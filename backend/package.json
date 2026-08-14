@@ -1,0 +1,21 @@
+{
+  "name": "jacquin-backend",
+  "version": "0.1.0",
+  "description": "Sistema Web de Gestión Interna — Academia Musical Jacquin. Fase 0: Core Arquitectónico.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node scripts/migrate.js",
+    "seed:admin": "node scripts/seed_admin.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

@@ -1,0 +1,1890 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Jacquin — Sistema de gestión</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,400&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --azul-oscuro: #223F61;
+    --azul-noche: #152A44;
+    --azul-claro: #93B6EE;
+    --naranja: #E78C3B;
+    --beige: #F3F2EE;
+    --texto: #223F61;
+    --muted: #6b7686;
+    --verde: #2e7d32;
+    --rojo: #b3261e;
+    --font-ui: 'Manrope', 'Helvetica Neue', Arial, sans-serif;
+    --font-wordmark: 'Fraunces', Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-ui); background: var(--beige); color: var(--texto); }
+  a { color: inherit; text-decoration: none; }
+
+  /* ---------- Hero / login ---------- */
+  #vista-login {
+    min-height: 100vh; position: relative; overflow: hidden;
+    background: linear-gradient(180deg, var(--azul-noche) 0%, var(--azul-oscuro) 100%);
+    display: flex; align-items: center; justify-content: center;
+  }
+  #ecualizador {
+    position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 0 2%; opacity: 0.55;
+  }
+  #ecualizador .barra {
+    width: 1.1%; min-width: 3px; background: var(--azul-claro); border-radius: 3px 3px 0 0;
+    animation: pulso 2.4s ease-in-out infinite;
+    transform-origin: bottom;
+  }
+  @keyframes pulso {
+    0%, 100% { transform: scaleY(0.25); }
+    50% { transform: scaleY(1); }
+  }
+  #vista-login::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(21,42,68,0.15) 0%, rgba(21,42,68,0.85) 78%, var(--azul-noche) 100%);
+  }
+  .tarjeta-login {
+    position: relative; z-index: 2; width: 100%; max-width: 340px; margin: 24px;
+    background: rgba(255,255,255,0.97); backdrop-filter: blur(6px);
+    border-radius: 16px; padding: 40px 32px; box-shadow: 0 24px 60px rgba(0,0,0,0.35);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .piano-mini { display: flex; gap: 3px; align-items: flex-end; margin-bottom: 14px; }
+  .piano-mini div { width: 9px; background: var(--azul-oscuro); border-radius: 3px 3px 0 0; }
+  .wordmark { font-family: var(--font-wordmark); font-weight: 500; font-size: 30px; letter-spacing: 0.01em; margin: 0; color: var(--azul-oscuro); }
+  .subwordmark { font-size: 10.5px; letter-spacing: 0.22em; color: var(--muted); margin: 3px 0 26px; text-transform: uppercase; }
+  .tagline { font-family: var(--font-wordmark); font-style: italic; font-size: 14px; color: var(--muted); text-align: center; margin: -14px 0 26px; }
+  #form-login { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+  #form-login input, .campo input, .campo select { height: 42px; border: 1px solid #dde1e7; border-radius: 8px; padding: 0 14px; font-size: 14px; width: 100%; font-family: var(--font-ui); }
+  #form-login input:focus, .campo input:focus, .campo select:focus { outline: 2px solid var(--azul-claro); outline-offset: 1px; border-color: var(--azul-claro); }
+  #form-login button {
+    height: 44px; background: var(--naranja); color: #fff; border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; transition: filter 0.15s;
+  }
+  #form-login button:hover { filter: brightness(0.94); }
+  #msj-error { font-size: 12px; color: var(--rojo); text-align: center; margin: 2px 0 0; display: none; }
+  .caja-prueba { background: var(--beige); border-radius: 8px; padding: 10px 12px; margin-top: 16px; width: 100%; }
+  .caja-prueba p { margin: 0; font-size: 12px; }
+  .caja-prueba p.etiqueta { color: var(--muted); margin-bottom: 4px; }
+  .nota-simulado { font-size: 11px; color: var(--muted); text-align: center; margin-top: 10px; }
+
+  /* ---------- App (post-login) ---------- */
+  #vista-app { display: none; min-height: 100vh; }
+  header.topbar { background: var(--azul-oscuro); color: #fff; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+  header.topbar .marca { display: flex; align-items: center; gap: 10px; font-size: 14px; letter-spacing: 0.03em; font-weight: 500; }
+  header.topbar .piano-mini div { background: #fff; }
+  header.topbar .quien { font-size: 12px; opacity: 0.85; margin-right: 10px; }
+  header.topbar button { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; height: 30px; padding: 0 12px; font-size: 12px; cursor: pointer; font-family: var(--font-ui); }
+  #btn-menu { display: none; background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; padding: 0 4px 0 0; line-height: 1; }
+  .layout { display: flex; position: relative; }
+  #overlay-menu { display: none; position: fixed; inset: 0; background: rgba(21,42,68,0.45); z-index: 9; }
+  nav.sidebar { width: 220px; background: #fff; border-right: 1px solid #e2e5ea; min-height: calc(100vh - 55px); padding: 14px 0; }
+  nav.sidebar a { display: flex; align-items: center; gap: 10px; padding: 9px 18px; font-size: 13px; color: var(--texto); border-left: 3px solid transparent; border-radius: 0 20px 20px 0; margin-right: 10px; }
+  nav.sidebar a:hover { background: var(--beige); }
+  nav.sidebar a.activo { border-left-color: var(--naranja); background: var(--beige); font-weight: 600; }
+  nav.sidebar .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--azul-claro); flex-shrink: 0; }
+  nav.sidebar .separador-menu { height: 1px; background: #ebedf0; margin: 8px 18px; }
+  main.contenido { flex: 1; position: relative; overflow: hidden; min-height: calc(100vh - 55px); }
+  #piano-fondo { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 1.6%; padding: 0 4%; opacity: 0.07; pointer-events: none; z-index: 0; }
+  #piano-fondo .barra-grande { width: 3.2%; max-width: 34px; background: var(--azul-oscuro); border-radius: 6px 6px 0 0; animation: pulso-lento 6s ease-in-out infinite; transform-origin: bottom; }
+  @keyframes pulso-lento { 0%, 100% { transform: scaleY(0.7); } 50% { transform: scaleY(1); } }
+  #contenido { position: relative; z-index: 1; padding: 32px; max-width: 760px; animation: aparecer 0.25s ease; }
+  @keyframes aparecer { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .malla { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+  .tile { background: #fff; border-top: 4px solid var(--azul-oscuro); border-radius: 0 0 14px 14px; padding: 18px 14px; cursor: pointer; box-shadow: 0 2px 10px rgba(34,63,97,0.08); transition: transform 0.12s, box-shadow 0.12s; }
+  .tile:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(34,63,97,0.14); }
+  .tile p { margin: 10px 0 0; font-size: 13px; }
+  .placeholder { background: #fff; border: 1px dashed #cfd3da; border-radius: 14px; padding: 48px 24px; text-align: center; }
+  .placeholder h1 { font-family: var(--font-wordmark); font-weight: 500; font-size: 22px; margin: 0 0 6px; }
+  .placeholder p { color: var(--muted); font-size: 13px; margin: 0; }
+
+  .panel { background: #fff; border: 1px solid #e2e5ea; border-radius: 14px; padding: 20px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(34,63,97,0.05); }
+  .panel h2 { font-family: var(--font-wordmark); font-weight: 500; font-size: 17px; margin: 0 0 12px; }
+  .campo { margin-bottom: 10px; }
+  .campo label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .regla { font-size: 12px; padding: 3px 0; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .regla.ok { color: var(--verde); }
+  .btn-primario { background: var(--azul-oscuro); color: #fff; border: none; border-radius: 6px; height: 38px; padding: 0 16px; font-size: 13px; cursor: pointer; font-family: var(--font-ui); width: 100%; }
+  .btn-primario:disabled { background: #cfd3da; cursor: not-allowed; }
+  .tabla-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table.tabla-usuarios { width: 100%; min-width: 380px; border-collapse: collapse; font-size: 13px; }
+  table.tabla-usuarios th { text-align: left; font-size: 11px; color: var(--muted); text-transform: uppercase; padding: 6px 8px; border-bottom: 1px solid #e2e5ea; }
+  table.tabla-usuarios td { padding: 8px; border-bottom: 1px solid #f0f1ee; }
+  .chip-rol { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: var(--beige); color: var(--azul-oscuro); }
+  select#previa-rol { max-width: 100%; width: 100%; }
+  .lista-previa { margin-top: 10px; }
+  .lista-previa div { font-size: 13px; padding: 4px 0; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #comprobante-imprimir, #comprobante-imprimir * { visibility: visible; }
+    #comprobante-imprimir { display: block !important; position: absolute; top: 0; left: 0; width: 100%; }
+  }
+
+  /* ---------- Mobile ---------- */
+  @media (max-width: 768px) {
+    .tarjeta-login { max-width: 92%; padding: 32px 22px; }
+    #btn-menu { display: block; }
+    header.topbar { padding: 10px 14px; }
+    header.topbar .marca span.texto-marca { display: none; }
+    header.topbar .quien { display: none; }
+    nav.sidebar {
+      position: fixed; top: 0; left: 0; height: 100vh; z-index: 10;
+      transform: translateX(-100%); transition: transform 0.2s ease; box-shadow: 2px 0 12px rgba(0,0,0,0.15);
+    }
+    nav.sidebar.abierto { transform: translateX(0); }
+    #overlay-menu.abierto { display: block; }
+    main.contenido { min-height: calc(100vh - 50px); }
+    #contenido { padding: 18px; max-width: 100%; }
+    #piano-fondo .barra-grande { max-width: 20px; }
+    .malla { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+    .panel { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="vista-login">
+  <div id="ecualizador"></div>
+  <div class="tarjeta-login">
+    <div class="piano-mini"><div style="height:24px"></div><div style="height:31px"></div><div style="height:19px"></div><div style="height:27px"></div></div>
+    <p class="wordmark">Jacquin</p>
+    <p class="subwordmark">academia musical</p>
+    <p class="tagline">Donde cada nota encuentra su lugar</p>
+    <form id="form-login">
+      <input id="in-email" type="email" placeholder="admin@jacquin.local" autocomplete="username" />
+      <input id="in-pass" type="password" placeholder="Contraseña" autocomplete="current-password" />
+      <button type="submit">Entrar</button>
+      <p id="msj-error">Email o contraseña incorrectos.</p>
+      <div class="caja-prueba">
+        <p class="etiqueta">Usuario de prueba (dominio genérico)</p>
+        <p>admin@jacquin.local</p>
+        <p>CambiarEnPrimerIngreso123</p>
+      </div>
+      <p class="nota-simulado">Simulado en el navegador — la validación real vive en el backend (Fase 1).</p>
+    </form>
+  </div>
+</div>
+
+<div id="vista-app">
+  <header class="topbar">
+    <div class="marca">
+      <button id="btn-menu" aria-label="Abrir menú">☰</button>
+      <div class="piano-mini"><div style="height:13px"></div><div style="height:17px"></div><div style="height:11px"></div><div style="height:15px"></div></div>
+      <span class="texto-marca">Jacquin · sistema de gestión</span>
+    </div>
+    <div>
+      <span class="quien" id="quien-soy"></span>
+      <button id="btn-salir">Cerrar sesión ↩</button>
+    </div>
+  </header>
+  <div class="layout">
+    <div id="overlay-menu"></div>
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="contenido">
+      <div id="piano-fondo"></div>
+      <div id="contenido"></div>
+    </main>
+  </div>
+</div>
+
+<script>
+// ---- Ecualizador de fondo (login): barras con animación escalonada ----
+(function () {
+  var cont = document.getElementById('ecualizador');
+  var total = 48;
+  for (var i = 0; i < total; i++) {
+    var b = document.createElement('div');
+    b.className = 'barra';
+    var alto = 30 + Math.round(Math.random() * 55);
+    b.style.height = alto + '%';
+    b.style.animationDelay = (Math.random() * 2.4).toFixed(2) + 's';
+    b.style.animationDuration = (1.8 + Math.random() * 1.4).toFixed(2) + 's';
+    if (i % 7 === 0) b.style.background = 'var(--naranja)';
+    cont.appendChild(b);
+  }
+})();
+
+// ---- Piano grande de fondo (interior de la app): persiste detrás de todos los módulos ----
+(function () {
+  var cont = document.getElementById('piano-fondo');
+  var total = 11;
+  for (var i = 0; i < total; i++) {
+    var b = document.createElement('div');
+    b.className = 'barra-grande';
+    var alto = 45 + Math.round(Math.random() * 45);
+    b.style.height = alto + '%';
+    b.style.animationDelay = (Math.random() * 5).toFixed(2) + 's';
+    cont.appendChild(b);
+  }
+})();
+
+var EMAIL_PRUEBA = 'admin@jacquin.local';
+var PASS_PRUEBA = 'CambiarEnPrimerIngreso123';
+
+var MODULOS = [
+  { key: 'dashboard', label: 'Dashboard', grupo: 'principal' },
+  { key: 'estudiantes', label: 'Estudiantes', grupo: 'matricula' },
+  { key: 'matricula', label: 'Matrícula', grupo: 'matricula' },
+  { key: 'pagos', label: 'Pagos y cartera', grupo: 'matricula' },
+  { key: 'horarios', label: 'Horarios', grupo: 'matricula' },
+  { key: 'profesores', label: 'Profesores', grupo: 'academia' },
+  { key: 'cursos', label: 'Cursos y programas', grupo: 'academia' },
+  { key: 'asistencia', label: 'Asistencia', grupo: 'academia' },
+  { key: 'evaluacion', label: 'Evaluación académica', grupo: 'seguimiento' },
+  { key: 'comunicacion', label: 'Comunicación', grupo: 'seguimiento' },
+  { key: 'inventario', label: 'Inventario', grupo: 'seguimiento' },
+  { key: 'reportes', label: 'Reportes', grupo: 'seguimiento' },
+  { key: 'admin', label: 'Admin (tenant)', grupo: 'admin' },
+  { key: 'usuarios-permisos', label: 'Usuarios y permisos', grupo: 'admin' }
+];
+
+var VISIBILIDAD_ROL = {
+  ADMINISTRADOR: MODULOS.map(function (m) { return m.key; }),
+  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes'],
+  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario'],
+  PROFESOR: ['dashboard','estudiantes','profesores','asistencia','evaluacion']
+};
+
+var POLITICA_PASSWORD = [
+  { id: 'p-len', txt: 'Mínimo 8 caracteres', test: function (p) { return p.length >= 8; } },
+  { id: 'p-may', txt: 'Al menos 1 mayúscula', test: function (p) { return /[A-Z]/.test(p); } },
+  { id: 'p-min', txt: 'Al menos 1 minúscula', test: function (p) { return /[a-z]/.test(p); } },
+  { id: 'p-num', txt: 'Al menos 1 número', test: function (p) { return /[0-9]/.test(p); } },
+  { id: 'p-sim', txt: 'Al menos 1 símbolo', test: function (p) { return /[^A-Za-z0-9]/.test(p); } }
+];
+
+var PROGRAMAS = ['Piano','Guitarra acústica','Guitarra eléctrica','Bajo','Técnica vocal','Violín','Percusión','Iniciación musical','Exploración musical infantil'];
+var ESTADOS_ALUMNO = ['preinscrito','pendiente_matricula','activo','inactivo','retirado'];
+var ETIQUETA_ESTADO = { preinscrito:'Preinscrito', pendiente_matricula:'Pendiente de matrícula', activo:'Activo', inactivo:'Inactivo', retirado:'Retirado' };
+
+function cargarAlumnos() {
+  var g = localStorage.getItem('jacquin_demo_alumnos');
+  return g ? JSON.parse(g) : [];
+}
+function guardarAlumnos(lista) { localStorage.setItem('jacquin_demo_alumnos', JSON.stringify(lista)); }
+
+function cargarPlanes() {
+  var g = localStorage.getItem('jacquin_demo_planes');
+  return g ? JSON.parse(g) : [];
+}
+function guardarPlanes(lista) { localStorage.setItem('jacquin_demo_planes', JSON.stringify(lista)); }
+
+function cargarInscripciones() {
+  var g = localStorage.getItem('jacquin_demo_inscripciones');
+  return g ? JSON.parse(g) : [];
+}
+function guardarInscripciones(lista) { localStorage.setItem('jacquin_demo_inscripciones', JSON.stringify(lista)); }
+
+var CONCEPTOS_PAGO = ['Matrícula', 'Mensualidad', 'Clase suelta', 'Programa especial', 'Eventos', 'Libros', 'Uniformes'];
+
+function cargarPagosRegistrados() {
+  var g = localStorage.getItem('jacquin_demo_pagos_registrados');
+  return g ? JSON.parse(g) : [];
+}
+function guardarPagosRegistrados(lista) { localStorage.setItem('jacquin_demo_pagos_registrados', JSON.stringify(lista)); }
+
+// Evaluación académica — método propio de Jacquin (ver Skill: pedagogia/metodo-propio-jacquin.md).
+// Escala cualitativa, no numérica de exámenes — el número acá es solo interno, para poder graficar la línea de tiempo.
+var ESCALA_EVALUACION = { iniciando: 1, en_desarrollo: 2, consolidado: 3 };
+var ETIQUETA_ESCALA = { iniciando: 'Iniciando', en_desarrollo: 'En desarrollo', consolidado: 'Consolidado' };
+var INDICADORES_EVALUACION = ['tecnica', 'ritmo', 'coordinacion', 'interpretacion', 'repertorio', 'participacion', 'disciplina'];
+var ETIQUETA_INDICADOR = {
+  tecnica: 'Técnica', ritmo: 'Ritmo', coordinacion: 'Coordinación', interpretacion: 'Interpretación',
+  repertorio: 'Repertorio', participacion: 'Participación', disciplina: 'Disciplina'
+};
+
+function cargarEvaluaciones() {
+  var g = localStorage.getItem('jacquin_demo_evaluaciones');
+  return g ? JSON.parse(g) : [];
+}
+function guardarEvaluaciones(lista) { localStorage.setItem('jacquin_demo_evaluaciones', JSON.stringify(lista)); }
+
+function promedioEvaluacion(ev) {
+  var suma = 0;
+  INDICADORES_EVALUACION.forEach(function (ind) { suma += ESCALA_EVALUACION[ev[ind]] || 2; });
+  return suma / INDICADORES_EVALUACION.length; // 1 a 3
+}
+
+function cargarCargos() {
+  var g = localStorage.getItem('jacquin_demo_cargos');
+  return g ? JSON.parse(g) : [];
+}
+function guardarCargos(lista) { localStorage.setItem('jacquin_demo_cargos', JSON.stringify(lista)); }
+
+var DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+var MAX_RECUPERACIONES_MES = 2;
+
+function cargarClases() {
+  var g = localStorage.getItem('jacquin_demo_clases');
+  return g ? JSON.parse(g) : [];
+}
+function guardarClases(lista) { localStorage.setItem('jacquin_demo_clases', JSON.stringify(lista)); }
+
+function cargarRecuperaciones() {
+  var g = localStorage.getItem('jacquin_demo_recuperaciones');
+  return g ? JSON.parse(g) : [];
+}
+function guardarRecuperaciones(lista) { localStorage.setItem('jacquin_demo_recuperaciones', JSON.stringify(lista)); }
+
+var ESTADOS_ASISTENCIA = ['asistio','falta','excusa','cancelada','reprogramada','recuperada'];
+var ETIQUETA_ASISTENCIA = { asistio:'Asistió', falta:'Falta', excusa:'Excusa', cancelada:'Cancelada', reprogramada:'Reprogramada', recuperada:'Recuperada' };
+var UMBRAL_ALERTA_FALTAS = 3;
+
+function cargarAsistencias() {
+  var g = localStorage.getItem('jacquin_demo_asistencias');
+  return g ? JSON.parse(g) : [];
+}
+function guardarAsistencias(lista) { localStorage.setItem('jacquin_demo_asistencias', JSON.stringify(lista)); }
+
+function cargarPerfilesProfesor() {
+  var g = localStorage.getItem('jacquin_demo_perfiles_profesor');
+  return g ? JSON.parse(g) : {};
+}
+function guardarPerfilesProfesor(obj) { localStorage.setItem('jacquin_demo_perfiles_profesor', JSON.stringify(obj)); }
+
+function cargarUsuarios() {
+  var guardado = localStorage.getItem('jacquin_demo_usuarios');
+  if (guardado) return JSON.parse(guardado);
+  var base = [{ nombre: 'Administrador', email: EMAIL_PRUEBA, rol: 'ADMINISTRADOR' }];
+  localStorage.setItem('jacquin_demo_usuarios', JSON.stringify(base));
+  return base;
+}
+function guardarUsuarios(lista) { localStorage.setItem('jacquin_demo_usuarios', JSON.stringify(lista)); }
+
+function sesionActual() {
+  var raw = sessionStorage.getItem('jacquin_demo_sesion');
+  return raw ? JSON.parse(raw) : null;
+}
+
+function modulosVisibles(rol) { return VISIBILIDAD_ROL[rol] || []; }
+
+function renderSidebar(activo) {
+  var sesion = sesionActual();
+  var visibles = modulosVisibles(sesion.rol);
+  var html = '';
+  var grupoAnterior = null;
+  MODULOS.filter(function (m) { return visibles.indexOf(m.key) !== -1; }).forEach(function (m) {
+    if (grupoAnterior !== null && m.grupo !== grupoAnterior) {
+      html += '<div class="separador-menu"></div>';
+    }
+    grupoAnterior = m.grupo;
+    var clase = m.key === activo ? 'activo' : '';
+    html += '<a href="#' + m.key + '" class="' + clase + '"><span class="dot"></span>' + m.label + '</a>';
+  });
+  document.getElementById('sidebar').innerHTML = html;
+}
+
+function renderDashboard(sesion) {
+  var visibles = modulosVisibles(sesion.rol);
+  var html = '<div class="malla">';
+  MODULOS.filter(function (m) { return m.key !== 'dashboard' && visibles.indexOf(m.key) !== -1; }).forEach(function (m) {
+    html += '<a href="#' + m.key + '" class="tile"><p>' + m.label + '</p></a>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderEstudiantes() {
+  var alumnos = cargarAlumnos();
+  var profesoresDisponibles = cargarUsuarios().filter(function (u) { return u.rol === 'PROFESOR'; });
+  var filas = alumnos.map(function (a, i) {
+    return '<tr><td>' + a.nombres + ' ' + a.apellidos + '</td><td>' + a.programa + '</td>' +
+      '<td><span class="chip-rol">' + ETIQUETA_ESTADO[a.estado] + '</span></td>' +
+      '<td>' + (a.acudiente || '—') + '</td><td>' + (a.profesor ? (profesoresDisponibles.find(function (p) { return p.email === a.profesor; }) || {}).nombre || a.profesor : '—') + '</td></tr>';
+  }).join('');
+
+  return '' +
+    '<div class="panel"><h2>Nuevo estudiante</h2>' +
+    '<div class="campo"><label>Nombres</label><input id="al-nombres" type="text" /></div>' +
+    '<div class="campo"><label>Apellidos</label><input id="al-apellidos" type="text" /></div>' +
+    '<div class="campo"><label>Documento</label><input id="al-documento" type="text" /></div>' +
+    '<div class="campo"><label>Fecha de nacimiento</label><input id="al-nacimiento" type="date" /></div>' +
+    '<div class="campo"><label>Programa</label><select id="al-programa">' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Profesor asignado (opcional)</label><select id="al-profesor">' +
+    '<option value="">Sin asignar todavía</option>' +
+    profesoresDisponibles.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Teléfono de contacto</label><input id="al-telefono" type="text" /></div>' +
+    '<div class="campo"><label id="lbl-acudiente">Nombre del acudiente (opcional)</label><input id="al-acudiente" type="text" /></div>' +
+    '<p id="aviso-menor" style="font-size:12px; color:var(--naranja); display:none; margin:-4px 0 10px;">Alumno menor de edad: el acudiente es obligatorio.</p>' +
+    '<div class="campo"><label>Observaciones</label><input id="al-obs" type="text" /></div>' +
+    '<button class="btn-primario" id="btn-crear-alumno">Registrar estudiante</button>' +
+    '<p id="msj-alumno-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Estudiante registrado (guardado en este navegador, no en el backend real).</p>' +
+    '</div>' +
+
+    '<div class="panel"><h2>Estudiantes (' + alumnos.length + ')</h2>' +
+    (alumnos.length === 0
+      ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay estudiantes registrados.</p>'
+      : '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Programa</th><th>Estado</th><th>Acudiente</th><th>Profesor</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+    '</div>' +
+
+    '<p style="font-size:11px; color:var(--muted);">Estado inicial siempre "Preinscrito" — pasa a "Activo" cuando se complete la Matrícula (próximo módulo a construir). Nunca se borra un estudiante: los estados quedan en historial.</p>';
+}
+
+function activarLogicaEstudiantes(volverA) {
+  volverA = volverA || 'estudiantes';
+  function esMenor(fechaStr) {
+    if (!fechaStr) return null;
+    var nacimiento = new Date(fechaStr);
+    var hoy = new Date();
+    var edad = hoy.getFullYear() - nacimiento.getFullYear();
+    var m = hoy.getMonth() - nacimiento.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) edad--;
+    return edad < 18;
+  }
+
+  document.getElementById('al-nacimiento').addEventListener('change', function () {
+    var menor = esMenor(this.value);
+    document.getElementById('aviso-menor').style.display = menor ? 'block' : 'none';
+    document.getElementById('lbl-acudiente').textContent = menor ? 'Nombre del acudiente (obligatorio)' : 'Nombre del acudiente (opcional)';
+  });
+
+  document.getElementById('btn-crear-alumno').addEventListener('click', function () {
+    var nombres = document.getElementById('al-nombres').value.trim();
+    var apellidos = document.getElementById('al-apellidos').value.trim();
+    var nacimiento = document.getElementById('al-nacimiento').value;
+    var acudiente = document.getElementById('al-acudiente').value.trim();
+    if (!nombres || !apellidos) return;
+    if (!nacimiento) { alert('La fecha de nacimiento es obligatoria (determina si necesita acudiente).'); return; }
+    if (esMenor(nacimiento) && !acudiente) { alert('El alumno es menor de edad: el acudiente es obligatorio.'); return; }
+    var alumnos = cargarAlumnos();
+    alumnos.push({
+      nombres: nombres,
+      apellidos: apellidos,
+      documento: document.getElementById('al-documento').value.trim(),
+      nacimiento: nacimiento,
+      programa: document.getElementById('al-programa').value,
+      profesor: document.getElementById('al-profesor').value,
+      telefono: document.getElementById('al-telefono').value.trim(),
+      acudiente: acudiente,
+      observaciones: document.getElementById('al-obs').value.trim(),
+      estado: 'preinscrito'
+    });
+    guardarAlumnos(alumnos);
+    document.getElementById('msj-alumno-creado').style.display = 'block';
+    setTimeout(function () { renderContenido(volverA); }, 500);
+  });
+}
+
+function renderMatricula(sesion) {
+  var alumnos = cargarAlumnos();
+  var planes = cargarPlanes();
+  var inscripciones = cargarInscripciones();
+  var esAdmin = sesion.rol === 'ADMINISTRADOR';
+
+  var filasBusqueda = alumnos.map(function (a, i) {
+    var telefono = (a.telefono || '').replace(/\D/g, '');
+    var mensaje = encodeURIComponent('Hola, te escribimos de Academia Musical Jacquin sobre la matrícula de ' + a.nombres + '.');
+    var botonWhatsapp = telefono
+      ? '<a href="https://wa.me/' + telefono + '?text=' + mensaje + '" target="_blank" rel="noopener" style="font-size:12px; background:#25D366; color:#fff; padding:5px 10px; border-radius:6px; text-decoration:none; display:inline-block;">WhatsApp</a>'
+      : '<span style="font-size:11px; color:var(--muted); font-style:italic;">sin teléfono</span>';
+    return '<tr class="fila-busqueda-matricula" data-nombre="' + (a.nombres + ' ' + a.apellidos).toLowerCase() + '">' +
+      '<td style="font-weight:600;">' + a.nombres + ' ' + a.apellidos + '</td>' +
+      '<td>' + a.programa + '</td>' +
+      '<td><span class="chip-rol">' + ETIQUETA_ESTADO[a.estado] + '</span></td>' +
+      '<td>' + (a.acudiente || '<span style="color:var(--muted); font-style:italic;">—</span>') + '</td>' +
+      '<td>' + botonWhatsapp + '</td>' +
+      '</tr>';
+  }).join('');
+
+  var panelBusqueda =
+    '<div class="panel"><h2>Buscar estudiante</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Consultá el estado de matrícula de cualquier estudiante y escribile al acudiente por WhatsApp directo.</p>' +
+    '<input id="buscar-estudiante-matricula" type="text" placeholder="Escribí un nombre..." />' +
+    (alumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted); margin-top:10px;">Todavía no hay estudiantes registrados.</p>' :
+     '<div class="tabla-scroll" style="margin-top:12px;"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Programa</th><th>Estado</th><th>Acudiente</th><th></th></tr></thead><tbody>' + filasBusqueda + '</tbody></table></div>') +
+    '</div>';
+
+  var filasPlanes = planes.map(function (p) {
+    return '<tr><td>' + p.nombre + '</td><td>' + p.horas + 'h/sem</td><td>$' + p.valor + '</td></tr>';
+  }).join('');
+
+  var filasInscripciones = inscripciones.map(function (i) {
+    var alumno = alumnos[i.alumnoIdx];
+    var plan = planes[i.planIdx];
+    var estadoTxt = i.pagado ? 'Activo (pagado)' : 'Pendiente de matrícula';
+    return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td><td>' + (plan ? plan.nombre : '—') + '</td><td>' + i.fechaInicio + '</td><td><span class="chip-rol">' + estadoTxt + '</span></td></tr>';
+  }).join('');
+
+  return '' +
+    panelBusqueda +
+    (esAdmin ? (
+      '<div class="panel"><h2>Planes y tarifas</h2>' +
+      '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">El nombre del plan se toma del programa — no es texto libre, para no inventar nombres fuera del catálogo real.</p>' +
+      '<div class="campo"><label>Programa</label><select id="pl-programa">' +
+      PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+      '</select></div>' +
+      '<div class="campo"><label>Horas por semana</label><input id="pl-horas" type="number" min="1" step="0.5" value="1" /></div>' +
+      '<div class="campo"><label>Valor</label><input id="pl-valor" type="number" min="1" /></div>' +
+      '<button class="btn-primario" id="btn-crear-plan">Crear plan</button>' +
+      '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Plan</th><th>Horas/semana</th><th>Valor</th></tr></thead><tbody>' + (filasPlanes || '<tr><td colspan="3" style="color:var(--muted);">Sin planes todavía</td></tr>') + '</tbody></table></div>' +
+      '</div>'
+    ) : '') +
+
+    '<div class="panel"><h2>Inscribir estudiante</h2>' +
+    (alumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Primero registrá un estudiante en el módulo Estudiantes.</p>' :
+     planes.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Primero necesitás al menos un plan creado.</p>' :
+    '<div class="campo"><label>Estudiante</label><select id="in-alumno">' +
+    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Plan</label><select id="in-plan">' +
+    planes.map(function (p, i) { return '<option value="' + i + '">' + p.nombre + ' — $' + p.valor + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Fecha de inicio</label><input id="in-fecha" type="date" /></div>' +
+    '<div class="campo"><label>¿Ya pagó?</label><select id="in-pagado"><option value="no">No, todavía no</option><option value="si">Sí, ya pagó</option></select></div>' +
+    '<div class="campo"><label id="lbl-fecha-pago">Fecha límite de pago</label><input id="in-fecha-pago" type="date" /></div>' +
+    '<div class="campo" id="campo-medio-pago" style="display:none;"><label>Medio de pago</label><select id="in-medio-pago"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div>' +
+    '<button class="btn-primario" id="btn-inscribir">Inscribir</button>' +
+    '<p id="msj-inscripcion" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;"></p>') +
+    '</div>' +
+
+    '<div class="panel"><h2>Inscripciones (' + inscripciones.length + ')</h2>' +
+    (inscripciones.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay inscripciones.</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Plan</th><th>Inicio</th><th>Estado</th></tr></thead><tbody>' + filasInscripciones + '</tbody></table></div>') +
+    '</div>';
+}
+
+function activarLogicaMatricula() {
+  var buscador = document.getElementById('buscar-estudiante-matricula');
+  if (buscador) {
+    buscador.addEventListener('input', function () {
+      var termino = this.value.trim().toLowerCase();
+      document.querySelectorAll('.fila-busqueda-matricula').forEach(function (fila) {
+        fila.style.display = fila.getAttribute('data-nombre').indexOf(termino) !== -1 ? '' : 'none';
+      });
+    });
+  }
+
+  var btnPlan = document.getElementById('btn-crear-plan');
+  if (btnPlan) {
+    btnPlan.addEventListener('click', function () {
+      var programa = document.getElementById('pl-programa').value;
+      var horas = document.getElementById('pl-horas').value;
+      var valor = document.getElementById('pl-valor').value;
+      if (!horas || !valor) return;
+      var planes = cargarPlanes();
+      planes.push({
+        nombre: programa + ' — ' + horas + 'h/semana',
+        programa: programa,
+        horas: horas,
+        valor: valor
+      });
+      guardarPlanes(planes);
+      renderContenido('matricula');
+    });
+  }
+
+  var selectPagado = document.getElementById('in-pagado');
+  if (selectPagado) {
+    selectPagado.addEventListener('change', function () {
+      var esPagado = this.value === 'si';
+      document.getElementById('lbl-fecha-pago').textContent = esPagado ? 'Fecha de pago' : 'Fecha límite de pago';
+      document.getElementById('campo-medio-pago').style.display = esPagado ? 'block' : 'none';
+    });
+  }
+
+  var btnInscribir = document.getElementById('btn-inscribir');
+  if (btnInscribir) {
+    btnInscribir.addEventListener('click', function () {
+      var fechaInicio = document.getElementById('in-fecha').value;
+      var fechaPago = document.getElementById('in-fecha-pago').value;
+      var pagado = document.getElementById('in-pagado').value === 'si';
+      var alumnoIdx = Number(document.getElementById('in-alumno').value);
+      var planIdx = Number(document.getElementById('in-plan').value);
+      if (!fechaInicio) { alert('La fecha de inicio es obligatoria.'); return; }
+      if (!fechaPago) { alert('Falta la fecha de pago (si ya pagó) o la fecha límite (si no pagó).'); return; }
+
+      var planes = cargarPlanes();
+      var plan = planes[planIdx];
+
+      var inscripciones = cargarInscripciones();
+      inscripciones.push({ alumnoIdx: alumnoIdx, planIdx: planIdx, fechaInicio: fechaInicio, pagado: pagado });
+      guardarInscripciones(inscripciones);
+
+      // Genera el cargo de matrícula — mismo criterio que el backend real.
+      var cargos = cargarCargos();
+      var nuevoCargo = {
+        alumnoIdx: alumnoIdx,
+        concepto: 'Matrícula',
+        valor: Number(plan.valor),
+        descuento: 0,
+        saldo: pagado ? 0 : Number(plan.valor),
+        vencimiento: fechaPago,
+        estado: pagado ? 'pagado' : 'pendiente'
+      };
+      cargos.push(nuevoCargo);
+      guardarCargos(cargos);
+
+      // Si ya pagó, además queda el pago cargado en Pagos, y el alumno pasa a "activo" directo.
+      var alumnos = cargarAlumnos();
+      if (pagado) {
+        var pagos = cargarPagosRegistrados();
+        pagos.push({ alumnoIdx: alumnoIdx, concepto: 'Matrícula', valor: Number(plan.valor), fecha: fechaPago, medioPago: document.getElementById('in-medio-pago').value });
+        guardarPagosRegistrados(pagos);
+        alumnos[alumnoIdx].estado = 'activo';
+      } else {
+        alumnos[alumnoIdx].estado = 'pendiente_matricula';
+      }
+      guardarAlumnos(alumnos);
+
+      document.getElementById('msj-inscripcion').textContent = pagado
+        ? 'Inscripción creada y pago registrado — el estudiante ya quedó "Activo", y el cargo aparece saldado en el módulo Pagos.'
+        : 'Inscripción creada — el estudiante queda "Pendiente de matrícula" y el cargo aparece pendiente en el módulo Pagos hasta que se registre el pago.';
+      document.getElementById('msj-inscripcion').style.display = 'block';
+      setTimeout(function () { renderContenido('matricula'); }, 900);
+    });
+  }
+}
+
+var vistaPagos = 'cartera'; // 'cartera' o 'pagos' — separadas a propósito para no confundir.
+
+function renderPagos() {
+  var alumnos = cargarAlumnos();
+  var cargos = cargarCargos();
+
+  var toggleHtml =
+    '<div class="panel" style="padding:12px 20px; display:flex; gap:8px;">' +
+    '<button id="btn-tab-cartera" style="height:38px; border-radius:6px; padding:0 16px; font-size:13px; cursor:pointer; font-family:var(--font-ui); border:2px solid var(--rojo); background:' + (vistaPagos === 'cartera' ? 'var(--rojo)' : 'transparent') + '; color:' + (vistaPagos === 'cartera' ? '#fff' : 'var(--rojo)') + ';">💰 Cartera (deudas)</button>' +
+    '<button id="btn-tab-pagos" style="height:38px; border-radius:6px; padding:0 16px; font-size:13px; cursor:pointer; font-family:var(--font-ui); border:2px solid var(--azul-oscuro); background:' + (vistaPagos === 'pagos' ? 'var(--azul-oscuro)' : 'transparent') + '; color:' + (vistaPagos === 'pagos' ? '#fff' : 'var(--azul-oscuro)') + ';">🧾 Pagos y comprobantes</button>' +
+    '</div>';
+
+  return toggleHtml + (vistaPagos === 'cartera' ? renderCartera(alumnos, cargos) : renderPagosTab(alumnos, cargos));
+}
+
+function renderCartera(alumnos, cargos) {
+  var cartera = {};
+  cargos.forEach(function (c) {
+    if (c.saldo > 0) cartera[c.alumnoIdx] = (cartera[c.alumnoIdx] || 0) + c.saldo;
+  });
+  var filasCartera = Object.keys(cartera).map(function (idx) {
+    var a = alumnos[idx];
+    var telefono = a ? (a.telefono || '').replace(/\D/g, '') : '';
+    var msj = encodeURIComponent('Hola, te recordamos que ' + (a ? a.nombres : '') + ' tiene un saldo pendiente de $' + cartera[idx] + ' en Academia Musical Jacquin.');
+    return '<tr><td style="font-weight:600;">' + (a ? a.nombres + ' ' + a.apellidos : '—') + '</td>' +
+      '<td style="color:var(--rojo); font-weight:700;">$' + cartera[idx] + '</td>' +
+      '<td>' + (telefono ? '<a href="https://wa.me/' + telefono + '?text=' + msj + '" target="_blank" rel="noopener" style="font-size:12px; background:#25D366; color:#fff; padding:5px 10px; border-radius:6px; text-decoration:none;">Recordar por WhatsApp</a>' : '<span style="font-size:11px; color:var(--muted); font-style:italic;">sin teléfono</span>') + '</td></tr>';
+  }).join('');
+
+  return '' +
+    '<div class="panel" style="border:2px solid #fbe2dd; background:#fffaf9;"><h2 style="color:var(--rojo);">Cartera pendiente</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Quién debe, cuánto — la prioridad #1 que pidió Sergio.</p>' +
+    (filasCartera ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Total pendiente</th><th></th></tr></thead><tbody>' + filasCartera + '</tbody></table></div>'
+      : '<p style="font-size:13px; color:var(--verde);">Nadie tiene saldo pendiente.</p>') +
+    '</div>';
+}
+
+function renderPagosTab(alumnos, cargos) {
+  var pagosRegistrados = cargarPagosRegistrados();
+
+  var filasCargos = cargos.map(function (c) {
+    var a = alumnos[c.alumnoIdx];
+    var color = c.estado === 'pagado' ? 'var(--verde)' : (c.estado === 'parcial' ? 'var(--naranja)' : 'var(--rojo)');
+    return '<tr><td>' + (a ? a.nombres + ' ' + a.apellidos : '—') + '</td><td>' + c.concepto + '</td><td>$' + c.valor + '</td><td>$' + c.saldo + '</td><td style="color:' + color + ';">' + c.estado + '</td></tr>';
+  }).join('');
+
+  var filasComprobantes = pagosRegistrados.slice().reverse().map(function (p, iRev) {
+    var i = pagosRegistrados.length - 1 - iRev;
+    var a = alumnos[p.alumnoIdx];
+    return '<tr><td>' + (a ? a.nombres + ' ' + a.apellidos : '—') + '</td><td>' + p.concepto + '</td><td>$' + p.valor + '</td><td>' + p.fecha + '</td>' +
+      '<td><button class="btn-comprobante" data-idx="' + i + '" style="font-size:11px; background:var(--azul-oscuro); color:#fff; border:none; border-radius:5px; padding:4px 8px; cursor:pointer;">Comprobante PDF</button></td></tr>';
+  }).join('');
+
+  return '' +
+    '<div class="panel" style="border:2px solid #dbe6f5; background:#fafcff;"><h2 style="color:var(--azul-oscuro);">Generar cargo</h2>' +
+    (alumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Primero registrá un estudiante.</p>' :
+    '<div class="campo"><label>Estudiante</label><select id="cg-alumno">' +
+    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Concepto</label><select id="cg-concepto">' +
+    CONCEPTOS_PAGO.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Valor</label><input id="cg-valor" type="number" min="1" /></div>' +
+    '<div class="campo"><label>Descuento (opcional)</label><input id="cg-descuento" type="number" min="0" value="0" /></div>' +
+    '<div class="campo"><label>Fecha de vencimiento</label><input id="cg-vencimiento" type="date" /></div>' +
+    '<button class="btn-primario" id="btn-crear-cargo">Generar cargo</button>') +
+    '</div>' +
+
+    '<div class="panel" style="border:2px solid #dbe6f5; background:#fafcff;"><h2 style="color:var(--azul-oscuro);">Registrar pago</h2>' +
+    (cargos.filter(function (c) { return c.saldo > 0; }).length === 0 ? '<p style="font-size:13px; color:var(--muted);">No hay cargos con saldo pendiente.</p>' :
+    '<div class="campo"><label>Cargo</label><select id="pg-cargo">' +
+    cargos.map(function (c, i) {
+      if (c.saldo <= 0) return '';
+      var a = alumnos[c.alumnoIdx];
+      return '<option value="' + i + '">' + (a ? a.nombres : '') + ' — ' + c.concepto + ' (saldo $' + c.saldo + ')</option>';
+    }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Valor a pagar</label><input id="pg-valor" type="number" min="1" /></div>' +
+    '<div class="campo"><label>Medio de pago</label><select id="pg-medio"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div>' +
+    '<button class="btn-primario" id="btn-registrar-pago">Registrar pago</button>' +
+    '<p id="msj-pago" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Pago registrado. Si el cargo quedó saldado y estaba ligado a una matrícula, el estudiante pasa a "Activo".</p>') +
+    '</div>' +
+
+    '<div class="panel"><h2>Comprobantes de pago</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Generá el PDF y enviaselo al acudiente por WhatsApp.</p>' +
+    (filasComprobantes ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Concepto</th><th>Valor</th><th>Fecha</th><th></th></tr></thead><tbody>' + filasComprobantes + '</tbody></table></div>'
+      : '<p style="font-size:13px; color:var(--muted);">Todavía no hay pagos registrados con comprobante.</p>') +
+    '</div>' +
+
+    '<div class="panel"><h2>Todos los cargos</h2>' +
+    (filasCargos ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Concepto</th><th>Valor</th><th>Saldo</th><th>Estado</th></tr></thead><tbody>' + filasCargos + '</tbody></table></div>'
+      : '<p style="font-size:13px; color:var(--muted);">Sin cargos todavía.</p>') +
+    '</div>' +
+
+    '<div id="comprobante-imprimir" style="display:none;"></div>';
+}
+
+function generarHtmlComprobante(pago, alumno) {
+  return '' +
+    '<div style="font-family:Arial,sans-serif; max-width:400px; margin:0 auto; padding:24px; border:1px solid #ccc;">' +
+    '<div style="text-align:center; border-bottom:2px solid #223F61; padding-bottom:12px; margin-bottom:16px;">' +
+    '<div style="font-size:20px; font-weight:bold; color:#223F61;">Jacquin</div>' +
+    '<div style="font-size:11px; letter-spacing:2px; color:#666;">ACADEMIA MUSICAL</div>' +
+    '</div>' +
+    '<h3 style="text-align:center; margin:0 0 16px;">Comprobante de pago</h3>' +
+    '<table style="width:100%; font-size:13px; border-collapse:collapse;">' +
+    '<tr><td style="padding:6px 0; color:#666;">Estudiante</td><td style="padding:6px 0; text-align:right; font-weight:600;">' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td></tr>' +
+    '<tr><td style="padding:6px 0; color:#666;">Concepto</td><td style="padding:6px 0; text-align:right;">' + pago.concepto + '</td></tr>' +
+    '<tr><td style="padding:6px 0; color:#666;">Fecha</td><td style="padding:6px 0; text-align:right;">' + pago.fecha + '</td></tr>' +
+    '<tr><td style="padding:6px 0; color:#666;">Medio de pago</td><td style="padding:6px 0; text-align:right;">' + (pago.medioPago || 'No especificado') + '</td></tr>' +
+    '<tr><td style="padding:10px 0; font-weight:bold; border-top:1px solid #ccc;">Valor pagado</td><td style="padding:10px 0; text-align:right; font-weight:bold; font-size:16px; border-top:1px solid #ccc;">$' + pago.valor + '</td></tr>' +
+    '</table>' +
+    '<p style="text-align:center; font-size:11px; color:#999; margin-top:20px;">Academia Musical Jacquin — gracias por su pago</p>' +
+    '</div>';
+}
+
+function activarLogicaPagos() {
+  var btnTabCartera = document.getElementById('btn-tab-cartera');
+  var btnTabPagos = document.getElementById('btn-tab-pagos');
+  if (btnTabCartera) btnTabCartera.addEventListener('click', function () { vistaPagos = 'cartera'; renderContenido('pagos'); });
+  if (btnTabPagos) btnTabPagos.addEventListener('click', function () { vistaPagos = 'pagos'; renderContenido('pagos'); });
+
+  var btnCargo = document.getElementById('btn-crear-cargo');
+  if (btnCargo) {
+    btnCargo.addEventListener('click', function () {
+      var valor = Number(document.getElementById('cg-valor').value);
+      var descuento = Number(document.getElementById('cg-descuento').value || 0);
+      var vencimiento = document.getElementById('cg-vencimiento').value;
+      if (!valor || !vencimiento) { alert('Valor y fecha de vencimiento son obligatorios.'); return; }
+      if (descuento > valor) { alert('El descuento no puede ser mayor al valor.'); return; }
+      var cargos = cargarCargos();
+      cargos.push({
+        alumnoIdx: Number(document.getElementById('cg-alumno').value),
+        concepto: document.getElementById('cg-concepto').value,
+        valor: valor,
+        descuento: descuento,
+        saldo: valor - descuento,
+        vencimiento: vencimiento,
+        estado: 'pendiente'
+      });
+      guardarCargos(cargos);
+      renderContenido('pagos');
+    });
+  }
+
+  var btnPago = document.getElementById('btn-registrar-pago');
+  if (btnPago) {
+    btnPago.addEventListener('click', function () {
+      var idx = Number(document.getElementById('pg-cargo').value);
+      var valor = Number(document.getElementById('pg-valor').value);
+      var medioPago = document.getElementById('pg-medio').value;
+      var cargos = cargarCargos();
+      var cargo = cargos[idx];
+      if (!valor || valor <= 0) { alert('El valor del pago debe ser mayor a cero.'); return; }
+      if (valor > cargo.saldo) { alert('El pago no puede ser mayor al saldo pendiente ($' + cargo.saldo + ').'); return; }
+      cargo.saldo -= valor;
+      cargo.estado = cargo.saldo === 0 ? 'pagado' : 'parcial';
+      guardarCargos(cargos);
+
+      var pagos = cargarPagosRegistrados();
+      pagos.push({ alumnoIdx: cargo.alumnoIdx, concepto: cargo.concepto, valor: valor, fecha: new Date().toISOString().slice(0, 10), medioPago: medioPago });
+      guardarPagosRegistrados(pagos);
+
+      document.getElementById('msj-pago').style.display = 'block';
+      setTimeout(function () { renderContenido('pagos'); }, 700);
+    });
+  }
+
+  document.querySelectorAll('.btn-comprobante').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idx = Number(btn.getAttribute('data-idx'));
+      var pagos = cargarPagosRegistrados();
+      var pago = pagos[idx];
+      var alumnos = cargarAlumnos();
+      var alumno = alumnos[pago.alumnoIdx];
+      var contenedor = document.getElementById('comprobante-imprimir');
+      contenedor.innerHTML = generarHtmlComprobante(pago, alumno);
+      window.print();
+
+      var telefono = alumno ? (alumno.telefono || '').replace(/\D/g, '') : '';
+      if (telefono && confirm('¿Abrir WhatsApp para enviarle el resumen del pago? (el PDF hay que adjuntarlo a mano, WhatsApp no permite adjuntar archivos desde un enlace)')) {
+        var msj = encodeURIComponent('Hola, te confirmamos el pago de ' + pago.concepto + ' por $' + pago.valor + ' del ' + pago.fecha + '. ¡Gracias! — Academia Musical Jacquin');
+        window.open('https://wa.me/' + telefono + '?text=' + msj, '_blank');
+      }
+    });
+  });
+}
+
+// Franjas reales de la academia (según la planilla de Jacquin): entre
+// semana funciona en tardes, sábado en mañanas hasta el mediodía —
+// se muestran alineadas en la misma fila porque ocupan el mismo lugar
+// en el flujo semanal, aunque el horario de reloj sea distinto.
+var FRANJAS = [
+  { horaLunVie: '15:00', horaSabado: '09:00', etiquetaLunVie: '3:00 - 4:00 PM', etiquetaSabado: '9:00 - 10:00 AM' },
+  { horaLunVie: '16:00', horaSabado: '10:00', etiquetaLunVie: '4:00 - 5:00 PM', etiquetaSabado: '10:00 - 11:00 AM' },
+  { horaLunVie: '17:00', horaSabado: '11:00', etiquetaLunVie: '5:00 - 6:00 PM', etiquetaSabado: '11:00 AM - 12:00 M' }
+];
+var COLUMNAS_DIAS = [1, 2, 3, 4, 5, 6]; // lunes(1) a sábado(6), sin domingo — pedido explícito.
+
+// Festivos oficiales de Colombia 2026 (fuente: festivos.com.co, consultado 2026-08-13).
+// Nota de mantenimiento: esta lista es solo de 2026 — si el proyecto sigue
+// vivo en 2027, hay que actualizarla (los festivos religiosos móviles cambian de fecha cada año).
+var FESTIVOS_2026 = {
+  '2026-01-01': 'Año Nuevo', '2026-01-12': 'Reyes Magos', '2026-03-23': 'Día de San José',
+  '2026-04-02': 'Jueves Santo', '2026-04-03': 'Viernes Santo', '2026-05-01': 'Día del Trabajo',
+  '2026-05-18': 'Ascensión de Jesús', '2026-06-08': 'Corpus Christi', '2026-06-15': 'Sagrado Corazón',
+  '2026-06-29': 'San Pedro y San Pablo', '2026-07-13': 'Virgen de Chiquinquirá', '2026-07-20': 'Independencia de Colombia',
+  '2026-08-07': 'Batalla de Boyacá', '2026-08-17': 'Asunción de la Virgen', '2026-10-12': 'Día de la Raza',
+  '2026-11-02': 'Todos los Santos', '2026-11-16': 'Independencia de Cartagena', '2026-12-08': 'Inmaculada Concepción',
+  '2026-12-25': 'Navidad'
+};
+
+var vistaHorarios = 'semana'; // 'semana' (reservas) o 'mensual' (calendario tipo Outlook)
+var mesCalendario = (function () { var hoy = new Date(); return { anio: hoy.getFullYear(), mes: hoy.getMonth() }; })();
+
+function clasesDeCelda(clases, dia, hora) {
+  return clases.map(function (c, i) { return { c: c, i: i }; }).filter(function (o) { return o.c.dia === dia && o.c.hora === hora; });
+}
+
+function formatearFecha(anio, mes, dia) {
+  return anio + '-' + String(mes + 1).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
+}
+
+function renderCalendarioMensual(sesion) {
+  var alumnos = cargarAlumnos();
+  var usuariosDemo = cargarUsuarios();
+  var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
+  var clases = cargarClases();
+  var esProfesor = sesion.rol === 'PROFESOR';
+  var clasesBase = esProfesor ? clases.filter(function (c) { return c.profesor === sesion.email; }) : clases;
+
+  var anio = mesCalendario.anio, mes = mesCalendario.mes;
+  var nombreMes = new Date(anio, mes, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+  var primerDiaSemana = new Date(anio, mes, 1).getDay(); // 0=domingo
+  var totalDias = new Date(anio, mes + 1, 0).getDate();
+  var offset = primerDiaSemana === 0 ? 6 : primerDiaSemana - 1; // que la grilla arranque en lunes
+
+  var celdas = [];
+  for (var i = 0; i < offset; i++) celdas.push(null);
+  for (var d = 1; d <= totalDias; d++) celdas.push(d);
+  while (celdas.length % 7 !== 0) celdas.push(null);
+
+  var filasHtml = '';
+  for (var f = 0; f < celdas.length / 7; f++) {
+    filasHtml += '<tr>';
+    for (var c = 0; c < 7; c++) {
+      var dia = celdas[f * 7 + c];
+      if (dia === null) { filasHtml += '<td style="background:#fafafa; border:1px solid #eee;"></td>'; continue; }
+      var fechaStr = formatearFecha(anio, mes, dia);
+      var diaSemanaJs = new Date(anio, mes, dia).getDay(); // 0=domingo..6=sábado
+      var esFestivo = FESTIVOS_2026[fechaStr];
+      var clasesDelDia = esFestivo ? [] : clasesBase.filter(function (cl) {
+        var franja = FRANJAS.find(function (fr) { return (diaSemanaJs === 6 ? fr.horaSabado : fr.horaLunVie) === cl.hora; });
+        return franja && cl.dia === diaSemanaJs;
+      });
+      var esHoy = fechaStr === formatearFecha(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
+      filasHtml += '<td style="border:1px solid #eee; vertical-align:top; padding:4px; min-width:110px; height:90px; background:' + (esFestivo ? '#fdf3f0' : '#fff') + (esHoy ? '; box-shadow: inset 0 0 0 2px var(--azul-claro);' : '') + '">' +
+        '<div style="font-size:11px; font-weight:700; color:' + (esFestivo ? 'var(--rojo)' : 'var(--texto)') + ';">' + dia + '</div>' +
+        (esFestivo ? '<div style="font-size:9px; color:var(--rojo);">' + esFestivo + '</div>' : '') +
+        clasesDelDia.slice(0, 3).map(function (cl) {
+          var prof = profesores.find(function (p) { return p.email === cl.profesor; });
+          return '<div style="font-size:9px; background:var(--beige); border-radius:3px; padding:2px 3px; margin-top:2px;">' + cl.programa + (esProfesor ? '' : ' · ' + (prof ? prof.nombre.split(' ')[0] : '')) + '</div>';
+        }).join('') +
+        (clasesDelDia.length > 3 ? '<div style="font-size:9px; color:var(--muted);">+' + (clasesDelDia.length - 3) + ' más</div>' : '') +
+        '</td>';
+    }
+    filasHtml += '</tr>';
+  }
+
+  var encabezadoDias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(function (d) { return '<th style="font-size:11px; color:var(--muted); padding:4px;">' + d + '</th>'; }).join('');
+
+  var htmlEnvio = esProfesor ? '' :
+    '<div class="panel"><h2>Enviar calendario por correo</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Abre tu programa de correo con el calendario del mes ya redactado — todavía tenés que darle "Enviar" ahí, esto no manda el correo solo.</p>' +
+    '<div class="campo"><label>Profesor</label><select id="mc-profesor-envio">' +
+    profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '<button class="btn-primario" id="btn-enviar-calendario">Preparar correo</button>' +
+    '</div>';
+
+  return '' +
+    '<div class="panel">' +
+    '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">' +
+    '<button id="btn-mes-anterior" style="background:transparent; border:1px solid #ddd; border-radius:6px; width:30px; height:30px; cursor:pointer;">‹</button>' +
+    '<h2 style="margin:0; text-transform:capitalize;">' + nombreMes + '</h2>' +
+    '<button id="btn-mes-siguiente" style="background:transparent; border:1px solid #ddd; border-radius:6px; width:30px; height:30px; cursor:pointer;">›</button>' +
+    '</div>' +
+    '<div class="tabla-scroll"><table style="border-collapse:collapse; width:100%;"><thead><tr>' + encabezadoDias + '</tr></thead><tbody>' + filasHtml + '</tbody></table></div>' +
+    '<div style="display:flex; gap:16px; margin-top:10px; font-size:11px; color:var(--muted);">' +
+    '<span><span style="display:inline-block; width:10px; height:10px; background:#fdf3f0; border:1px solid var(--rojo); border-radius:2px; margin-right:4px;"></span>Festivo — sin clases</span>' +
+    '<span><span style="display:inline-block; width:10px; height:10px; box-shadow: inset 0 0 0 2px var(--azul-claro); border-radius:2px; margin-right:4px;"></span>Hoy</span>' +
+    '</div>' +
+    '</div>' +
+    htmlEnvio;
+}
+
+function renderHorarios(sesion) {
+  var toggleHtml = '<div class="panel" style="padding:12px 20px; display:flex; gap:8px;">' +
+    '<button id="btn-vista-semana" class="btn-primario" style="' + (vistaHorarios === 'semana' ? '' : 'background:transparent; color:var(--azul-oscuro); border:1px solid var(--azul-oscuro);') + '">Semana (reservas)</button>' +
+    '<button id="btn-vista-mensual" class="btn-primario" style="' + (vistaHorarios === 'mensual' ? '' : 'background:transparent; color:var(--azul-oscuro); border:1px solid var(--azul-oscuro);') + '">Calendario del año</button>' +
+    '</div>';
+
+  if (vistaHorarios === 'mensual') return toggleHtml + renderCalendarioMensual(sesion);
+  return toggleHtml + renderHorariosSemana(sesion);
+}
+
+function renderHorariosSemana(sesion) {
+  var alumnos = cargarAlumnos();
+  var usuariosDemo = cargarUsuarios();
+  var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
+  var clases = cargarClases();
+  var esProfesor = sesion.rol === 'PROFESOR';
+
+  var filasGrilla = FRANJAS.map(function (franja) {
+    var celdas = COLUMNAS_DIAS.map(function (dia) {
+      var esSabado = dia === 6;
+      var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
+      var ocupantes = clasesDeCelda(clases, dia, hora);
+      if (esProfesor) ocupantes = ocupantes.filter(function (o) { return o.c.profesor === sesion.email; });
+
+      var ocupada = ocupantes.length > 0;
+      var colorBorde = ocupada ? 'var(--rojo)' : 'var(--verde)';
+
+      var contenidoOcupantes = ocupantes.map(function (o) {
+        var prof = profesores.find(function (p) { return p.email === o.c.profesor; });
+        var nombresAlumnos = (o.c.alumnos || []).map(function (idx) { return alumnos[idx] ? alumnos[idx].nombres + ' ' + alumnos[idx].apellidos.split(' ')[0] : ''; }).filter(Boolean);
+        return '<div class="celda-clase" data-clase-idx="' + o.i + '" style="font-size:11px; text-align:left; background:#fff; border-radius:5px; padding:4px 6px; margin-bottom:3px; cursor:pointer;">' +
+          '<div style="font-weight:600;">' + o.c.programa + '</div>' +
+          '<div style="color:var(--muted);">' + (prof ? prof.nombre : o.c.profesor) + '</div>' +
+          (nombresAlumnos.length ? '<div style="color:var(--azul-oscuro);">' + nombresAlumnos.join(', ') + '</div>' : '<div style="color:var(--muted); font-style:italic;">sin estudiante todavía</div>') +
+          '</div>';
+      }).join('');
+
+      var celdaBtn = (!esProfesor) ? '<button class="btn-celda-agendar" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:11px; background:transparent; border:1px dashed var(--azul-claro); border-radius:5px; width:100%; padding:4px; color:var(--azul-oscuro); cursor:pointer; margin-top:2px;">+ Agendar</button>' : '';
+      var etiquetaHoraCelda = '<div style="font-size:10px; font-weight:700; color:' + (ocupada ? 'var(--rojo)' : 'var(--verde)') + '; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
+
+      return '<td style="border-left:3px solid ' + colorBorde + '; background:' + (ocupada ? '#fdf3f0' : '#f2f8f2') + '; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
+    }).join('');
+
+    return '<tr><td style="font-size:11px; color:var(--muted); font-weight:600; padding:6px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
+  }).join('');
+
+  var encabezado = '<tr><td></td>' + COLUMNAS_DIAS.map(function (d) { return '<td style="font-size:12px; font-weight:700; text-align:center; padding:6px; color:var(--azul-oscuro);">' + DIAS_SEMANA[d] + '</td>'; }).join('') + '</tr>';
+
+  var grillaHtml =
+    '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:4px; width:100%;">' + encabezado + filasGrilla + '</table></div>' +
+    '<div style="display:flex; gap:16px; margin-top:10px; font-size:11px; color:var(--muted);">' +
+    '<span><span style="display:inline-block; width:10px; height:10px; background:var(--verde); border-radius:2px; margin-right:4px;"></span>Disponible</span>' +
+    '<span><span style="display:inline-block; width:10px; height:10px; background:var(--rojo); border-radius:2px; margin-right:4px;"></span>Ocupado</span>' +
+    '</div>';
+
+  var htmlModalAgendar =
+    '<div id="modal-agendar" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:50; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px; max-height:85vh; overflow-y:auto;">' +
+    '<h2 style="margin-top:0;">Agendar en esta franja</h2>' +
+    '<p id="modal-franja-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
+    '<div class="campo"><label>Profesor</label><select id="mo-profesor">' +
+    profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Programa</label><select id="mo-programa">' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Tipo</label><select id="mo-tipo"><option value="individual">Individual</option><option value="grupal">Grupal</option></select></div>' +
+    '<div class="campo"><label>Sala (opcional)</label><input id="mo-sala" type="text" /></div>' +
+    '<div class="campo"><label>Estudiante (opcional, se puede asignar después)</label><select id="mo-alumno"><option value="">Sin asignar todavía</option>' +
+    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+    '</select></div>' +
+    '<button class="btn-primario" id="btn-confirmar-agendar">Confirmar</button>' +
+    '<button id="btn-cancelar-agendar" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '<p id="msj-cruce" style="font-size:12px; color:var(--rojo); display:none; margin-top:8px;">Ese profesor ya tiene una clase en ese día y horario.</p>' +
+    '</div></div>';
+
+  var htmlModalAsignar =
+    '<div id="modal-asignar" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:50; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px;">' +
+    '<h2 style="margin-top:0;">Asignar estudiante</h2>' +
+    '<p id="modal-asignar-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
+    '<div class="campo"><label>Estudiante</label><select id="as-nuevo-alumno">' +
+    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+    '</select></div>' +
+    '<button class="btn-primario" id="btn-confirmar-asignar">Asignar</button>' +
+    '<button id="btn-cancelar-asignar" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '</div></div>';
+
+  return '' +
+    '<div class="panel"><h2>Calendario de reservas' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">' + (esProfesor ? 'Se actualiza automáticamente cuando Secretaría o Administración agenda o matricula.' : 'Hacé clic en "+ Agendar" para reservar, o en una clase existente para asignarle un estudiante.') + '</p>' +
+    grillaHtml +
+    '</div>' +
+    htmlModalAgendar + htmlModalAsignar;
+}
+
+function activarLogicaHorarios() {
+  var btnVistaSemana = document.getElementById('btn-vista-semana');
+  var btnVistaMensual = document.getElementById('btn-vista-mensual');
+  if (btnVistaSemana) btnVistaSemana.addEventListener('click', function () { vistaHorarios = 'semana'; renderContenido('horarios'); });
+  if (btnVistaMensual) btnVistaMensual.addEventListener('click', function () { vistaHorarios = 'mensual'; renderContenido('horarios'); });
+
+  var btnMesAnterior = document.getElementById('btn-mes-anterior');
+  var btnMesSiguiente = document.getElementById('btn-mes-siguiente');
+  if (btnMesAnterior) btnMesAnterior.addEventListener('click', function () {
+    mesCalendario.mes--; if (mesCalendario.mes < 0) { mesCalendario.mes = 11; mesCalendario.anio--; }
+    renderContenido('horarios');
+  });
+  if (btnMesSiguiente) btnMesSiguiente.addEventListener('click', function () {
+    mesCalendario.mes++; if (mesCalendario.mes > 11) { mesCalendario.mes = 0; mesCalendario.anio++; }
+    renderContenido('horarios');
+  });
+
+  var btnEnviar = document.getElementById('btn-enviar-calendario');
+  if (btnEnviar) {
+    btnEnviar.addEventListener('click', function () {
+      var emailProfesor = document.getElementById('mc-profesor-envio').value;
+      var usuariosDemo = cargarUsuarios();
+      var prof = usuariosDemo.find(function (u) { return u.email === emailProfesor; });
+      var clases = cargarClases().filter(function (c) { return c.profesor === emailProfesor; });
+      var nombreMes = new Date(mesCalendario.anio, mesCalendario.mes, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+
+      var cuerpo = 'Hola ' + (prof ? prof.nombre : '') + ',%0D%0A%0D%0ATu horario de clases (' + nombreMes + '):%0D%0A%0D%0A';
+      if (clases.length === 0) {
+        cuerpo += 'Todavía no tenés clases asignadas.%0D%0A';
+      } else {
+        clases.forEach(function (c) {
+          var etiqueta = c.dia === 6 ? (FRANJAS.find(function (fr) { return fr.horaSabado === c.hora; }) || {}).etiquetaSabado : (FRANJAS.find(function (fr) { return fr.horaLunVie === c.hora; }) || {}).etiquetaLunVie;
+          cuerpo += '- ' + DIAS_SEMANA[c.dia] + ' ' + (etiqueta || c.hora) + ': ' + c.programa + '%0D%0A';
+        });
+      }
+      cuerpo += '%0D%0ASaludos,%0D%0AAcademia Musical Jacquin';
+
+      window.location.href = 'mailto:' + emailProfesor + '?subject=' + encodeURIComponent('Tu horario — ' + nombreMes) + '&body=' + cuerpo;
+    });
+  }
+
+  var modalAgendar = document.getElementById('modal-agendar');
+  var modalAsignar = document.getElementById('modal-asignar');
+
+  document.querySelectorAll('.btn-celda-agendar').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var dia = Number(btn.getAttribute('data-dia'));
+      var hora = btn.getAttribute('data-hora');
+      modalAgendar.setAttribute('data-dia', dia);
+      modalAgendar.setAttribute('data-hora', hora);
+      document.getElementById('modal-franja-info').textContent = DIAS_SEMANA[dia] + ' — ' + hora;
+      document.getElementById('msj-cruce').style.display = 'none';
+      if (modalAgendar) modalAgendar.style.display = 'flex';
+    });
+  });
+  var btnCancelarAgendar = document.getElementById('btn-cancelar-agendar');
+  if (btnCancelarAgendar) btnCancelarAgendar.addEventListener('click', function () { modalAgendar.style.display = 'none'; });
+
+  var btnConfirmar = document.getElementById('btn-confirmar-agendar');
+  if (btnConfirmar) {
+    btnConfirmar.addEventListener('click', function () {
+      var dia = Number(modalAgendar.getAttribute('data-dia'));
+      var hora = modalAgendar.getAttribute('data-hora');
+      var profesor = document.getElementById('mo-profesor').value;
+      var clases = cargarClases();
+      var cruce = clases.some(function (c) { return c.dia === dia && c.hora === hora && c.profesor === profesor; });
+      if (cruce) { document.getElementById('msj-cruce').style.display = 'block'; return; }
+
+      var alumnoSel = document.getElementById('mo-alumno').value;
+      var nuevaClase = {
+        profesor: profesor,
+        programa: document.getElementById('mo-programa').value,
+        tipo: document.getElementById('mo-tipo').value,
+        dia: dia, hora: hora,
+        sala: document.getElementById('mo-sala').value.trim(),
+        alumnos: alumnoSel !== '' ? [Number(alumnoSel)] : []
+      };
+      clases.push(nuevaClase);
+      guardarClases(clases);
+
+      // Si se asignó un estudiante, su "profesor asignado" queda sincronizado
+      // automáticamente — esto es lo que hace que Profesores se actualice solo.
+      if (alumnoSel !== '') {
+        var alumnos = cargarAlumnos();
+        alumnos[Number(alumnoSel)].profesor = profesor;
+        guardarAlumnos(alumnos);
+      }
+
+      modalAgendar.style.display = 'none';
+      renderContenido('horarios');
+    });
+  }
+
+  document.querySelectorAll('.celda-clase').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var idx = Number(el.getAttribute('data-clase-idx'));
+      modalAsignar.setAttribute('data-clase-idx', idx);
+      var clases = cargarClases();
+      var c = clases[idx];
+      document.getElementById('modal-asignar-info').textContent = c.programa + ' — ' + DIAS_SEMANA[c.dia] + ' ' + c.hora;
+      modalAsignar.style.display = 'flex';
+    });
+  });
+  var btnCancelarAsignar = document.getElementById('btn-cancelar-asignar');
+  if (btnCancelarAsignar) btnCancelarAsignar.addEventListener('click', function () { modalAsignar.style.display = 'none'; });
+
+  var btnConfirmarAsignar = document.getElementById('btn-confirmar-asignar');
+  if (btnConfirmarAsignar) {
+    btnConfirmarAsignar.addEventListener('click', function () {
+      var idxClase = Number(modalAsignar.getAttribute('data-clase-idx'));
+      var idxAlumno = Number(document.getElementById('as-nuevo-alumno').value);
+      var clases = cargarClases();
+      var c = clases[idxClase];
+      c.alumnos = c.alumnos || [];
+      if (c.alumnos.indexOf(idxAlumno) === -1) c.alumnos.push(idxAlumno);
+      guardarClases(clases);
+
+      // Mismo criterio: asignar acá también sincroniza el profesor del estudiante.
+      var alumnos = cargarAlumnos();
+      alumnos[idxAlumno].profesor = c.profesor;
+      guardarAlumnos(alumnos);
+
+      modalAsignar.style.display = 'none';
+      renderContenido('horarios');
+    });
+  }
+}
+
+var COLOR_ESTADO_ASISTENCIA = {
+  asistio: '#2e7d32', falta: '#b3261e', excusa: '#E78C3B',
+  cancelada: '#6b7686', reprogramada: '#93B6EE', recuperada: '#7c5cbf'
+};
+
+function renderAsistencia(sesion) {
+  var alumnos = cargarAlumnos();
+  var clases = cargarClases();
+  var esProfesor = sesion.rol === 'PROFESOR';
+  var clasesVisibles = esProfesor ? clases.filter(function (c) { return c.profesor === sesion.email; }) : clases;
+  var asistencias = cargarAsistencias();
+  if (esProfesor) {
+    var clasesIdxVisibles = clases.map(function (c, i) { return c.profesor === sesion.email ? i : -1; }).filter(function (i) { return i !== -1; });
+    asistencias = asistencias.filter(function (a) { return clasesIdxVisibles.indexOf(a.claseIdx) !== -1; });
+  }
+
+  var filas = asistencias.slice().reverse().map(function (a) {
+    var alumno = alumnos[a.alumnoIdx];
+    var clase = clases[a.claseIdx];
+    var color = COLOR_ESTADO_ASISTENCIA[a.estado] || 'var(--muted)';
+    return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td>' +
+      '<td>' + (clase ? clase.programa : '—') + '</td><td>' + a.fecha + '</td>' +
+      '<td><span style="display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; color:#fff; background:' + color + ';">' + ETIQUETA_ASISTENCIA[a.estado] + '</span></td></tr>';
+  }).join('');
+
+  var hoy = new Date().toISOString().slice(0, 10);
+
+  return '' +
+    '<div class="panel"><h2>Registrar asistencia</h2>' +
+    (alumnos.length === 0 || clasesVisibles.length === 0 ? '<p style="font-size:13px; color:var(--muted);">' + (esProfesor ? 'No tenés clases asignadas todavía.' : 'Necesitás al menos un estudiante y una clase.') + '</p>' :
+    '<div class="campo"><label>Estudiante</label><select id="as-alumno">' +
+    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Curso / programa</label><input id="as-curso-info" type="text" readonly style="background:var(--beige); color:var(--muted);" /></div>' +
+    '<div class="campo" style="display:none;"><label>Clase</label><select id="as-clase">' +
+    clases.map(function (c, i) {
+      if (esProfesor && c.profesor !== sesion.email) return '';
+      return '<option value="' + i + '">' + c.programa + ' — ' + DIAS_SEMANA[c.dia] + ' ' + c.hora + '</option>';
+    }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Fecha</label><input id="as-fecha" type="date" value="' + hoy + '" /></div>' +
+    '<div class="campo"><label>Estado</label><select id="as-estado">' +
+    ESTADOS_ASISTENCIA.map(function (e) { return '<option value="' + e + '">' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('') +
+    '</select></div>' +
+    '<button class="btn-primario" id="btn-registrar-asistencia">Guardar</button>' +
+    '<p id="msj-asistencia-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Asistencia registrada.</p>' +
+    '<p id="msj-alerta-faltas" style="font-size:12px; color:var(--rojo); display:none; margin-top:8px;">⚠ Este estudiante acumula ' + UMBRAL_ALERTA_FALTAS + ' o más faltas recientes — considerar contactar al acudiente.</p>') +
+    '</div>' +
+
+    '<div class="panel"><h2>Historial de asistencia</h2>' +
+    '<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">' +
+    ESTADOS_ASISTENCIA.map(function (e) {
+      return '<span style="font-size:11px; color:var(--muted);"><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:' + COLOR_ESTADO_ASISTENCIA[e] + '; margin-right:4px;"></span>' + ETIQUETA_ASISTENCIA[e] + '</span>';
+    }).join('') +
+    '</div>' +
+    (filas ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Programa</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>' + filas + '</tbody></table></div>'
+      : '<p style="font-size:13px; color:var(--muted);">Sin registros todavía.</p>') +
+    '</div>';
+}
+
+function activarLogicaAsistencia() {
+  var btn = document.getElementById('btn-registrar-asistencia');
+  if (!btn) return;
+
+  var selectAlumno = document.getElementById('as-alumno');
+  var selectClase = document.getElementById('as-clase');
+  var infoCurso = document.getElementById('as-curso-info');
+  var selectEstado = document.getElementById('as-estado');
+
+  function sincronizarCursoDelAlumno() {
+    var alumnoIdx = Number(selectAlumno.value);
+    var clases = cargarClases();
+    var idxClase = -1;
+    for (var i = 0; i < clases.length; i++) {
+      var opcion = selectClase.querySelector('option[value="' + i + '"]');
+      if (!opcion) continue; // no visible para este profesor
+      if ((clases[i].alumnos || []).indexOf(alumnoIdx) !== -1) { idxClase = i; break; }
+    }
+    if (idxClase === -1) {
+      // el estudiante no está anotado en ninguna clase todavía — se usa su programa registrado como referencia.
+      var alumno = cargarAlumnos()[alumnoIdx];
+      infoCurso.value = alumno ? alumno.programa + ' (sin clase específica asignada)' : '';
+      if (selectClase.options.length) selectClase.selectedIndex = 0;
+    } else {
+      selectClase.value = String(idxClase);
+      infoCurso.value = clases[idxClase].programa;
+    }
+  }
+
+  function colorearEstado() {
+    var color = COLOR_ESTADO_ASISTENCIA[selectEstado.value] || '#ccc';
+    selectEstado.style.borderColor = color;
+    selectEstado.style.boxShadow = '0 0 0 1px ' + color;
+  }
+
+  if (selectAlumno && selectClase && infoCurso) {
+    selectAlumno.addEventListener('change', sincronizarCursoDelAlumno);
+    sincronizarCursoDelAlumno();
+  }
+  if (selectEstado) {
+    selectEstado.addEventListener('change', colorearEstado);
+    colorearEstado();
+  }
+
+  btn.addEventListener('click', function () {
+    var alumnoIdx = Number(document.getElementById('as-alumno').value);
+    var claseIdx = Number(document.getElementById('as-clase').value);
+    var fecha = document.getElementById('as-fecha').value;
+    var estado = document.getElementById('as-estado').value;
+    if (!fecha) { alert('La fecha es obligatoria.'); return; }
+
+    var asistencias = cargarAsistencias();
+    // Una sola asistencia por alumno+clase+fecha — se corrige, no se duplica.
+    var existente = asistencias.find(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fecha; });
+    if (existente) { existente.estado = estado; } else { asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fecha, estado: estado }); }
+    guardarAsistencias(asistencias);
+
+    document.getElementById('msj-asistencia-ok').style.display = 'block';
+
+    if (estado === 'falta') {
+      var faltasRecientes = asistencias.filter(function (a) { return a.alumnoIdx === alumnoIdx && a.estado === 'falta'; });
+      document.getElementById('msj-alerta-faltas').style.display = faltasRecientes.length >= UMBRAL_ALERTA_FALTAS ? 'block' : 'none';
+    } else {
+      document.getElementById('msj-alerta-faltas').style.display = 'none';
+    }
+  });
+}
+
+function renderProfesores(sesion) {
+  var usuariosDemo = cargarUsuarios();
+  var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
+  var perfiles = cargarPerfilesProfesor();
+  var alumnos = cargarAlumnos();
+  var clases = cargarClases();
+  var esProfesor = sesion.rol === 'PROFESOR';
+
+  if (esProfesor) {
+    // Espacio de trabajo único del profesor: solo lo suyo, nada más.
+    // Esto reemplaza cualquier vista general — un profesor nunca ve la
+    // lista completa de estudiantes ni de horarios de la academia.
+    var misAlumnos = alumnos.filter(function (a) { return a.profesor === sesion.email; });
+    var misClases = clases.filter(function (c) { return c.profesor === sesion.email; });
+
+    var filasMisAlumnos = misAlumnos.map(function (a) {
+      return '<tr><td>' + a.nombres + ' ' + a.apellidos + '</td><td>' + a.programa + '</td><td><span class="chip-rol">' + ETIQUETA_ESTADO[a.estado] + '</span></td></tr>';
+    }).join('');
+
+    var filasMisClases = misClases.map(function (c) {
+      var nombresAlumnos = (c.alumnos || []).map(function (idx) { return alumnos[idx] ? alumnos[idx].nombres + ' ' + alumnos[idx].apellidos : ''; }).filter(Boolean);
+      return '<tr><td>' + DIAS_SEMANA[c.dia] + '</td><td>' + c.hora + '</td><td>' + c.programa + '</td><td>' + c.tipo + '</td><td>' + (nombresAlumnos.join(', ') || '—') + '</td></tr>';
+    }).join('');
+
+    return '' +
+      '<div class="panel"><h2>Mi espacio de trabajo</h2>' +
+      '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Solo tus estudiantes y tus horarios — no ves el resto de la academia.</p>' +
+      '</div>' +
+      '<div class="panel"><h2>Mis estudiantes (' + misAlumnos.length + ')</h2>' +
+      (misAlumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no tenés estudiantes asignados.</p>' :
+       '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Programa</th><th>Estado</th></tr></thead><tbody>' + filasMisAlumnos + '</tbody></table></div>') +
+      '</div>' +
+      '<div class="panel"><h2>Mis horarios (' + misClases.length + ')</h2>' +
+      (misClases.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no tenés clases asignadas.</p>' :
+       '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Día</th><th>Hora</th><th>Programa</th><th>Tipo</th><th>Estudiantes</th></tr></thead><tbody>' + filasMisClases + '</tbody></table></div>') +
+      '</div>';
+  }
+
+  // Vista de administración: coexistencia de datos — cada profesor con
+  // sus estudiantes asignados y sus horarios, todo en una sola tabla.
+  var filasConsolidado = profesores.map(function (p) {
+    var suyos = alumnos.filter(function (a) { return a.profesor === p.email; });
+    var suyasClases = clases.filter(function (c) { return c.profesor === p.email; });
+    var listaAlumnos = suyos.length ? suyos.map(function (a) { return a.nombres + ' ' + a.apellidos; }).join(', ') : '—';
+    var listaHorarios = suyasClases.length ? suyasClases.map(function (c) { return DIAS_SEMANA[c.dia].slice(0, 3) + ' ' + c.hora; }).join(', ') : '—';
+    return '<tr><td>' + p.nombre + '</td><td>' + listaAlumnos + '</td><td>' + listaHorarios + '</td></tr>';
+  }).join('');
+
+  var filasPerfil = profesores.map(function (p) {
+    var perfil = perfiles[p.email] || {};
+    return '<tr><td>' + p.nombre + '</td><td>' + p.email + '</td><td>' + (perfil.instrumentos || '—') + '</td><td>' + (perfil.telefono || '—') + '</td></tr>';
+  }).join('');
+
+  return '' +
+    '<div class="panel"><h2>Profesores, estudiantes y horarios (' + profesores.length + ')</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Vista consolidada — quién enseña, a quiénes y cuándo.</p>' +
+    (profesores.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay profesores.</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Profesor</th><th>Estudiantes asignados</th><th>Horarios</th></tr></thead><tbody>' + filasConsolidado + '</tbody></table></div>') +
+    '</div>' +
+
+    '<div class="panel"><h2>Agregar profesor</h2>' +
+    '<div class="campo"><label>Nombre</label><input id="np-nombre" type="text" /></div>' +
+    '<div class="campo"><label>Email</label><input id="np-email" type="email" /></div>' +
+    '<div class="campo"><label>Instrumentos que enseña</label><select id="np-instrumentos" multiple size="5">' +
+    PROGRAMAS.map(function (pr) { return '<option value="' + pr + '">' + pr + '</option>'; }).join('') +
+    '</select></div>' +
+    '<button class="btn-primario" id="btn-agregar-profesor">Agregar profesor</button>' +
+    '<p id="msj-profesor-nuevo" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Profesor agregado — ya puede iniciar sesión (cualquier contraseña sirve en esta demo) y asignarle estudiantes/horarios.</p>' +
+    '</div>' +
+
+    '<div class="panel"><h2>Perfiles</h2>' +
+    (profesores.length === 0 ? '<p style="font-size:13px; color:var(--muted);">—</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Instrumentos</th><th>Teléfono</th></tr></thead><tbody>' + filasPerfil + '</tbody></table></div>') +
+    '</div>' +
+
+    (profesores.length === 0 ? '' :
+    '<div class="panel"><h2>Completar perfil</h2>' +
+    '<div class="campo"><label>Profesor</label><select id="pf-usuario">' +
+    profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Instrumentos que enseña</label><select id="pf-instrumentos" multiple size="5">' +
+    PROGRAMAS.map(function (pr) { return '<option value="' + pr + '">' + pr + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Teléfono</label><input id="pf-telefono" type="text" /></div>' +
+    '<div class="campo"><label>Experiencia</label><input id="pf-experiencia" type="text" placeholder="Ej: 8 años enseñando piano clásico" /></div>' +
+    '<button class="btn-primario" id="btn-guardar-perfil">Guardar perfil</button>' +
+    '<p id="msj-perfil-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Perfil actualizado.</p>' +
+    '</div>');
+}
+
+function activarLogicaProfesores() {
+  var btnNuevo = document.getElementById('btn-agregar-profesor');
+  if (btnNuevo) {
+    btnNuevo.addEventListener('click', function () {
+      var nombre = document.getElementById('np-nombre').value.trim();
+      var email = document.getElementById('np-email').value.trim();
+      if (!nombre || !email) { alert('Nombre y email son obligatorios.'); return; }
+      var usuarios = cargarUsuarios();
+      if (usuarios.some(function (u) { return u.email === email; })) { alert('Ya existe un usuario con ese email.'); return; }
+      usuarios.push({ nombre: nombre, email: email, rol: 'PROFESOR' });
+      guardarUsuarios(usuarios);
+
+      var seleccion = Array.prototype.slice.call(document.getElementById('np-instrumentos').selectedOptions).map(function (o) { return o.value; });
+      if (seleccion.length) {
+        var perfiles = cargarPerfilesProfesor();
+        perfiles[email] = { instrumentos: seleccion.join(', '), telefono: '', experiencia: '' };
+        guardarPerfilesProfesor(perfiles);
+      }
+
+      document.getElementById('msj-profesor-nuevo').style.display = 'block';
+      setTimeout(function () { renderContenido('profesores'); }, 700);
+    });
+  }
+
+  var btn = document.getElementById('btn-guardar-perfil');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var email = document.getElementById('pf-usuario').value;
+    var seleccion = Array.prototype.slice.call(document.getElementById('pf-instrumentos').selectedOptions).map(function (o) { return o.value; });
+    var perfiles = cargarPerfilesProfesor();
+    perfiles[email] = {
+      instrumentos: seleccion.join(', '),
+      telefono: document.getElementById('pf-telefono').value.trim(),
+      experiencia: document.getElementById('pf-experiencia').value.trim()
+    };
+    guardarPerfilesProfesor(perfiles);
+    document.getElementById('msj-perfil-ok').style.display = 'block';
+  });
+}
+
+function renderCursos() {
+  var alumnos = cargarAlumnos();
+  var usuariosDemo = cargarUsuarios();
+  var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
+  var clases = cargarClases();
+  var COLORES_ACENTO = ['#223F61', '#93B6EE', '#E78C3B'];
+
+  function horarioDeAlumnoEnPrograma(alumnoIdx, programa) {
+    var clase = clases.find(function (c) { return c.programa === programa && (c.alumnos || []).indexOf(alumnoIdx) !== -1; });
+    if (!clase) return null;
+    var franja = FRANJAS.find(function (fr) { return (clase.dia === 6 ? fr.horaSabado : fr.horaLunVie) === clase.hora; });
+    var etiquetaHora = franja ? (clase.dia === 6 ? franja.etiquetaSabado : franja.etiquetaLunVie) : clase.hora;
+    return DIAS_SEMANA[clase.dia] + ' · ' + etiquetaHora;
+  }
+
+  var tarjetasHtml = PROGRAMAS.map(function (programa, idx) {
+    var alumnosPrograma = alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return o.a.programa === programa; });
+    var colorAcento = COLORES_ACENTO[idx % 3];
+
+    var filas = alumnosPrograma.map(function (o) {
+      var prof = profesores.find(function (p) { return p.email === o.a.profesor; });
+      var horario = horarioDeAlumnoEnPrograma(o.i, programa);
+      var nombreCompleto = o.a.nombres + ' ' + o.a.apellidos;
+      return '<tr class="fila-consulta-estudiante" data-nombre="' + nombreCompleto.toLowerCase() + '">' +
+        '<td style="font-weight:600;">' + nombreCompleto + '</td>' +
+        '<td>' + (prof ? prof.nombre : '<span style="color:var(--muted); font-style:italic;">sin asignar</span>') + '</td>' +
+        '<td>' + (horario ? horario : '<span style="color:var(--muted); font-style:italic;">sin horario</span>') + '</td>' +
+        '<td><span class="chip-rol">' + ETIQUETA_ESTADO[o.a.estado] + '</span></td>' +
+        '</tr>';
+    }).join('');
+
+    return '' +
+      '<div class="panel tarjeta-programa" style="border-top:4px solid ' + colorAcento + '; margin-bottom:16px;">' +
+      '<div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:4px;">' +
+      '<h2 style="margin:0;">' + programa + '</h2>' +
+      '<span style="font-size:12px; color:var(--muted); font-weight:600;">' + alumnosPrograma.length + ' estudiante' + (alumnosPrograma.length === 1 ? '' : 's') + '</span>' +
+      '</div>' +
+      (alumnosPrograma.length === 0
+        ? '<p class="sin-resultado-programa" style="font-size:13px; color:var(--muted); margin:8px 0 2px;">Todavía no hay estudiantes en este programa.</p>'
+        : '<div class="tabla-scroll" style="margin-top:10px;"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Profesor</th><th>Horario</th><th>Estado</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+      '</div>';
+  }).join('');
+
+  var profesoresDisponibles = profesores;
+  var formularioAlta =
+    '<div class="panel"><h2>Registrar nuevo estudiante</h2>' +
+    '<div class="campo"><label>Nombres</label><input id="al-nombres" type="text" /></div>' +
+    '<div class="campo"><label>Apellidos</label><input id="al-apellidos" type="text" /></div>' +
+    '<div class="campo"><label>Documento</label><input id="al-documento" type="text" /></div>' +
+    '<div class="campo"><label>Fecha de nacimiento</label><input id="al-nacimiento" type="date" /></div>' +
+    '<div class="campo"><label>Programa</label><select id="al-programa">' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Profesor asignado (opcional)</label><select id="al-profesor">' +
+    '<option value="">Sin asignar todavía</option>' +
+    profesoresDisponibles.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Teléfono de contacto</label><input id="al-telefono" type="text" /></div>' +
+    '<div class="campo"><label id="lbl-acudiente">Nombre del acudiente (opcional)</label><input id="al-acudiente" type="text" /></div>' +
+    '<p id="aviso-menor" style="font-size:12px; color:var(--naranja); display:none; margin:-4px 0 10px;">Alumno menor de edad: el acudiente es obligatorio.</p>' +
+    '<div class="campo"><label>Observaciones</label><input id="al-obs" type="text" /></div>' +
+    '<button class="btn-primario" id="btn-crear-alumno">Registrar estudiante</button>' +
+    '<p id="msj-alumno-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Estudiante registrado — ya aparece en la tarjeta de su programa arriba.</p>' +
+    '</div>';
+
+  return '' +
+    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 16px;">Cursos y programas</h1>' +
+    '<div class="panel"><label style="display:block; font-size:12px; color:var(--muted); margin-bottom:6px;">Buscar estudiante (en todos los programas)</label>' +
+    '<input id="buscar-estudiante-cursos" type="text" placeholder="Escribí un nombre..." /></div>' +
+    tarjetasHtml +
+    formularioAlta;
+}
+
+function activarLogicaCursos() {
+  activarLogicaEstudiantes('cursos');
+
+  var buscador = document.getElementById('buscar-estudiante-cursos');
+  if (buscador) {
+    buscador.addEventListener('input', function () {
+      var termino = this.value.trim().toLowerCase();
+      document.querySelectorAll('.fila-consulta-estudiante').forEach(function (fila) {
+        fila.style.display = fila.getAttribute('data-nombre').indexOf(termino) !== -1 ? '' : 'none';
+      });
+      document.querySelectorAll('.tarjeta-programa').forEach(function (tarjeta) {
+        var filas = tarjeta.querySelectorAll('.fila-consulta-estudiante');
+        if (filas.length === 0) return; // tarjeta sin estudiantes, no tocar
+        var algunaVisible = Array.prototype.some.call(filas, function (f) { return f.style.display !== 'none'; });
+        tarjeta.style.display = algunaVisible ? '' : (termino ? 'none' : '');
+      });
+    });
+  }
+}
+
+function renderLineaTiempoEvaluacion(evaluaciones) {
+  if (evaluaciones.length === 0) return '<p style="font-size:13px; color:var(--muted);">Todavía no hay evaluaciones registradas para armar la línea de tiempo.</p>';
+  var ordenadas = evaluaciones.slice().sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+  var tiempos = ordenadas.map(function (e) { return new Date(e.fecha).getTime(); });
+  var minT = Math.min.apply(null, tiempos), maxT = Math.max.apply(null, tiempos);
+  var rango = maxT - minT || 1;
+  var W = 680, H = 210, PAD = 40;
+
+  var puntos = ordenadas.map(function (e) {
+    var x = PAD + ((new Date(e.fecha).getTime() - minT) / rango) * (W - 2 * PAD);
+    var prom = promedioEvaluacion(e);
+    var y = (H - PAD - 20) - ((prom - 1) / 2) * (H - 2 * PAD - 20);
+    return { x: x, y: y, prom: prom, fecha: e.fecha };
+  });
+
+  var lineaPts = puntos.map(function (p) { return p.x + ',' + p.y; }).join(' ');
+
+  var circulos = puntos.map(function (p) {
+    var color = p.prom >= 2.5 ? '#39ff88' : (p.prom >= 1.5 ? '#ffb347' : '#ff4d6d');
+    return '<circle cx="' + p.x + '" cy="' + p.y + '" r="7" fill="' + color + '" filter="url(#neonGlow)"><title>' + p.fecha + ' — ' + p.prom.toFixed(1) + '/3</title></circle>' +
+      '<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#fff"></circle>';
+  }).join('');
+
+  var etiquetasFecha = puntos.map(function (p) {
+    return '<text x="' + p.x + '" y="' + (H - 12) + '" font-size="9.5" fill="#9fb3d1" text-anchor="middle" transform="rotate(-30 ' + p.x + ' ' + (H - 12) + ')">' + p.fecha + '</text>';
+  }).join('');
+
+  var ultimo = puntos[puntos.length - 1];
+  var etiquetaUltimo = ultimo.prom >= 2.5 ? 'Consolidado' : (ultimo.prom >= 1.5 ? 'En desarrollo' : 'Iniciando');
+  var colorUltimoTexto = ultimo.prom >= 2.5 ? '#39ff88' : (ultimo.prom >= 1.5 ? '#ffb347' : '#ff4d6d');
+
+  return '' +
+    '<div style="display:flex; align-items:baseline; gap:10px; margin-bottom:10px;">' +
+    '<span style="font-size:13px; color:var(--muted);">Nivel actual:</span>' +
+    '<span style="font-size:16px; font-weight:700; color:' + colorUltimoTexto + '; text-shadow:0 0 8px ' + colorUltimoTexto + ';">' + etiquetaUltimo + '</span>' +
+    '<span style="font-size:11px; color:var(--muted);">(' + puntos.length + ' evaluación' + (puntos.length === 1 ? '' : 'es') + ' registrada' + (puntos.length === 1 ? '' : 's') + ')</span>' +
+    '</div>' +
+    '<div style="background:var(--azul-noche); border-radius:12px; padding:8px 4px;">' +
+    '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%; height:210px;">' +
+    '<defs><filter id="neonGlow" x="-100%" y="-100%" width="300%" height="300%">' +
+    '<feGaussianBlur stdDeviation="4.5" result="blur"/>' +
+    '<feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>' +
+    '</filter></defs>' +
+    '<line x1="' + PAD + '" y1="' + (H - PAD - 20) + '" x2="' + (W - PAD) + '" y2="' + (H - PAD - 20) + '" stroke="#2a3f5f" stroke-width="1"/>' +
+    '<polyline points="' + lineaPts + '" fill="none" stroke="#5ee7ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#neonGlow)"/>' +
+    '<polyline points="' + lineaPts + '" fill="none" stroke="#eafcff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+    circulos +
+    etiquetasFecha +
+    '</svg>' +
+    '</div>';
+}
+
+function renderEvaluacion(sesion) {
+  var alumnos = cargarAlumnos();
+  var esProfesor = sesion.rol === 'PROFESOR';
+  var alumnosVisibles = esProfesor ? alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return o.a.profesor === sesion.email; }) : alumnos.map(function (a, i) { return { a: a, i: i }; });
+  var evaluaciones = cargarEvaluaciones();
+
+  if (alumnosVisibles.length === 0) {
+    return '<div class="panel"><h2>Evaluación académica</h2><p style="font-size:13px; color:var(--muted);">' + (esProfesor ? 'No tenés estudiantes asignados todavía.' : 'Todavía no hay estudiantes registrados.') + '</p></div>';
+  }
+
+  var alumnoSeleccionadoIdx = alumnosVisibles[0].i;
+  var evaluacionesAlumno = evaluaciones.filter(function (e) { return e.alumnoIdx === alumnoSeleccionadoIdx; });
+
+  var historialFilas = evaluacionesAlumno.slice().sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); }).map(function (e) {
+    return '<tr><td>' + e.fecha + '</td><td>' + promedioEvaluacion(e).toFixed(1) + '/3</td><td>' + (e.observaciones || '—') + '</td></tr>';
+  }).join('');
+
+  return '' +
+    '<div class="panel"><h2>Evaluación académica</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Método propio de Jacquin — cualitativo, por observación del profesor. No es examen ni nota numérica.</p>' +
+    '<div class="campo"><label>Estudiante</label><select id="ev-alumno-ver">' +
+    alumnosVisibles.map(function (o) { return '<option value="' + o.i + '">' + o.a.nombres + ' ' + o.a.apellidos + '</option>'; }).join('') +
+    '</select></div>' +
+    '</div>' +
+
+    '<div class="panel" id="panel-linea-tiempo"><h2>Línea de tiempo de avance</h2>' +
+    renderLineaTiempoEvaluacion(evaluacionesAlumno) +
+    '</div>' +
+
+    '<div class="panel"><h2>Nueva evaluación</h2>' +
+    '<div class="campo"><label>Fecha</label><input id="ev-fecha" type="date" value="' + new Date().toISOString().slice(0, 10) + '" /></div>' +
+    INDICADORES_EVALUACION.map(function (ind) {
+      return '<div class="campo"><label>' + ETIQUETA_INDICADOR[ind] + '</label><select id="ev-' + ind + '">' +
+        Object.keys(ETIQUETA_ESCALA).map(function (k) { return '<option value="' + k + '"' + (k === 'en_desarrollo' ? ' selected' : '') + '>' + ETIQUETA_ESCALA[k] + '</option>'; }).join('') +
+        '</select></div>';
+    }).join('') +
+    '<div class="campo"><label>Observaciones</label><input id="ev-observaciones" type="text" placeholder="Notas del profesor sobre esta evaluación..." /></div>' +
+    '<button class="btn-primario" id="btn-guardar-evaluacion">Guardar evaluación</button>' +
+    '<p id="msj-evaluacion-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Evaluación registrada — la línea de tiempo ya se actualizó.</p>' +
+    '</div>' +
+
+    '<div class="panel"><h2>Historial</h2>' +
+    (historialFilas ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Promedio</th><th>Observaciones</th></tr></thead><tbody>' + historialFilas + '</tbody></table></div>' : '<p style="font-size:13px; color:var(--muted);">Sin evaluaciones todavía.</p>') +
+    '</div>' +
+
+    (esProfesor ? '' :
+    '<div class="panel"><h2>Enviar informe al acudiente</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Genera el PDF del informe y te ayuda a mandarlo por WhatsApp.</p>' +
+    '<button class="btn-primario" id="btn-informe-pdf">Generar informe PDF</button>' +
+    '</div>') +
+
+    '<div id="comprobante-imprimir" style="display:none;"></div>';
+}
+
+function generarHtmlInformeEvaluacion(alumno, evaluaciones) {
+  var ordenadas = evaluaciones.slice().sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+  var filas = ordenadas.map(function (e) {
+    return '<tr><td style="padding:4px 0;">' + e.fecha + '</td><td style="padding:4px 0; text-align:right;">' + promedioEvaluacion(e).toFixed(1) + '/3</td><td style="padding:4px 0; font-size:11px;">' + (e.observaciones || '—') + '</td></tr>';
+  }).join('');
+  var ultimo = ordenadas.length ? promedioEvaluacion(ordenadas[ordenadas.length - 1]) : null;
+  var nivelTxt = ultimo === null ? '—' : (ultimo >= 2.5 ? 'Consolidado' : (ultimo >= 1.5 ? 'En desarrollo' : 'Iniciando'));
+
+  return '' +
+    '<div style="font-family:Arial,sans-serif; max-width:420px; margin:0 auto; padding:24px; border:1px solid #ccc;">' +
+    '<div style="text-align:center; border-bottom:2px solid #223F61; padding-bottom:12px; margin-bottom:16px;">' +
+    '<div style="font-size:20px; font-weight:bold; color:#223F61;">Jacquin</div>' +
+    '<div style="font-size:11px; letter-spacing:2px; color:#666;">ACADEMIA MUSICAL</div>' +
+    '</div>' +
+    '<h3 style="text-align:center; margin:0 0 6px;">Informe de evaluación académica</h3>' +
+    '<p style="text-align:center; font-size:13px; color:#666; margin:0 0 16px;">' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '') + ' — ' + (alumno ? alumno.programa : '') + '</p>' +
+    '<p style="text-align:center; font-size:14px; margin:0 0 16px;">Nivel actual: <strong>' + nivelTxt + '</strong></p>' +
+    '<table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666;">Fecha</td><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666; text-align:right;">Promedio</td><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666;">Observaciones</td></tr></thead><tbody>' + filas + '</tbody></table>' +
+    '<p style="text-align:center; font-size:11px; color:#999; margin-top:20px;">Academia Musical Jacquin — evaluación cualitativa por observación del profesor</p>' +
+    '</div>';
+}
+
+function activarLogicaEvaluacion() {
+  var selectVer = document.getElementById('ev-alumno-ver');
+  if (selectVer) {
+    selectVer.addEventListener('change', function () {
+      var idx = Number(this.value);
+      var evaluaciones = cargarEvaluaciones().filter(function (e) { return e.alumnoIdx === idx; });
+      document.getElementById('panel-linea-tiempo').innerHTML = '<h2>Línea de tiempo de avance</h2>' + renderLineaTiempoEvaluacion(evaluaciones);
+    });
+  }
+
+  var btnGuardar = document.getElementById('btn-guardar-evaluacion');
+  if (btnGuardar) {
+    btnGuardar.addEventListener('click', function () {
+      var alumnoIdx = Number(document.getElementById('ev-alumno-ver').value);
+      var fecha = document.getElementById('ev-fecha').value;
+      if (!fecha) { alert('La fecha es obligatoria.'); return; }
+      var nueva = { alumnoIdx: alumnoIdx, fecha: fecha, observaciones: document.getElementById('ev-observaciones').value.trim() };
+      INDICADORES_EVALUACION.forEach(function (ind) { nueva[ind] = document.getElementById('ev-' + ind).value; });
+      var evaluaciones = cargarEvaluaciones();
+      evaluaciones.push(nueva);
+      guardarEvaluaciones(evaluaciones);
+      document.getElementById('msj-evaluacion-ok').style.display = 'block';
+      setTimeout(function () { renderContenido('evaluacion'); }, 700);
+    });
+  }
+
+  var btnInforme = document.getElementById('btn-informe-pdf');
+  if (btnInforme) {
+    btnInforme.addEventListener('click', function () {
+      var alumnoIdx = Number(document.getElementById('ev-alumno-ver').value);
+      var alumno = cargarAlumnos()[alumnoIdx];
+      var evaluaciones = cargarEvaluaciones().filter(function (e) { return e.alumnoIdx === alumnoIdx; });
+      if (evaluaciones.length === 0) { alert('Este estudiante todavía no tiene evaluaciones registradas.'); return; }
+
+      document.getElementById('comprobante-imprimir').innerHTML = generarHtmlInformeEvaluacion(alumno, evaluaciones);
+      window.print();
+
+      var telefono = alumno ? (alumno.telefono || '').replace(/\D/g, '') : '';
+      if (telefono && confirm('¿Abrir WhatsApp para enviarle el resumen al acudiente? (el PDF hay que adjuntarlo a mano, WhatsApp no permite adjuntar archivos desde un enlace)')) {
+        var ultimo = promedioEvaluacion(evaluaciones[evaluaciones.length - 1]);
+        var nivel = ultimo >= 2.5 ? 'Consolidado' : (ultimo >= 1.5 ? 'En desarrollo' : 'Iniciando');
+        var msj = encodeURIComponent('Hola, te compartimos el avance de ' + alumno.nombres + ' en Academia Musical Jacquin. Nivel actual: ' + nivel + '. Te enviamos el informe completo en PDF.');
+        window.open('https://wa.me/' + telefono + '?text=' + msj, '_blank');
+      }
+    });
+  }
+}
+
+function renderAdmin() {
+  var usuarios = cargarUsuarios();
+  var filas = usuarios.map(function (u) {
+    return '<tr><td>' + u.nombre + '</td><td>' + u.email + '</td><td><span class="chip-rol">' + u.rol + '</span></td></tr>';
+  }).join('');
+
+  return '' +
+    '<div class="panel"><h2>Políticas de contraseña activas</h2>' +
+    POLITICA_PASSWORD.map(function (r) { return '<div class="regla">· ' + r.txt + '</div>'; }).join('') +
+    '<div class="regla">· No debe contener el nombre de usuario/email</div>' +
+    '<div class="regla">· Expira cada 90 días</div>' +
+    '<div class="regla">· Bloqueo temporal tras 5 intentos fallidos</div>' +
+    '<div class="regla">· No reutilizar las últimas 5 contraseñas</div>' +
+    '</div>' +
+
+    '<div class="panel"><h2>Crear usuario</h2>' +
+    '<div class="campo"><label>Nombre</label><input id="admin-nombre" type="text" /></div>' +
+    '<div class="campo"><label>Email</label><input id="admin-email" type="email" /></div>' +
+    '<div class="campo"><label>Rol</label><select id="admin-rol">' +
+    '<option value="ADMINISTRADOR">Administrador</option>' +
+    '<option value="SECRETARIA">Secretaría</option>' +
+    '<option value="PROFESOR">Profesor</option>' +
+    '<option value="DIRECCION">Dirección</option>' +
+    '</select></div>' +
+    '<div class="campo"><label>Contraseña temporal</label><input id="admin-pass" type="password" /></div>' +
+    '<div id="reglas-vivo">' + POLITICA_PASSWORD.map(function (r) { return '<div class="regla" id="regla-' + r.id + '">· ' + r.txt + '</div>'; }).join('') + '</div>' +
+    '<button class="btn-primario" id="btn-crear-usuario" style="margin-top:10px;" disabled>Crear usuario</button>' +
+    '<p id="msj-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Usuario creado (guardado en este navegador, no en el backend real).</p>' +
+    '</div>' +
+
+    '<div class="panel"><h2>Usuarios</h2>' +
+    '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th></tr></thead><tbody id="tbody-usuarios">' + filas + '</tbody></table></div>' +
+    '</div>' +
+
+    '<div class="panel"><h2>Vista previa de menú por rol</h2>' +
+    '<select id="previa-rol"><option value="ADMINISTRADOR">Administrador</option><option value="DIRECCION">Dirección</option><option value="SECRETARIA">Secretaría</option><option value="PROFESOR">Profesor</option></select>' +
+    '<div class="lista-previa" id="lista-previa"></div>' +
+    '</div>';
+}
+
+function activarLogicaAdmin() {
+  var pass = document.getElementById('admin-pass');
+  var btn = document.getElementById('btn-crear-usuario');
+
+  function validarPassword() {
+    var val = pass.value;
+    var todasOk = true;
+    POLITICA_PASSWORD.forEach(function (r) {
+      var el = document.getElementById('regla-' + r.id);
+      var ok = r.test(val);
+      el.className = 'regla' + (ok ? ' ok' : '');
+      if (!ok) todasOk = false;
+    });
+    btn.disabled = !todasOk;
+  }
+
+  // 'input' cubre tipeo normal; 'change'/'blur' cubren autocompletado o
+  // contraseñas sugeridas por el navegador, que a veces no disparan 'input'.
+  ['input', 'change', 'blur', 'keyup', 'paste'].forEach(function (evento) {
+    pass.addEventListener(evento, validarPassword);
+  });
+  // Por si el campo ya viene con un valor al cargar la pantalla (autocompletado del navegador).
+  setTimeout(validarPassword, 150);
+
+  btn.addEventListener('click', function () {
+    var nombre = document.getElementById('admin-nombre').value.trim();
+    var email = document.getElementById('admin-email').value.trim();
+    var rol = document.getElementById('admin-rol').value;
+    if (!nombre || !email) return;
+    var usuarios = cargarUsuarios();
+    usuarios.push({ nombre: nombre, email: email, rol: rol });
+    guardarUsuarios(usuarios);
+    document.getElementById('msj-creado').style.display = 'block';
+    setTimeout(function () { renderContenido('admin'); }, 600);
+  });
+
+  function pintarPrevia() {
+    var rol = document.getElementById('previa-rol').value;
+    var visibles = modulosVisibles(rol);
+    var html = MODULOS.filter(function (m) { return visibles.indexOf(m.key) !== -1; })
+      .map(function (m) { return '<div>· ' + m.label + '</div>'; }).join('');
+    document.getElementById('lista-previa').innerHTML = html;
+  }
+  document.getElementById('previa-rol').addEventListener('change', pintarPrevia);
+  pintarPrevia();
+}
+
+function renderContenido(clave) {
+  var sesion = sesionActual();
+  var visibles = modulosVisibles(sesion.rol);
+  if (visibles.indexOf(clave) === -1) clave = 'dashboard';
+  var mod = MODULOS.find(function (m) { return m.key === clave; }) || MODULOS[0];
+
+  if (mod.key === 'dashboard') {
+    document.getElementById('contenido').innerHTML = renderDashboard(sesion);
+  } else if (mod.key === 'admin') {
+    document.getElementById('contenido').innerHTML = renderAdmin();
+    activarLogicaAdmin();
+  } else if (mod.key === 'estudiantes') {
+    document.getElementById('contenido').innerHTML = renderEstudiantes();
+    activarLogicaEstudiantes();
+    if (sesion.rol === 'PROFESOR') {
+      document.getElementById('contenido').insertAdjacentHTML('afterbegin',
+        '<p style="font-size:12px; color:var(--muted); margin-bottom:14px;">Vista acotada a tus estudiantes asignados (el filtrado real depende de datos que todavía no existen).</p>');
+    }
+  } else if (mod.key === 'matricula') {
+    document.getElementById('contenido').innerHTML = renderMatricula(sesion);
+    activarLogicaMatricula();
+  } else if (mod.key === 'pagos') {
+    document.getElementById('contenido').innerHTML = renderPagos();
+    activarLogicaPagos();
+  } else if (mod.key === 'horarios') {
+    document.getElementById('contenido').innerHTML = renderHorarios(sesion);
+    activarLogicaHorarios();
+  } else if (mod.key === 'asistencia') {
+    document.getElementById('contenido').innerHTML = renderAsistencia(sesion);
+    activarLogicaAsistencia();
+  } else if (mod.key === 'profesores') {
+    document.getElementById('contenido').innerHTML = renderProfesores(sesion);
+    activarLogicaProfesores();
+  } else if (mod.key === 'cursos') {
+    document.getElementById('contenido').innerHTML = renderCursos();
+    activarLogicaCursos();
+  } else if (mod.key === 'evaluacion') {
+    document.getElementById('contenido').innerHTML = renderEvaluacion(sesion);
+    activarLogicaEvaluacion();
+  } else {
+    var nota = '';
+    if (mod.key === 'estudiantes' && sesion.rol === 'PROFESOR') nota = '<p style="margin-top:8px;">Acotado a los alumnos de tu salón (el filtrado real depende de datos que todavía no existen).</p>';
+    document.getElementById('contenido').innerHTML = '<div class="placeholder"><h1>' + mod.label + '</h1><p>Pantalla en construcción — sin datos todavía.</p>' + nota + '</div>';
+  }
+}
+
+function navegar() {
+  var clave = location.hash.replace('#', '') || 'dashboard';
+  renderSidebar(clave);
+  renderContenido(clave);
+  cerrarMenu();
+}
+
+function abrirMenu() {
+  document.getElementById('sidebar').classList.add('abierto');
+  document.getElementById('overlay-menu').classList.add('abierto');
+}
+function cerrarMenu() {
+  document.getElementById('sidebar').classList.remove('abierto');
+  document.getElementById('overlay-menu').classList.remove('abierto');
+}
+document.getElementById('btn-menu').addEventListener('click', abrirMenu);
+document.getElementById('overlay-menu').addEventListener('click', cerrarMenu);
+
+function mostrarApp() {
+  var sesion = sesionActual();
+  document.getElementById('vista-login').style.display = 'none';
+  document.getElementById('vista-app').style.display = 'block';
+  document.getElementById('quien-soy').textContent = sesion.email + ' · ' + sesion.rol;
+  if (!location.hash) location.hash = '#dashboard';
+  navegar();
+}
+
+function mostrarLogin() {
+  document.getElementById('vista-app').style.display = 'none';
+  document.getElementById('vista-login').style.display = 'flex';
+  document.getElementById('in-email').value = '';
+  document.getElementById('in-pass').value = '';
+}
+
+document.getElementById('form-login').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var email = document.getElementById('in-email').value.trim();
+  var pass = document.getElementById('in-pass').value;
+  var usuarios = cargarUsuarios();
+  var encontrado = usuarios.find(function (u) { return u.email === email; });
+  var passOk = email === EMAIL_PRUEBA ? pass === PASS_PRUEBA : pass.length > 0;
+  if (encontrado && passOk) {
+    sessionStorage.setItem('jacquin_demo_sesion', JSON.stringify({ email: encontrado.email, rol: encontrado.rol }));
+    document.getElementById('msj-error').style.display = 'none';
+    mostrarApp();
+  } else {
+    document.getElementById('msj-error').style.display = 'block';
+  }
+});
+
+document.getElementById('btn-salir').addEventListener('click', function () {
+  sessionStorage.removeItem('jacquin_demo_sesion');
+  location.hash = '';
+  mostrarLogin();
+});
+
+window.addEventListener('hashchange', navegar);
+
+if (sesionActual()) { mostrarApp(); } else { mostrarLogin(); }
+</script>
+
+</body>
+</html>
