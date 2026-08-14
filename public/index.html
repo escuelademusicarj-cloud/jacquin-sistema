@@ -255,6 +255,21 @@ var POLITICA_PASSWORD = [
 ];
 
 var PROGRAMAS = ['Piano','Guitarra acústica','Guitarra eléctrica','Bajo','Técnica vocal','Violín','Percusión','Iniciación musical','Exploración musical infantil'];
+
+// Valores DE REFERENCIA para agilizar la carga de un plan nuevo — no son
+// tarifas reales confirmadas por Sergio (nunca las dio). Administración
+// los puede editar antes de guardar; son solo un punto de partida.
+var REFERENCIA_PROGRAMA = {
+  'Piano': { horas: 2, valor: 150000 },
+  'Guitarra acústica': { horas: 2, valor: 150000 },
+  'Guitarra eléctrica': { horas: 2, valor: 150000 },
+  'Bajo': { horas: 2, valor: 150000 },
+  'Técnica vocal': { horas: 2, valor: 150000 },
+  'Violín': { horas: 2, valor: 150000 },
+  'Percusión': { horas: 2, valor: 150000 },
+  'Iniciación musical': { horas: 1, valor: 100000 },
+  'Exploración musical infantil': { horas: 1, valor: 100000 }
+};
 var ESTADOS_ALUMNO = ['preinscrito','pendiente_matricula','activo','inactivo','retirado'];
 var ETIQUETA_ESTADO = { preinscrito:'Preinscrito', pendiente_matricula:'Pendiente de matrícula', activo:'Activo', inactivo:'Inactivo', retirado:'Retirado' };
 
@@ -519,7 +534,9 @@ function renderMatricula(sesion) {
       '</select></div>' +
       '<div class="campo"><label>Horas por semana</label><input id="pl-horas" type="number" min="1" step="0.5" value="1" /></div>' +
       '<div class="campo"><label>Valor</label><input id="pl-valor" type="text" inputmode="numeric" placeholder="$ 0" /></div>' +
+      '<p style="font-size:11px; color:var(--muted); margin:-6px 0 10px;">Horas y valor se autocompletan al elegir el programa — son de referencia, editalos si hace falta.</p>' +
       '<div class="campo"><label>Descuento (%)</label><input id="pl-descuento" type="number" min="0" max="100" value="0" /></div>' +
+      '<div class="campo"><label>Total con descuento</label><input id="pl-total" type="text" readonly style="background:var(--beige); color:var(--azul-oscuro); font-weight:700;" /></div>' +
       '<button class="btn-primario" id="btn-crear-plan">Crear plan</button>' +
       '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Plan</th><th>Horas/semana</th><th>Valor</th><th>Descuento</th></tr></thead><tbody>' + (filasPlanes || '<tr><td colspan="4" style="color:var(--muted);">Sin planes todavía</td></tr>') + '</tbody></table></div>' +
       '</div>'
@@ -563,13 +580,47 @@ function activarLogicaMatricula() {
     return '$ ' + Number(numero).toLocaleString('es-CO');
   }
 
+  function recalcularTotalPlan() {
+    var totalField = document.getElementById('pl-total');
+    if (!totalField) return;
+    var valorCrudo = Number((document.getElementById('pl-valor').value || '').replace(/\D/g, '')) || 0;
+    var descuento = Number(document.getElementById('pl-descuento').value || 0);
+    var total = Math.round(valorCrudo - (valorCrudo * descuento / 100));
+    totalField.value = formatearCOP(total);
+  }
+
+  var selectProgramaPlan = document.getElementById('pl-programa');
+  if (selectProgramaPlan) {
+    selectProgramaPlan.addEventListener('change', function () {
+      var ref = REFERENCIA_PROGRAMA[this.value];
+      if (ref) {
+        document.getElementById('pl-horas').value = ref.horas;
+        document.getElementById('pl-valor').value = formatearCOP(ref.valor);
+      }
+      recalcularTotalPlan();
+    });
+    // Autocompletar de una con el primer programa de la lista al abrir la pantalla.
+    var refInicial = REFERENCIA_PROGRAMA[selectProgramaPlan.value];
+    if (refInicial) {
+      document.getElementById('pl-horas').value = refInicial.horas;
+      document.getElementById('pl-valor').value = formatearCOP(refInicial.valor);
+    }
+  }
+
   var inputValorPlan = document.getElementById('pl-valor');
   if (inputValorPlan) {
     inputValorPlan.addEventListener('input', function () {
       var soloDigitos = this.value.replace(/\D/g, '');
       this.value = soloDigitos ? formatearCOP(soloDigitos) : '';
+      recalcularTotalPlan();
     });
   }
+
+  var inputDescuentoPlan = document.getElementById('pl-descuento');
+  if (inputDescuentoPlan) {
+    inputDescuentoPlan.addEventListener('input', recalcularTotalPlan);
+  }
+  recalcularTotalPlan();
 
   var btnPlan = document.getElementById('btn-crear-plan');
   if (btnPlan) {
