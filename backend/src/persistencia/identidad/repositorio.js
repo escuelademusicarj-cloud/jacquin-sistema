@@ -22,6 +22,11 @@ export async function buscarUsuarioPorEmail(email) {
   return rows[0] ?? null;
 }
 
+export async function contarUsuarios() {
+  const { rows } = await pool.query(`SELECT COUNT(*)::int AS total FROM usuarios`);
+  return rows[0].total;
+}
+
 export async function listarRoles() {
   const { rows } = await pool.query(`SELECT id, nombre, descripcion FROM roles ORDER BY nombre`);
   return rows;

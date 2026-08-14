@@ -166,7 +166,7 @@
         <p>admin@jacquin.local</p>
         <p>CambiarEnPrimerIngreso123</p>
       </div>
-      <p class="nota-simulado">Simulado en el navegador — la validación real vive en el backend (Fase 1).</p>
+      <p class="nota-simulado">Login conectado al backend real (Supabase). El resto de los módulos todavía usa datos locales de prueba, se van conectando de a uno.</p>
     </form>
   </div>
 </div>
@@ -1859,20 +1859,46 @@ function mostrarLogin() {
   document.getElementById('in-pass').value = '';
 }
 
+// ---- Conexión a la API real (backend en Vercel + Supabase) ----
+// Si el HTML se abre como archivo local (file://), apunta al sitio
+// publicado. Si el HTML se sirve DESDE ese mismo sitio, usa rutas
+// relativas — así funciona sin importar el dominio.
+var API_BASE = (location.protocol === 'file:') ? 'https://jacquin-sistema.vercel.app' : '';
+
+async function apiFetch(ruta, opciones) {
+  var headers = Object.assign({ 'Content-Type': 'application/json' }, (opciones && opciones.headers) || {});
+  var sesion = sesionActual();
+  if (sesion && sesion.token) headers['Authorization'] = 'Bearer ' + sesion.token;
+  var respuesta = await fetch(API_BASE + ruta, Object.assign({}, opciones, { headers: headers }));
+  var cuerpo = await respuesta.json().catch(function () { return null; });
+  if (!respuesta.ok) {
+    var mensaje = (cuerpo && cuerpo.error && cuerpo.error.mensaje) || ('Error de conexión (' + respuesta.status + ')');
+    throw new Error(mensaje);
+  }
+  return cuerpo ? cuerpo.data : null;
+}
+
 document.getElementById('form-login').addEventListener('submit', function (e) {
   e.preventDefault();
   var email = document.getElementById('in-email').value.trim();
   var pass = document.getElementById('in-pass').value;
-  var usuarios = cargarUsuarios();
-  var encontrado = usuarios.find(function (u) { return u.email === email; });
-  var passOk = email === EMAIL_PRUEBA ? pass === PASS_PRUEBA : pass.length > 0;
-  if (encontrado && passOk) {
-    sessionStorage.setItem('jacquin_demo_sesion', JSON.stringify({ email: encontrado.email, rol: encontrado.rol }));
-    document.getElementById('msj-error').style.display = 'none';
-    mostrarApp();
-  } else {
-    document.getElementById('msj-error').style.display = 'block';
-  }
+  var msjError = document.getElementById('msj-error');
+  msjError.style.display = 'none';
+
+  // Identidad ya está conectada al backend real — el resto de los
+  // módulos por ahora sigue funcionando con datos locales, se van
+  // conectando uno por uno.
+  apiFetch('/api/identidad/login', { method: 'POST', body: JSON.stringify({ email: email, password: pass }) })
+    .then(function (data) {
+      sessionStorage.setItem('jacquin_demo_sesion', JSON.stringify({
+        email: data.usuario.email, rol: data.usuario.rol, token: data.token, usuarioId: data.usuario.id
+      }));
+      mostrarApp();
+    })
+    .catch(function (err) {
+      msjError.textContent = err.message || 'Email o contraseña incorrectos.';
+      msjError.style.display = 'block';
+    });
 });
 
 document.getElementById('btn-salir').addEventListener('click', function () {

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { altaUsuario, login } from "../../servicios/identidad/servicio.js";
+import { altaUsuario, login, bootstrapAdmin } from "../../servicios/identidad/servicio.js";
 import { listarRoles } from "../../persistencia/identidad/repositorio.js";
 import { respuestaExitosa } from "../middlewares/manejoErrores.js";
 import { requiereAutenticacion } from "../middlewares/autenticacion.js";
@@ -11,6 +11,17 @@ export const rutasIdentidad = Router();
 rutasIdentidad.post("/login", async (req, res, next) => {
   try {
     const resultado = await login(req.body);
+    respuestaExitosa(res, resultado);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Bootstrap de un solo uso — se autodesactiva apenas existe un usuario.
+// Pensado para crear el primer admin sin terminal, visitando la URL.
+rutasIdentidad.get("/bootstrap-admin", async (req, res, next) => {
+  try {
+    const resultado = await bootstrapAdmin();
     respuestaExitosa(res, resultado);
   } catch (err) {
     next(err);
