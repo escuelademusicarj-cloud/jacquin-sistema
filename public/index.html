@@ -94,6 +94,7 @@
   #piano-fondo .barra-grande { width: 3.2%; max-width: 34px; background: var(--azul-oscuro); border-radius: 6px 6px 0 0; animation: pulso-lento 6s ease-in-out infinite; transform-origin: bottom; }
   @keyframes pulso-lento { 0%, 100% { transform: scaleY(0.7); } 50% { transform: scaleY(1); } }
   #contenido { position: relative; z-index: 1; padding: 32px; max-width: 760px; animation: aparecer 0.25s ease; }
+  #contenido.ancho-completo { max-width: 100%; }
   @keyframes aparecer { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .malla { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
   .tile { background: #fff; border-top: 4px solid var(--azul-oscuro); border-radius: 0 0 14px 14px; padding: 18px 14px; cursor: pointer; box-shadow: 0 2px 10px rgba(34,63,97,0.08); transition: transform 0.12s, box-shadow 0.12s; }
@@ -498,7 +499,7 @@ function renderMatricula(sesion) {
     '</div>';
 
   var filasPlanes = planes.map(function (p) {
-    return '<tr><td>' + p.nombre + '</td><td>' + p.horas + 'h/sem</td><td>$' + p.valor + '</td></tr>';
+    return '<tr><td>' + p.nombre + '</td><td>' + p.horas + 'h/sem</td><td>$ ' + Number(p.valor).toLocaleString('es-CO') + '</td><td>' + (p.descuentoPorcentaje || 0) + '%</td></tr>';
   }).join('');
 
   var filasInscripciones = inscripciones.map(function (i) {
@@ -517,9 +518,10 @@ function renderMatricula(sesion) {
       PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
       '</select></div>' +
       '<div class="campo"><label>Horas por semana</label><input id="pl-horas" type="number" min="1" step="0.5" value="1" /></div>' +
-      '<div class="campo"><label>Valor</label><input id="pl-valor" type="number" min="1" /></div>' +
+      '<div class="campo"><label>Valor</label><input id="pl-valor" type="text" inputmode="numeric" placeholder="$ 0" /></div>' +
+      '<div class="campo"><label>Descuento (%)</label><input id="pl-descuento" type="number" min="0" max="100" value="0" /></div>' +
       '<button class="btn-primario" id="btn-crear-plan">Crear plan</button>' +
-      '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Plan</th><th>Horas/semana</th><th>Valor</th></tr></thead><tbody>' + (filasPlanes || '<tr><td colspan="3" style="color:var(--muted);">Sin planes todavía</td></tr>') + '</tbody></table></div>' +
+      '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Plan</th><th>Horas/semana</th><th>Valor</th><th>Descuento</th></tr></thead><tbody>' + (filasPlanes || '<tr><td colspan="4" style="color:var(--muted);">Sin planes todavía</td></tr>') + '</tbody></table></div>' +
       '</div>'
     ) : '') +
 
@@ -530,7 +532,7 @@ function renderMatricula(sesion) {
     alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Plan</label><select id="in-plan">' +
-    planes.map(function (p, i) { return '<option value="' + i + '">' + p.nombre + ' — $' + p.valor + '</option>'; }).join('') +
+    planes.map(function (p, i) { return '<option value="' + i + '">' + p.nombre + ' — $ ' + Number(p.valor).toLocaleString('es-CO') + (p.descuentoPorcentaje ? ' (-' + p.descuentoPorcentaje + '%)' : '') + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Fecha de inicio</label><input id="in-fecha" type="date" /></div>' +
     '<div class="campo"><label>¿Ya pagó?</label><select id="in-pagado"><option value="no">No, todavía no</option><option value="si">Sí, ya pagó</option></select></div>' +
@@ -557,19 +559,33 @@ function activarLogicaMatricula() {
     });
   }
 
+  function formatearCOP(numero) {
+    return '$ ' + Number(numero).toLocaleString('es-CO');
+  }
+
+  var inputValorPlan = document.getElementById('pl-valor');
+  if (inputValorPlan) {
+    inputValorPlan.addEventListener('input', function () {
+      var soloDigitos = this.value.replace(/\D/g, '');
+      this.value = soloDigitos ? formatearCOP(soloDigitos) : '';
+    });
+  }
+
   var btnPlan = document.getElementById('btn-crear-plan');
   if (btnPlan) {
     btnPlan.addEventListener('click', function () {
       var programa = document.getElementById('pl-programa').value;
       var horas = document.getElementById('pl-horas').value;
-      var valor = document.getElementById('pl-valor').value;
-      if (!horas || !valor) return;
+      var valorCrudo = Number(document.getElementById('pl-valor').value.replace(/\D/g, ''));
+      var descuentoPorcentaje = Number(document.getElementById('pl-descuento').value || 0);
+      if (!horas || !valorCrudo) return;
       var planes = cargarPlanes();
       planes.push({
         nombre: programa + ' — ' + horas + 'h/semana',
         programa: programa,
         horas: horas,
-        valor: valor
+        valor: valorCrudo,
+        descuentoPorcentaje: descuentoPorcentaje
       });
       guardarPlanes(planes);
       renderContenido('matricula');
@@ -598,19 +614,22 @@ function activarLogicaMatricula() {
 
       var planes = cargarPlanes();
       var plan = planes[planIdx];
+      var descuentoMonto = Math.round(Number(plan.valor) * (Number(plan.descuentoPorcentaje || 0) / 100));
+      var valorConDescuento = Number(plan.valor) - descuentoMonto;
 
       var inscripciones = cargarInscripciones();
       inscripciones.push({ alumnoIdx: alumnoIdx, planIdx: planIdx, fechaInicio: fechaInicio, pagado: pagado });
       guardarInscripciones(inscripciones);
 
-      // Genera el cargo de matrícula — mismo criterio que el backend real.
+      // Genera el cargo de matrícula — mismo criterio que el backend real. El
+      // valor bruto y el descuento quedan por separado, el saldo ya los refleja.
       var cargos = cargarCargos();
       var nuevoCargo = {
         alumnoIdx: alumnoIdx,
         concepto: 'Matrícula',
         valor: Number(plan.valor),
-        descuento: 0,
-        saldo: pagado ? 0 : Number(plan.valor),
+        descuento: descuentoMonto,
+        saldo: pagado ? 0 : valorConDescuento,
         vencimiento: fechaPago,
         estado: pagado ? 'pagado' : 'pendiente'
       };
@@ -621,7 +640,7 @@ function activarLogicaMatricula() {
       var alumnos = cargarAlumnos();
       if (pagado) {
         var pagos = cargarPagosRegistrados();
-        pagos.push({ alumnoIdx: alumnoIdx, concepto: 'Matrícula', valor: Number(plan.valor), fecha: fechaPago, medioPago: document.getElementById('in-medio-pago').value });
+        pagos.push({ alumnoIdx: alumnoIdx, concepto: 'Matrícula', valor: valorConDescuento, fecha: fechaPago, medioPago: document.getElementById('in-medio-pago').value });
         guardarPagosRegistrados(pagos);
         alumnos[alumnoIdx].estado = 'activo';
       } else {
@@ -851,6 +870,7 @@ var FESTIVOS_2026 = {
 };
 
 var vistaHorarios = 'semana'; // 'semana' (reservas) o 'mensual' (calendario tipo Outlook)
+var filtroProgramaHorario = 'General'; // 'General' o el nombre exacto de un programa
 var mesCalendario = (function () { var hoy = new Date(); return { anio: hoy.getFullYear(), mes: hoy.getMonth() }; })();
 
 function clasesDeCelda(clases, dia, hora) {
@@ -958,6 +978,7 @@ function renderHorariosSemana(sesion) {
       var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
       var ocupantes = clasesDeCelda(clases, dia, hora);
       if (esProfesor) ocupantes = ocupantes.filter(function (o) { return o.c.profesor === sesion.email; });
+      if (filtroProgramaHorario !== 'General') ocupantes = ocupantes.filter(function (o) { return o.c.programa === filtroProgramaHorario; });
 
       var ocupada = ocupantes.length > 0;
       var colorBorde = ocupada ? 'var(--rojo)' : 'var(--verde)';
@@ -983,7 +1004,15 @@ function renderHorariosSemana(sesion) {
 
   var encabezado = '<tr><td></td>' + COLUMNAS_DIAS.map(function (d) { return '<td style="font-size:12px; font-weight:700; text-align:center; padding:6px; color:var(--azul-oscuro);">' + DIAS_SEMANA[d] + '</td>'; }).join('') + '</tr>';
 
+  var botonesFiltro = '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;">' +
+    ['General'].concat(PROGRAMAS).map(function (p) {
+      var activo = p === filtroProgramaHorario;
+      return '<button class="btn-filtro-programa" data-programa="' + p + '" style="font-size:12px; padding:6px 12px; border-radius:16px; cursor:pointer; border:1.5px solid ' + (activo ? 'var(--azul-oscuro)' : '#ddd') + '; background:' + (activo ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activo ? '#fff' : 'var(--texto)') + ';">' + p + '</button>';
+    }).join('') +
+    '</div>';
+
   var grillaHtml =
+    botonesFiltro +
     '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:4px; width:100%;">' + encabezado + filasGrilla + '</table></div>' +
     '<div style="display:flex; gap:16px; margin-top:10px; font-size:11px; color:var(--muted);">' +
     '<span><span style="display:inline-block; width:10px; height:10px; background:var(--verde); border-radius:2px; margin-right:4px;"></span>Disponible</span>' +
@@ -1032,6 +1061,13 @@ function renderHorariosSemana(sesion) {
 }
 
 function activarLogicaHorarios() {
+  document.querySelectorAll('.btn-filtro-programa').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      filtroProgramaHorario = btn.getAttribute('data-programa');
+      renderContenido('horarios');
+    });
+  });
+
   var btnVistaSemana = document.getElementById('btn-vista-semana');
   var btnVistaMensual = document.getElementById('btn-vista-mensual');
   if (btnVistaSemana) btnVistaSemana.addEventListener('click', function () { vistaHorarios = 'semana'; renderContenido('horarios'); });
@@ -1367,9 +1403,6 @@ function renderProfesores(sesion) {
     '<div class="campo"><label>Profesor</label><select id="pf-usuario">' +
     profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
     '</select></div>' +
-    '<div class="campo"><label>Instrumentos que enseña</label><select id="pf-instrumentos" multiple size="5">' +
-    PROGRAMAS.map(function (pr) { return '<option value="' + pr + '">' + pr + '</option>'; }).join('') +
-    '</select></div>' +
     '<div class="campo"><label>Teléfono</label><input id="pf-telefono" type="text" /></div>' +
     '<div class="campo"><label>Experiencia</label><input id="pf-experiencia" type="text" placeholder="Ej: 8 años enseñando piano clásico" /></div>' +
     '<button class="btn-primario" id="btn-guardar-perfil">Guardar perfil</button>' +
@@ -1405,10 +1438,10 @@ function activarLogicaProfesores() {
   if (!btn) return;
   btn.addEventListener('click', function () {
     var email = document.getElementById('pf-usuario').value;
-    var seleccion = Array.prototype.slice.call(document.getElementById('pf-instrumentos').selectedOptions).map(function (o) { return o.value; });
     var perfiles = cargarPerfilesProfesor();
+    var instrumentosPrevios = (perfiles[email] && perfiles[email].instrumentos) || '';
     perfiles[email] = {
-      instrumentos: seleccion.join(', '),
+      instrumentos: instrumentosPrevios, // se define al agregar el profesor, no se edita acá
       telefono: document.getElementById('pf-telefono').value.trim(),
       experiencia: document.getElementById('pf-experiencia').value.trim()
     };
@@ -1778,6 +1811,10 @@ function renderContenido(clave) {
   var visibles = modulosVisibles(sesion.rol);
   if (visibles.indexOf(clave) === -1) clave = 'dashboard';
   var mod = MODULOS.find(function (m) { return m.key === clave; }) || MODULOS[0];
+
+  // Horarios necesita más ancho para que la grilla se lea bien — el resto
+  // de los módulos se mantiene en el ancho angosto de lectura normal.
+  document.getElementById('contenido').classList.toggle('ancho-completo', mod.key === 'horarios');
 
   if (mod.key === 'dashboard') {
     document.getElementById('contenido').innerHTML = renderDashboard(sesion);
