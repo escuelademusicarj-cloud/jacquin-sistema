@@ -256,20 +256,24 @@ var POLITICA_PASSWORD = [
 
 var PROGRAMAS = ['Piano','Guitarra acústica','Guitarra eléctrica','Bajo','Técnica vocal','Violín','Percusión','Iniciación musical','Exploración musical infantil'];
 
-// Valores DE REFERENCIA para agilizar la carga de un plan nuevo — no son
-// tarifas reales confirmadas por Sergio (nunca las dio). Administración
-// los puede editar antes de guardar; son solo un punto de partida.
-var REFERENCIA_PROGRAMA = {
-  'Piano': { horas: 2, valor: 150000 },
-  'Guitarra acústica': { horas: 2, valor: 150000 },
-  'Guitarra eléctrica': { horas: 2, valor: 150000 },
-  'Bajo': { horas: 2, valor: 150000 },
-  'Técnica vocal': { horas: 2, valor: 150000 },
-  'Violín': { horas: 2, valor: 150000 },
-  'Percusión': { horas: 2, valor: 150000 },
-  'Iniciación musical': { horas: 1, valor: 100000 },
-  'Exploración musical infantil': { horas: 1, valor: 100000 }
-};
+// Tipos de plan reales, provistos por el usuario (2026-08-14) — a
+// diferencia del catálogo anterior (que era estimado), estos son
+// precios y horas confirmados de verdad, no inventados.
+var TIPOS_PLAN = [
+  { nombre: 'Plan Básico', horasSemana: 1, horasMes: 4, valor: 220000, valorHora: 55000, combinaInstrumentos: 0 },
+  { nombre: 'Plan Premium', horasSemana: 2, horasMes: 8, valor: 400000, valorHora: 50000, combinaInstrumentos: 2 },
+  { nombre: 'Plan Élite', horasSemana: 3, horasMes: 12, valor: 540000, valorHora: 45000, combinaInstrumentos: 2 },
+  { nombre: 'Plan Mozart', horasSemana: 4, horasMes: 16, valor: 640000, valorHora: 40000, combinaInstrumentos: 3 },
+  { nombre: 'Plan Hermanos', horasSemana: 2, horasMes: 8, valor: 360000, valorHora: 45000, combinaInstrumentos: 0, nota: 'Valor por cada hermano' },
+  { nombre: 'Plan Exploración musical', horasSemana: 1, horasMes: 4, valor: 250000, valorHora: null, combinaInstrumentos: 0, programaFijo: 'Exploración musical infantil', nota: 'Solo para 2 a 3.5 años' }
+];
+
+function tiposPlanParaPrograma(programa) {
+  if (programa === 'Exploración musical infantil') {
+    return TIPOS_PLAN.filter(function (t) { return t.programaFijo === 'Exploración musical infantil'; });
+  }
+  return TIPOS_PLAN.filter(function (t) { return !t.programaFijo; });
+}
 var ESTADOS_ALUMNO = ['preinscrito','pendiente_matricula','activo','inactivo','retirado'];
 var ETIQUETA_ESTADO = { preinscrito:'Preinscrito', pendiente_matricula:'Pendiente de matrícula', activo:'Activo', inactivo:'Inactivo', retirado:'Retirado' };
 
@@ -514,7 +518,7 @@ function renderMatricula(sesion) {
     '</div>';
 
   var filasPlanes = planes.map(function (p) {
-    return '<tr><td>' + p.nombre + '</td><td>' + p.horas + 'h/sem</td><td>$ ' + Number(p.valor).toLocaleString('es-CO') + '</td><td>' + (p.descuentoPorcentaje || 0) + '%</td></tr>';
+    return '<tr><td>' + p.programa + '</td><td>' + (p.tipoPlan || '—') + '</td><td>' + p.horas + 'h/sem</td><td>$ ' + Number(p.valor).toLocaleString('es-CO') + '</td><td>' + (p.descuentoPorcentaje || 0) + '%</td></tr>';
   }).join('');
 
   var filasInscripciones = inscripciones.map(function (i) {
@@ -532,13 +536,15 @@ function renderMatricula(sesion) {
       '<div class="campo"><label>Programa</label><select id="pl-programa">' +
       PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
       '</select></div>' +
-      '<div class="campo"><label>Horas por semana</label><input id="pl-horas" type="number" min="1" step="0.5" value="1" /></div>' +
-      '<div class="campo"><label>Valor</label><input id="pl-valor" type="text" inputmode="numeric" placeholder="$ 0" /></div>' +
-      '<p style="font-size:11px; color:var(--muted); margin:-6px 0 10px;">Horas y valor se autocompletan al elegir el programa — son de referencia, editalos si hace falta.</p>' +
+      '<div class="campo"><label>Tipo de plan</label><select id="pl-tipo-plan"></select></div>' +
+      '<p id="pl-nota-tipo" style="font-size:11px; color:var(--naranja); margin:-6px 0 10px; display:none;"></p>' +
+      '<div class="campo"><label>Horas por semana</label><input id="pl-horas" type="number" min="1" step="0.5" value="1" readonly style="background:var(--beige);" /></div>' +
+      '<div class="campo"><label>Valor (mensualidad)</label><input id="pl-valor" type="text" inputmode="numeric" placeholder="$ 0" readonly style="background:var(--beige);" /></div>' +
+      '<p style="font-size:11px; color:var(--muted); margin:-6px 0 10px;">Horas y valor se autocompletan según el tipo de plan elegido — son los reales de la academia.</p>' +
       '<div class="campo"><label>Descuento (%)</label><input id="pl-descuento" type="number" min="0" max="100" value="0" /></div>' +
       '<div class="campo"><label>Total con descuento</label><input id="pl-total" type="text" readonly style="background:var(--beige); color:var(--azul-oscuro); font-weight:700;" /></div>' +
       '<button class="btn-primario" id="btn-crear-plan">Crear plan</button>' +
-      '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Plan</th><th>Horas/semana</th><th>Valor</th><th>Descuento</th></tr></thead><tbody>' + (filasPlanes || '<tr><td colspan="4" style="color:var(--muted);">Sin planes todavía</td></tr>') + '</tbody></table></div>' +
+      '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Programa</th><th>Tipo de plan</th><th>Horas/semana</th><th>Valor</th><th>Descuento</th></tr></thead><tbody>' + (filasPlanes || '<tr><td colspan="5" style="color:var(--muted);">Sin planes todavía</td></tr>') + '</tbody></table></div>' +
       '</div>'
     ) : '') +
 
@@ -589,31 +595,37 @@ function activarLogicaMatricula() {
     totalField.value = formatearCOP(total);
   }
 
-  var selectProgramaPlan = document.getElementById('pl-programa');
-  if (selectProgramaPlan) {
-    selectProgramaPlan.addEventListener('change', function () {
-      var ref = REFERENCIA_PROGRAMA[this.value];
-      if (ref) {
-        document.getElementById('pl-horas').value = ref.horas;
-        document.getElementById('pl-valor').value = formatearCOP(ref.valor);
-      }
-      recalcularTotalPlan();
-    });
-    // Autocompletar de una con el primer programa de la lista al abrir la pantalla.
-    var refInicial = REFERENCIA_PROGRAMA[selectProgramaPlan.value];
-    if (refInicial) {
-      document.getElementById('pl-horas').value = refInicial.horas;
-      document.getElementById('pl-valor').value = formatearCOP(refInicial.valor);
-    }
+  function poblarTiposPlan(programa) {
+    var selectTipo = document.getElementById('pl-tipo-plan');
+    var tipos = tiposPlanParaPrograma(programa);
+    selectTipo.innerHTML = tipos.map(function (t) { return '<option value="' + t.nombre + '">' + t.nombre + ' (' + t.horasSemana + 'h/sem)</option>'; }).join('');
+    aplicarTipoPlanSeleccionado();
   }
 
-  var inputValorPlan = document.getElementById('pl-valor');
-  if (inputValorPlan) {
-    inputValorPlan.addEventListener('input', function () {
-      var soloDigitos = this.value.replace(/\D/g, '');
-      this.value = soloDigitos ? formatearCOP(soloDigitos) : '';
-      recalcularTotalPlan();
-    });
+  function aplicarTipoPlanSeleccionado() {
+    var selectTipo = document.getElementById('pl-tipo-plan');
+    var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === selectTipo.value; });
+    var notaEl = document.getElementById('pl-nota-tipo');
+    if (!tipo) return;
+    document.getElementById('pl-horas').value = tipo.horasSemana;
+    document.getElementById('pl-valor').value = formatearCOP(tipo.valor);
+    var notas = [];
+    if (tipo.combinaInstrumentos > 0) notas.push('Puede combinar hasta ' + tipo.combinaInstrumentos + ' instrumentos.');
+    if (tipo.nota) notas.push(tipo.nota);
+    if (notas.length) { notaEl.textContent = notas.join(' '); notaEl.style.display = 'block'; }
+    else { notaEl.style.display = 'none'; }
+    recalcularTotalPlan();
+  }
+
+  var selectProgramaPlan = document.getElementById('pl-programa');
+  if (selectProgramaPlan) {
+    selectProgramaPlan.addEventListener('change', function () { poblarTiposPlan(this.value); });
+    poblarTiposPlan(selectProgramaPlan.value); // arranca ya cargado al abrir la pantalla
+  }
+
+  var selectTipoPlan = document.getElementById('pl-tipo-plan');
+  if (selectTipoPlan) {
+    selectTipoPlan.addEventListener('change', aplicarTipoPlanSeleccionado);
   }
 
   var inputDescuentoPlan = document.getElementById('pl-descuento');
@@ -626,14 +638,16 @@ function activarLogicaMatricula() {
   if (btnPlan) {
     btnPlan.addEventListener('click', function () {
       var programa = document.getElementById('pl-programa').value;
+      var tipoPlanNombre = document.getElementById('pl-tipo-plan').value;
       var horas = document.getElementById('pl-horas').value;
       var valorCrudo = Number(document.getElementById('pl-valor').value.replace(/\D/g, ''));
       var descuentoPorcentaje = Number(document.getElementById('pl-descuento').value || 0);
       if (!horas || !valorCrudo) return;
       var planes = cargarPlanes();
       planes.push({
-        nombre: programa + ' — ' + horas + 'h/semana',
+        nombre: programa + ' — ' + tipoPlanNombre,
         programa: programa,
+        tipoPlan: tipoPlanNombre,
         horas: horas,
         valor: valorCrudo,
         descuentoPorcentaje: descuentoPorcentaje
