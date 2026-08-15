@@ -208,6 +208,12 @@
   .placeholder p { color: var(--muted); font-size: 13px; margin: 0; }
 
   .panel { background: #fff; border: 1px solid #e2e5ea; border-radius: 14px; padding: 20px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(34,63,97,0.05); }
+
+  /* Matrícula: centrado, usando casi todo el ancho de la página en vez
+     de quedar pegado a la izquierda con el formulario angosto. */
+  .ancho-matricula { max-width: 980px; margin: 0 auto; }
+  .grilla-2col { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 20px; }
+  .grilla-2col .campo { min-width: 0; }
   .panel h2 { font-family: var(--font-wordmark); font-weight: 500; font-size: 17px; margin: 0 0 12px; }
   .campo { margin-bottom: 10px; }
   .campo label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
@@ -675,9 +681,7 @@ function activarLogicaEstudiantes(volverA) {
 
 function renderMatricula(sesion) {
   var alumnos = cargarAlumnos();
-  var planes = cargarPlanes();
   var inscripciones = cargarInscripciones();
-  var esAdmin = sesion.rol === 'ADMINISTRADOR';
 
   var filasBusqueda = alumnos.map(function (a, i) {
     var telefono = (a.telefono || '').replace(/\D/g, '');
@@ -702,57 +706,46 @@ function renderMatricula(sesion) {
      '<div class="tabla-scroll" style="margin-top:12px;"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Programa</th><th>Estado</th><th>Acudiente</th><th></th></tr></thead><tbody>' + filasBusqueda + '</tbody></table></div>') +
     '</div>';
 
-  var filasPlanes = planes.map(function (p) {
-    return '<tr><td>' + p.programa + '</td><td>' + (p.tipoPlan || '—') + '</td><td>' + p.horas + 'h/sem</td><td>$ ' + Number(p.valor).toLocaleString('es-CO') + '</td><td>' + (p.descuentoPorcentaje || 0) + '%</td></tr>';
-  }).join('');
-
   var filasInscripciones = inscripciones.map(function (i) {
     var alumno = alumnos[i.alumnoIdx];
-    var plan = planes[i.planIdx];
     var estadoTxt = i.pagado ? 'Activo (pagado)' : 'Pendiente de matrícula';
-    return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td><td>' + (plan ? plan.nombre : '—') + '</td><td>' + i.fechaInicio + '</td><td><span class="chip-rol">' + estadoTxt + '</span></td></tr>';
+    return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td><td>' + i.tipoPlanNombre + '</td><td>' + i.fechaInicio + '</td><td><span class="chip-rol">' + estadoTxt + '</span></td></tr>';
   }).join('');
 
-  return '' +
-    panelBusqueda +
-    (esAdmin ? (
-      '<div class="panel"><h2>Planes y tarifas</h2>' +
-      '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">El nombre del plan se toma del programa — no es texto libre, para no inventar nombres fuera del catálogo real.</p>' +
-      '<div class="campo"><label>Programa</label><select id="pl-programa">' +
-      PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
-      '</select></div>' +
-      '<div class="campo"><label>Tipo de plan</label><select id="pl-tipo-plan"></select></div>' +
-      '<p id="pl-nota-tipo" style="font-size:11px; color:var(--naranja); margin:-6px 0 10px; display:none;"></p>' +
-      '<div class="campo"><label>Horas por semana</label><input id="pl-horas" type="number" min="1" step="0.5" value="1" readonly style="background:var(--beige);" /></div>' +
-      '<div class="campo"><label>Valor (mensualidad)</label><input id="pl-valor" type="text" inputmode="numeric" placeholder="$ 0" readonly style="background:var(--beige);" /></div>' +
-      '<p style="font-size:11px; color:var(--muted); margin:-6px 0 10px;">Horas y valor se autocompletan según el tipo de plan elegido — son los reales de la academia.</p>' +
-      '<div class="campo"><label>Descuento (%)</label><input id="pl-descuento" type="number" min="0" max="100" value="0" /></div>' +
-      '<div class="campo"><label>Total con descuento</label><input id="pl-total" type="text" readonly style="background:var(--beige); color:var(--azul-oscuro); font-weight:700;" /></div>' +
-      '<button class="btn-primario" id="btn-crear-plan">Crear plan</button>' +
-      '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Programa</th><th>Tipo de plan</th><th>Horas/semana</th><th>Valor</th><th>Descuento</th></tr></thead><tbody>' + (filasPlanes || '<tr><td colspan="5" style="color:var(--muted);">Sin planes todavía</td></tr>') + '</tbody></table></div>' +
-      '</div>'
-    ) : '') +
-
+  // Inscribir: un único paso. El programa se toma del estudiante ya
+  // registrado (no se vuelve a pedir) — sólo falta elegir el tipo de
+  // plan real de la academia; horas/valor se autocompletan solos.
+  var panelInscribir =
     '<div class="panel"><h2>Inscribir estudiante</h2>' +
     (alumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Primero registrá un estudiante en el módulo Estudiantes.</p>' :
-     planes.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Primero necesitás al menos un plan creado.</p>' :
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Estudiante</label><select id="in-alumno">' +
-    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + ' — ' + a.programa + '</option>'; }).join('') +
     '</select></div>' +
-    '<div class="campo"><label>Plan</label><select id="in-plan">' +
-    planes.map(function (p, i) { return '<option value="' + i + '">' + p.nombre + ' — $ ' + Number(p.valor).toLocaleString('es-CO') + (p.descuentoPorcentaje ? ' (-' + p.descuentoPorcentaje + '%)' : '') + '</option>'; }).join('') +
-    '</select></div>' +
+    '<div class="campo"><label>Programa</label><input id="in-programa" type="text" readonly style="background:var(--beige);" /></div>' +
+    '<div class="campo"><label>Tipo de plan</label><select id="in-tipo-plan"></select></div>' +
+    '<div class="campo"><label>Horas por semana</label><input id="in-horas" type="text" readonly style="background:var(--beige);" /></div>' +
+    '<div class="campo"><label>Valor (mensualidad)</label><input id="in-valor" type="text" readonly style="background:var(--beige);" /></div>' +
+    '<div class="campo"><label>Descuento (%)</label><input id="in-descuento" type="number" min="0" max="100" value="0" /></div>' +
+    '<div class="campo"><label>Total con descuento</label><input id="in-total" type="text" readonly style="background:var(--beige); color:var(--azul-oscuro); font-weight:700;" /></div>' +
     '<div class="campo"><label>Fecha de inicio</label><input id="in-fecha" type="date" /></div>' +
     '<div class="campo"><label>¿Ya pagó?</label><select id="in-pagado"><option value="no">No, todavía no</option><option value="si">Sí, ya pagó</option></select></div>' +
     '<div class="campo"><label id="lbl-fecha-pago">Fecha límite de pago</label><input id="in-fecha-pago" type="date" /></div>' +
     '<div class="campo" id="campo-medio-pago" style="display:none;"><label>Medio de pago</label><select id="in-medio-pago"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div>' +
-    '<button class="btn-primario" id="btn-inscribir">Inscribir</button>' +
-    '<p id="msj-inscripcion" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;"></p>') +
     '</div>' +
+    '<p id="in-nota-tipo" style="font-size:11px; color:var(--naranja); margin:6px 0 10px; display:none;"></p>' +
+    '<button class="btn-primario" id="btn-inscribir" style="max-width:280px;">Inscribir</button>' +
+    '<p id="msj-inscripcion" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;"></p>') +
+    '</div>';
 
+  return '' +
+    '<div class="ancho-matricula">' +
+    panelBusqueda +
+    panelInscribir +
     '<div class="panel"><h2>Inscripciones (' + inscripciones.length + ')</h2>' +
     (inscripciones.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay inscripciones.</p>' :
      '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Plan</th><th>Inicio</th><th>Estado</th></tr></thead><tbody>' + filasInscripciones + '</tbody></table></div>') +
+    '</div>' +
     '</div>';
 }
 
@@ -771,76 +764,49 @@ function activarLogicaMatricula() {
     return '$ ' + Number(numero).toLocaleString('es-CO');
   }
 
-  function recalcularTotalPlan() {
-    var totalField = document.getElementById('pl-total');
-    if (!totalField) return;
-    var valorCrudo = Number((document.getElementById('pl-valor').value || '').replace(/\D/g, '')) || 0;
-    var descuento = Number(document.getElementById('pl-descuento').value || 0);
-    var total = Math.round(valorCrudo - (valorCrudo * descuento / 100));
-    totalField.value = formatearCOP(total);
-  }
+  var selectAlumno = document.getElementById('in-alumno');
+  if (!selectAlumno) return; // no hay estudiantes registrados todavía
 
-  function poblarTiposPlan(programa) {
-    var selectTipo = document.getElementById('pl-tipo-plan');
-    var tipos = tiposPlanParaPrograma(programa);
-    selectTipo.innerHTML = tipos.map(function (t) { return '<option value="' + t.nombre + '">' + t.nombre + ' (' + t.horasSemana + 'h/sem)</option>'; }).join('');
-    aplicarTipoPlanSeleccionado();
+  var alumnos = cargarAlumnos();
+
+  function recalcularTotal() {
+    var valorCrudo = Number((document.getElementById('in-valor').value || '').replace(/\D/g, '')) || 0;
+    var descuento = Number(document.getElementById('in-descuento').value || 0);
+    var total = Math.round(valorCrudo - (valorCrudo * descuento / 100));
+    document.getElementById('in-total').value = formatearCOP(total);
   }
 
   function aplicarTipoPlanSeleccionado() {
-    var selectTipo = document.getElementById('pl-tipo-plan');
+    var selectTipo = document.getElementById('in-tipo-plan');
     var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === selectTipo.value; });
-    var notaEl = document.getElementById('pl-nota-tipo');
+    var notaEl = document.getElementById('in-nota-tipo');
     if (!tipo) return;
-    document.getElementById('pl-horas').value = tipo.horasSemana;
-    document.getElementById('pl-valor').value = formatearCOP(tipo.valor);
+    document.getElementById('in-horas').value = tipo.horasSemana + ' h/semana';
+    document.getElementById('in-valor').value = formatearCOP(tipo.valor);
     var notas = [];
     if (tipo.combinaInstrumentos > 0) notas.push('Puede combinar hasta ' + tipo.combinaInstrumentos + ' instrumentos.');
     if (tipo.nota) notas.push(tipo.nota);
     if (notas.length) { notaEl.textContent = notas.join(' '); notaEl.style.display = 'block'; }
     else { notaEl.style.display = 'none'; }
-    recalcularTotalPlan();
+    recalcularTotal();
   }
 
-  var selectProgramaPlan = document.getElementById('pl-programa');
-  if (selectProgramaPlan) {
-    selectProgramaPlan.addEventListener('change', function () { poblarTiposPlan(this.value); });
-    poblarTiposPlan(selectProgramaPlan.value); // arranca ya cargado al abrir la pantalla
+  // El programa NO se vuelve a preguntar — se toma del estudiante ya
+  // registrado en el módulo Estudiantes, para no duplicar el dato.
+  function alDefinirEstudiante() {
+    var alumno = alumnos[Number(selectAlumno.value)];
+    if (!alumno) return;
+    document.getElementById('in-programa').value = alumno.programa;
+    var selectTipo = document.getElementById('in-tipo-plan');
+    var tipos = tiposPlanParaPrograma(alumno.programa);
+    selectTipo.innerHTML = tipos.map(function (t) { return '<option value="' + t.nombre + '">' + t.nombre + ' (' + t.horasSemana + 'h/sem)</option>'; }).join('');
+    aplicarTipoPlanSeleccionado();
   }
 
-  var selectTipoPlan = document.getElementById('pl-tipo-plan');
-  if (selectTipoPlan) {
-    selectTipoPlan.addEventListener('change', aplicarTipoPlanSeleccionado);
-  }
-
-  var inputDescuentoPlan = document.getElementById('pl-descuento');
-  if (inputDescuentoPlan) {
-    inputDescuentoPlan.addEventListener('input', recalcularTotalPlan);
-  }
-  recalcularTotalPlan();
-
-  var btnPlan = document.getElementById('btn-crear-plan');
-  if (btnPlan) {
-    btnPlan.addEventListener('click', function () {
-      var programa = document.getElementById('pl-programa').value;
-      var tipoPlanNombre = document.getElementById('pl-tipo-plan').value;
-      var horas = document.getElementById('pl-horas').value;
-      var valorCrudo = Number(document.getElementById('pl-valor').value.replace(/\D/g, ''));
-      var descuentoPorcentaje = Number(document.getElementById('pl-descuento').value || 0);
-      if (!horas || !valorCrudo) return;
-      var planes = cargarPlanes();
-      planes.push({
-        nombre: programa + ' — ' + tipoPlanNombre,
-        programa: programa,
-        tipoPlan: tipoPlanNombre,
-        horas: horas,
-        valor: valorCrudo,
-        descuentoPorcentaje: descuentoPorcentaje
-      });
-      guardarPlanes(planes);
-      renderContenido('matricula');
-    });
-  }
+  selectAlumno.addEventListener('change', alDefinirEstudiante);
+  document.getElementById('in-tipo-plan').addEventListener('change', aplicarTipoPlanSeleccionado);
+  document.getElementById('in-descuento').addEventListener('input', recalcularTotal);
+  alDefinirEstudiante(); // arranca ya cargado con el primer estudiante de la lista
 
   var selectPagado = document.getElementById('in-pagado');
   if (selectPagado) {
@@ -857,18 +823,22 @@ function activarLogicaMatricula() {
       var fechaInicio = document.getElementById('in-fecha').value;
       var fechaPago = document.getElementById('in-fecha-pago').value;
       var pagado = document.getElementById('in-pagado').value === 'si';
-      var alumnoIdx = Number(document.getElementById('in-alumno').value);
-      var planIdx = Number(document.getElementById('in-plan').value);
+      var alumnoIdx = Number(selectAlumno.value);
+      var tipoPlanNombre = document.getElementById('in-tipo-plan').value;
+      var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === tipoPlanNombre; });
       if (!fechaInicio) { alert('La fecha de inicio es obligatoria.'); return; }
       if (!fechaPago) { alert('Falta la fecha de pago (si ya pagó) o la fecha límite (si no pagó).'); return; }
+      if (!tipo) { alert('Elegí un tipo de plan.'); return; }
 
-      var planes = cargarPlanes();
-      var plan = planes[planIdx];
-      var descuentoMonto = Math.round(Number(plan.valor) * (Number(plan.descuentoPorcentaje || 0) / 100));
-      var valorConDescuento = Number(plan.valor) - descuentoMonto;
+      var descuentoPorcentaje = Number(document.getElementById('in-descuento').value || 0);
+      var descuentoMonto = Math.round(Number(tipo.valor) * (descuentoPorcentaje / 100));
+      var valorConDescuento = Number(tipo.valor) - descuentoMonto;
 
       var inscripciones = cargarInscripciones();
-      inscripciones.push({ alumnoIdx: alumnoIdx, planIdx: planIdx, fechaInicio: fechaInicio, pagado: pagado });
+      inscripciones.push({
+        alumnoIdx: alumnoIdx, tipoPlanNombre: tipoPlanNombre, horas: tipo.horasSemana,
+        valor: tipo.valor, descuentoPorcentaje: descuentoPorcentaje, fechaInicio: fechaInicio, pagado: pagado
+      });
       guardarInscripciones(inscripciones);
 
       // Genera el cargo de matrícula — mismo criterio que el backend real. El
@@ -877,7 +847,7 @@ function activarLogicaMatricula() {
       var nuevoCargo = {
         alumnoIdx: alumnoIdx,
         concepto: 'Matrícula',
-        valor: Number(plan.valor),
+        valor: Number(tipo.valor),
         descuento: descuentoMonto,
         saldo: pagado ? 0 : valorConDescuento,
         vencimiento: fechaPago,
@@ -887,16 +857,16 @@ function activarLogicaMatricula() {
       guardarCargos(cargos);
 
       // Si ya pagó, además queda el pago cargado en Pagos, y el alumno pasa a "activo" directo.
-      var alumnos = cargarAlumnos();
+      var alumnosLista = cargarAlumnos();
       if (pagado) {
         var pagos = cargarPagosRegistrados();
         pagos.push({ alumnoIdx: alumnoIdx, concepto: 'Matrícula', valor: valorConDescuento, fecha: fechaPago, medioPago: document.getElementById('in-medio-pago').value });
         guardarPagosRegistrados(pagos);
-        alumnos[alumnoIdx].estado = 'activo';
+        alumnosLista[alumnoIdx].estado = 'activo';
       } else {
-        alumnos[alumnoIdx].estado = 'pendiente_matricula';
+        alumnosLista[alumnoIdx].estado = 'pendiente_matricula';
       }
-      guardarAlumnos(alumnos);
+      guardarAlumnos(alumnosLista);
 
       document.getElementById('msj-inscripcion').textContent = pagado
         ? 'Inscripción creada y pago registrado — el estudiante ya quedó "Activo", y el cargo aparece saldado en el módulo Pagos.'
@@ -2064,7 +2034,7 @@ function renderContenido(clave) {
 
   // Horarios necesita más ancho para que la grilla se lea bien — el resto
   // de los módulos se mantiene en el ancho angosto de lectura normal.
-  document.getElementById('contenido').classList.toggle('ancho-completo', mod.key === 'horarios' || mod.key === 'dashboard');
+  document.getElementById('contenido').classList.toggle('ancho-completo', mod.key === 'horarios' || mod.key === 'dashboard' || mod.key === 'matricula');
 
   if (mod.key === 'dashboard') {
     document.getElementById('contenido').innerHTML = renderDashboard(sesion);
