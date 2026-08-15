@@ -102,59 +102,80 @@
   .tile:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(34,63,97,0.14); }
   .tile p { margin: 10px 0 0; font-size: 13px; }
 
-  /* ---------- Inicio (post-login): panel foto + módulos, dos columnas ---------- */
-  .inicio-split { display: flex; gap: 26px; align-items: stretch; }
-  .panel-foto {
-    flex: 0 0 34%; min-width: 260px; background: linear-gradient(165deg, var(--azul-oscuro) 0%, var(--azul-noche) 120%);
-    border-radius: 26px; padding: 30px 26px 26px; color: #fff; display: flex; flex-direction: column;
-    box-shadow: 0 18px 40px rgba(21,42,68,0.22); position: relative; overflow: hidden;
+  /* ---------- Inicio (post-login): rediseño total estilo "About us" ---------- */
+
+  /* Fila de accesos rápidos — arriba de todo, como pediste. */
+  .accesos-rapidos { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 34px; }
+  .acceso-rapido {
+    flex: 1 1 170px; background: #fff; border-radius: 14px; padding: 13px 16px; text-decoration: none;
+    display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 10px rgba(34,63,97,0.07);
+    transition: transform 0.15s, box-shadow 0.15s;
   }
-  .panel-foto .pildora-eyebrow {
-    display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; background: var(--naranja);
-    color: #fff; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; padding: 5px 13px; border-radius: 999px; margin-bottom: 16px;
+  .acceso-rapido:hover { transform: translateY(-3px); box-shadow: 0 8px 18px rgba(34,63,97,0.15); }
+  .acceso-rapido .icono-mini {
+    width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
-  .panel-foto h1 {
-    font-family: var(--font-wordmark); font-weight: 500; font-style: italic;
-    font-size: clamp(22px, 2.6vw, 27px); line-height: 1.18; margin: 0 0 10px;
+  .acceso-rapido .icono-mini .piano-mini div { background: #fff; }
+  .acceso-rapido p { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--texto); }
+  .acceso-rapido span { font-size: 10.5px; color: var(--naranja); font-weight: 600; }
+
+  /* Hero tipo "About us": eyebrow + título + foto grande + stats */
+  .hero-about { text-align: center; margin-bottom: 6px; }
+  .hero-about .pildora-eyebrow {
+    display: inline-flex; align-items: center; gap: 6px; background: var(--azul-claro); color: var(--azul-noche);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 13px;
+    border-radius: 999px; margin-bottom: 14px;
   }
-  .panel-foto .info-academia { font-size: 12.5px; line-height: 1.6; color: rgba(255,255,255,0.78); margin: 0 0 20px; }
-  .panel-foto .foto-equipo {
-    margin-top: auto; border-radius: 18px; overflow: hidden; position: relative;
-    box-shadow: 0 10px 24px rgba(0,0,0,0.25); min-height: 220px;
+  .hero-about h1 {
+    font-family: var(--font-wordmark); font-weight: 500; font-style: italic; color: var(--azul-oscuro);
+    font-size: clamp(26px, 3.4vw, 36px); line-height: 1.16; max-width: 640px; margin: 0 auto 12px;
   }
-  .panel-foto .foto-equipo img { display: block; width: 100%; height: 100%; object-fit: cover; }
-  .panel-foto .foto-equipo .rotulo-foto {
-    position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 14px;
-    background: linear-gradient(0deg, rgba(21,42,68,0.85) 0%, rgba(21,42,68,0) 100%);
-    font-size: 11px; color: #fff; font-weight: 600;
+  .hero-about p.subtitulo { font-size: 14px; color: var(--muted); max-width: 460px; margin: 0 auto; line-height: 1.55; }
+
+  .foto-banner {
+    width: 100%; height: 300px; border-radius: 22px; overflow: hidden; margin: 26px 0; position: relative;
+    box-shadow: 0 16px 34px rgba(21,42,68,0.20);
+  }
+  .foto-banner img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+  .fila-stats { display: flex; justify-content: center; gap: 44px; flex-wrap: wrap; margin: 0 0 50px; }
+  .stat-item { text-align: center; }
+  .stat-item strong {
+    display: block; font-family: var(--font-wordmark); font-weight: 500; font-size: 28px; color: var(--azul-oscuro);
+  }
+  .stat-item span { font-size: 11px; color: var(--muted); }
+
+  /* Sección "Tus módulos" — grilla completa, todo el resto de opciones */
+  .seccion-modulos { text-align: center; margin-bottom: 22px; }
+  .seccion-modulos .pildora-eyebrow {
+    display: inline-flex; align-items: center; gap: 6px; background: var(--beige); color: var(--muted);
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 4px 12px;
+    border-radius: 999px; margin-bottom: 10px; border: 1px solid #e2e5ea;
+  }
+  .seccion-modulos h2 {
+    font-family: var(--font-wordmark); font-weight: 500; font-style: italic; color: var(--azul-oscuro);
+    font-size: 24px; margin: 0;
   }
 
-  .panel-modulos { flex: 1; min-width: 0; }
-  .panel-modulos .cabecera-modulos { margin-bottom: 18px; }
-  .panel-modulos h2 {
-    font-family: var(--font-wordmark); font-weight: 500; font-style: italic;
-    font-size: 22px; color: var(--azul-oscuro); margin: 0 0 6px;
-  }
-  .panel-modulos .cabecera-modulos p { font-size: 13px; color: var(--muted); margin: 0; }
-
-  .grilla-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
+  .grilla-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
   .carta-modulo2 {
-    background: #fff; border-radius: 16px; padding: 16px; text-decoration: none; display: block;
+    background: #fff; border-radius: 16px; padding: 20px 18px; text-decoration: none; display: block;
     box-shadow: 0 2px 10px rgba(34,63,97,0.08); transition: transform 0.15s, box-shadow 0.15s;
   }
   .carta-modulo2:hover { transform: translateY(-4px); box-shadow: 0 10px 22px rgba(34,63,97,0.16); }
   .carta-modulo2 .icono-modulo {
-    width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
-    margin-bottom: 14px;
+    width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
   }
   .carta-modulo2 .icono-modulo .piano-mini div { background: #fff; }
-  .carta-modulo2 p.nombre { margin: 0 0 4px; font-size: 13.5px; font-weight: 700; color: var(--texto); }
+  .carta-modulo2 p.nombre { margin: 0 0 5px; font-size: 14px; font-weight: 700; color: var(--texto); }
+  .carta-modulo2 p.descripcion { margin: 0 0 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
   .carta-modulo2 span.entrar { font-size: 11.5px; color: var(--naranja); font-weight: 600; }
 
-  @media (max-width: 860px) {
-    .inicio-split { flex-direction: column; }
-    .panel-foto { flex-basis: auto; }
-    .panel-foto .foto-equipo { min-height: 160px; }
+  @media (max-width: 720px) {
+    .foto-banner { height: 190px; }
+    .fila-stats { gap: 26px; }
+    .stat-item strong { font-size: 22px; }
   }
 
   .placeholder { background: #fff; border: 1px dashed #cfd3da; border-radius: 14px; padding: 48px 24px; text-align: center; }
@@ -469,6 +490,24 @@ function fondoCarta(m, indice) {
   return 'linear-gradient(160deg, ' + acento + ' 0%, var(--azul-noche) 130%)';
 }
 
+// Descripción corta por módulo — copy de interfaz (qué hace cada
+// pantalla), no dato de negocio inventado.
+var DESCRIPCION_MODULO = {
+  estudiantes: 'Fichas, estados y acudientes de cada alumno.',
+  matricula: 'Planes, inscripciones y cargos automáticos.',
+  pagos: 'Cartera pendiente y comprobantes de pago.',
+  horarios: 'Agenda semanal y calendario del año.',
+  profesores: 'Perfiles, disponibilidad y espacio de trabajo.',
+  cursos: 'Catálogo de programas y estudiantes por curso.',
+  asistencia: 'Registro diario por clase y alumno.',
+  evaluacion: 'Seguimiento cualitativo del progreso musical.',
+  comunicacion: 'Mensajes y avisos a estudiantes y tutores.',
+  inventario: 'Instrumentos y recursos de la academia.',
+  reportes: 'Indicadores generales de la academia.',
+  admin: 'Configuración general del sistema.',
+  'usuarios-permisos': 'Roles, permisos y accesos del sistema.'
+};
+
 function renderDashboard(sesion) {
   var visibles = modulosVisibles(sesion.rol);
   var modulos = MODULOS.filter(function (m) { return m.key !== 'dashboard' && visibles.indexOf(m.key) !== -1; });
@@ -477,34 +516,56 @@ function renderDashboard(sesion) {
   // nombre real (pendiente, no inventado acá).
   var primerNombre = sesion.email ? sesion.email.split('@')[0] : '';
 
-  var tarjetas = modulos.map(function (m, i) {
-    var acento = ACENTOS_CARTA[i % ACENTOS_CARTA.length];
+  // Accesos rápidos arriba de todo: prioriza Estudiantes/Matrícula/
+  // Profesores si el rol los ve, y completa con lo que sigue si no.
+  var prioridad = ['estudiantes', 'matricula', 'profesores'];
+  var rapidos = modulos.filter(function (m) { return prioridad.indexOf(m.key) !== -1; });
+  modulos.forEach(function (m) { if (rapidos.length < 3 && rapidos.indexOf(m) === -1) rapidos.push(m); });
+  rapidos = rapidos.slice(0, 3);
+
+  var htmlRapidos = rapidos.map(function (m, i) {
+    return '' +
+      '<a href="#' + m.key + '" class="acceso-rapido">' +
+        '<div class="icono-mini" style="background:' + ACENTOS_CARTA[i % ACENTOS_CARTA.length] + ';">' +
+          '<div class="piano-mini"><div style="height:8px"></div><div style="height:11px"></div><div style="height:6px"></div><div style="height:10px"></div></div>' +
+        '</div>' +
+        '<div><p>' + m.label + '</p><span>Entrar →</span></div>' +
+      '</a>';
+  }).join('');
+
+  var htmlModulos = modulos.map(function (m, i) {
     return '' +
       '<a href="#' + m.key + '" class="carta-modulo2">' +
-        '<div class="icono-modulo" style="background:' + acento + ';">' +
+        '<div class="icono-modulo" style="background:' + ACENTOS_CARTA[i % ACENTOS_CARTA.length] + ';">' +
           '<div class="piano-mini"><div style="height:9px"></div><div style="height:12px"></div><div style="height:7px"></div><div style="height:11px"></div></div>' +
         '</div>' +
         '<p class="nombre">' + m.label + '</p>' +
+        '<p class="descripcion">' + (DESCRIPCION_MODULO[m.key] || 'Entrá para ver el detalle.') + '</p>' +
         '<span class="entrar">Entrar →</span>' +
       '</a>';
   }).join('');
 
   return '' +
-    '<div class="inicio-split">' +
-      '<div class="panel-foto">' +
-        '<span class="pildora-eyebrow">♪ Jacquin</span>' +
-        '<h1>' + (primerNombre ? 'Hola, ' + primerNombre + '.' : 'Bienvenido/a.') + '<br>Donde cada nota encuentra su lugar.</h1>' +
-        '<p class="info-academia">Academia musical con método propio, práctico y personalizado. Piano, guitarra, bajo, violín, técnica vocal, percusión e iniciación musical, para cada nivel y edad.</p>' +
-        '<div class="foto-equipo">' +
-          '<img src="equipo-jacquin.jpg" alt="Equipo de Jacquin Academia Musical" />' +
-          '<div class="rotulo-foto">El equipo Jacquin</div>' +
-        '</div>' +
+    '<div class="accesos-rapidos">' + htmlRapidos + '</div>' +
+
+    '<div class="hero-about">' +
+      '<span class="pildora-eyebrow">Sobre Jacquin</span>' +
+      '<h1>' + (primerNombre ? 'Hola, ' + primerNombre + '. ' : '') + 'Un equipo cercano, con método propio.</h1>' +
+      '<p class="subtitulo">Formamos músicos con un método práctico y personalizado — piano, guitarra, bajo, violín, técnica vocal, percusión e iniciación musical, para cada nivel y edad.</p>' +
+      '<div class="foto-banner"><img src="equipo-jacquin.jpg" alt="Equipo de Jacquin Academia Musical" /></div>' +
+      '<div class="fila-stats">' +
+        '<div class="stat-item"><strong>9</strong><span>Programas musicales</span></div>' +
+        '<div class="stat-item"><strong>6</strong><span>Tipos de plan</span></div>' +
+        '<div class="stat-item"><strong>5</strong><span>Roles del sistema</span></div>' +
+        '<div class="stat-item"><strong>1</strong><span>Método propio</span></div>' +
       '</div>' +
-      '<div class="panel-modulos">' +
-        '<div class="cabecera-modulos"><h2>Tus módulos</h2><p>Elegí uno para empezar a trabajar.</p></div>' +
-        '<div class="grilla-modulos">' + tarjetas + '</div>' +
-      '</div>' +
-    '</div>';
+    '</div>' +
+
+    '<div class="seccion-modulos">' +
+      '<span class="pildora-eyebrow">¿Por dónde seguimos?</span>' +
+      '<h2>Tus módulos</h2>' +
+    '</div>' +
+    '<div class="grilla-modulos">' + htmlModulos + '</div>';
 }
 
 function activarLogicaDashboard() {}
@@ -1984,7 +2045,7 @@ function renderContenido(clave) {
 
   // Horarios necesita más ancho para que la grilla se lea bien — el resto
   // de los módulos se mantiene en el ancho angosto de lectura normal.
-  document.getElementById('contenido').classList.toggle('ancho-completo', mod.key === 'horarios');
+  document.getElementById('contenido').classList.toggle('ancho-completo', mod.key === 'horarios' || mod.key === 'dashboard');
 
   if (mod.key === 'dashboard') {
     document.getElementById('contenido').innerHTML = renderDashboard(sesion);
