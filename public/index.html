@@ -103,8 +103,8 @@
   #piano-fondo { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 1.6%; padding: 0 4%; opacity: 0.07; pointer-events: none; z-index: 0; }
   #piano-fondo .barra-grande { width: 3.2%; max-width: 34px; background: var(--azul-oscuro); border-radius: 6px 6px 0 0; animation: pulso-lento 6s ease-in-out infinite; transform-origin: bottom; }
   @keyframes pulso-lento { 0%, 100% { transform: scaleY(0.7); } 50% { transform: scaleY(1); } }
-  #contenido { position: relative; z-index: 1; padding: 32px; max-width: 760px; animation: aparecer 0.25s ease; }
-  #contenido.ancho-completo { max-width: 100%; }
+  #contenido { position: relative; z-index: 1; padding: 32px; max-width: 1020px; margin: 0 auto; animation: aparecer 0.25s ease; }
+  #contenido.ancho-completo { max-width: 100%; margin: 0; }
   @keyframes aparecer { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .malla { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
   .tile { background: #fff; border-top: 4px solid var(--azul-oscuro); border-radius: 0 0 14px 14px; padding: 18px 14px; cursor: pointer; box-shadow: 0 2px 10px rgba(34,63,97,0.08); transition: transform 0.12s, box-shadow 0.12s; }
@@ -606,6 +606,7 @@ function renderEstudiantes() {
 
   return '' +
     '<div class="panel"><h2>Nuevo estudiante</h2>' +
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Nombres</label><input id="al-nombres" type="text" /></div>' +
     '<div class="campo"><label>Apellidos</label><input id="al-apellidos" type="text" /></div>' +
     '<div class="campo"><label>Documento</label><input id="al-documento" type="text" /></div>' +
@@ -619,9 +620,10 @@ function renderEstudiantes() {
     '</select></div>' +
     '<div class="campo"><label>Teléfono de contacto</label><input id="al-telefono" type="text" /></div>' +
     '<div class="campo"><label id="lbl-acudiente">Nombre del acudiente (opcional)</label><input id="al-acudiente" type="text" /></div>' +
-    '<p id="aviso-menor" style="font-size:12px; color:var(--naranja); display:none; margin:-4px 0 10px;">Alumno menor de edad: el acudiente es obligatorio.</p>' +
     '<div class="campo"><label>Observaciones</label><input id="al-obs" type="text" /></div>' +
-    '<button class="btn-primario" id="btn-crear-alumno">Registrar estudiante</button>' +
+    '</div>' +
+    '<p id="aviso-menor" style="font-size:12px; color:var(--naranja); display:none; margin:-4px 0 10px;">Alumno menor de edad: el acudiente es obligatorio.</p>' +
+    '<button class="btn-primario" id="btn-crear-alumno" style="max-width:280px;">Registrar estudiante</button>' +
     '<p id="msj-alumno-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Estudiante registrado (guardado en este navegador, no en el backend real).</p>' +
     '</div>' +
 
@@ -933,6 +935,7 @@ function renderPagosTab(alumnos, cargos) {
   return '' +
     '<div class="panel" style="border:2px solid #dbe6f5; background:#fafcff;"><h2 style="color:var(--azul-oscuro);">Generar cargo</h2>' +
     (alumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Primero registrá un estudiante.</p>' :
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Estudiante</label><select id="cg-alumno">' +
     alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
     '</select></div>' +
@@ -942,11 +945,13 @@ function renderPagosTab(alumnos, cargos) {
     '<div class="campo"><label>Valor</label><input id="cg-valor" type="number" min="1" /></div>' +
     '<div class="campo"><label>Descuento (opcional)</label><input id="cg-descuento" type="number" min="0" value="0" /></div>' +
     '<div class="campo"><label>Fecha de vencimiento</label><input id="cg-vencimiento" type="date" /></div>' +
-    '<button class="btn-primario" id="btn-crear-cargo">Generar cargo</button>') +
+    '</div>' +
+    '<button class="btn-primario" id="btn-crear-cargo" style="max-width:280px;">Generar cargo</button>') +
     '</div>' +
 
     '<div class="panel" style="border:2px solid #dbe6f5; background:#fafcff;"><h2 style="color:var(--azul-oscuro);">Registrar pago</h2>' +
     (cargos.filter(function (c) { return c.saldo > 0; }).length === 0 ? '<p style="font-size:13px; color:var(--muted);">No hay cargos con saldo pendiente.</p>' :
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Cargo</label><select id="pg-cargo">' +
     cargos.map(function (c, i) {
       if (c.saldo <= 0) return '';
@@ -956,7 +961,8 @@ function renderPagosTab(alumnos, cargos) {
     '</select></div>' +
     '<div class="campo"><label>Valor a pagar</label><input id="pg-valor" type="number" min="1" /></div>' +
     '<div class="campo"><label>Medio de pago</label><select id="pg-medio"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div>' +
-    '<button class="btn-primario" id="btn-registrar-pago">Registrar pago</button>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-registrar-pago" style="max-width:280px;">Registrar pago</button>' +
     '<p id="msj-pago" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Pago registrado. Si el cargo quedó saldado y estaba ligado a una matrícula, el estudiante pasa a "Activo".</p>') +
     '</div>' +
 
@@ -1445,21 +1451,23 @@ function renderAsistencia(sesion) {
   return '' +
     '<div class="panel"><h2>Registrar asistencia</h2>' +
     (alumnos.length === 0 || clasesVisibles.length === 0 ? '<p style="font-size:13px; color:var(--muted);">' + (esProfesor ? 'No tenés clases asignadas todavía.' : 'Necesitás al menos un estudiante y una clase.') + '</p>' :
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Estudiante</label><select id="as-alumno">' +
     alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Curso / programa</label><input id="as-curso-info" type="text" readonly style="background:var(--beige); color:var(--muted);" /></div>' +
+    '<div class="campo"><label>Fecha</label><input id="as-fecha" type="date" value="' + hoy + '" /></div>' +
+    '<div class="campo"><label>Estado</label><select id="as-estado">' +
+    ESTADOS_ASISTENCIA.map(function (e) { return '<option value="' + e + '">' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('') +
+    '</select></div>' +
     '<div class="campo" style="display:none;"><label>Clase</label><select id="as-clase">' +
     clases.map(function (c, i) {
       if (esProfesor && c.profesor !== sesion.email) return '';
       return '<option value="' + i + '">' + c.programa + ' — ' + DIAS_SEMANA[c.dia] + ' ' + c.hora + '</option>';
     }).join('') +
     '</select></div>' +
-    '<div class="campo"><label>Fecha</label><input id="as-fecha" type="date" value="' + hoy + '" /></div>' +
-    '<div class="campo"><label>Estado</label><select id="as-estado">' +
-    ESTADOS_ASISTENCIA.map(function (e) { return '<option value="' + e + '">' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('') +
-    '</select></div>' +
-    '<button class="btn-primario" id="btn-registrar-asistencia">Guardar</button>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-registrar-asistencia" style="max-width:280px;">Guardar</button>' +
     '<p id="msj-asistencia-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Asistencia registrada.</p>' +
     '<p id="msj-alerta-faltas" style="font-size:12px; color:var(--rojo); display:none; margin-top:8px;">⚠ Este estudiante acumula ' + UMBRAL_ALERTA_FALTAS + ' o más faltas recientes — considerar contactar al acudiente.</p>') +
     '</div>' +
@@ -1604,12 +1612,14 @@ function renderProfesores(sesion) {
     '</div>' +
 
     '<div class="panel"><h2>Agregar profesor</h2>' +
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Nombre</label><input id="np-nombre" type="text" /></div>' +
     '<div class="campo"><label>Email</label><input id="np-email" type="email" /></div>' +
     '<div class="campo"><label>Instrumentos que enseña</label><select id="np-instrumentos" multiple size="5">' +
     PROGRAMAS.map(function (pr) { return '<option value="' + pr + '">' + pr + '</option>'; }).join('') +
     '</select></div>' +
-    '<button class="btn-primario" id="btn-agregar-profesor">Agregar profesor</button>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-agregar-profesor" style="max-width:280px;">Agregar profesor</button>' +
     '<p id="msj-profesor-nuevo" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Profesor agregado — ya puede iniciar sesión (cualquier contraseña sirve en esta demo) y asignarle estudiantes/horarios.</p>' +
     '</div>' +
 
@@ -1620,12 +1630,14 @@ function renderProfesores(sesion) {
 
     (profesores.length === 0 ? '' :
     '<div class="panel"><h2>Completar perfil</h2>' +
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Profesor</label><select id="pf-usuario">' +
     profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Teléfono</label><input id="pf-telefono" type="text" /></div>' +
     '<div class="campo"><label>Experiencia</label><input id="pf-experiencia" type="text" placeholder="Ej: 8 años enseñando piano clásico" /></div>' +
-    '<button class="btn-primario" id="btn-guardar-perfil">Guardar perfil</button>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-guardar-perfil" style="max-width:280px;">Guardar perfil</button>' +
     '<p id="msj-perfil-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Perfil actualizado.</p>' +
     '</div>');
 }
@@ -1845,6 +1857,7 @@ function renderEvaluacion(sesion) {
     '</div>' +
 
     '<div class="panel"><h2>Nueva evaluación</h2>' +
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Fecha</label><input id="ev-fecha" type="date" value="' + new Date().toISOString().slice(0, 10) + '" /></div>' +
     INDICADORES_EVALUACION.map(function (ind) {
       return '<div class="campo"><label>' + ETIQUETA_INDICADOR[ind] + '</label><select id="ev-' + ind + '">' +
@@ -1852,7 +1865,8 @@ function renderEvaluacion(sesion) {
         '</select></div>';
     }).join('') +
     '<div class="campo"><label>Observaciones</label><input id="ev-observaciones" type="text" placeholder="Notas del profesor sobre esta evaluación..." /></div>' +
-    '<button class="btn-primario" id="btn-guardar-evaluacion">Guardar evaluación</button>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-guardar-evaluacion" style="max-width:280px;">Guardar evaluación</button>' +
     '<p id="msj-evaluacion-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Evaluación registrada — la línea de tiempo ya se actualizó.</p>' +
     '</div>' +
 
@@ -1955,6 +1969,7 @@ function renderAdmin() {
     '</div>' +
 
     '<div class="panel"><h2>Crear usuario</h2>' +
+    '<div class="grilla-2col">' +
     '<div class="campo"><label>Nombre</label><input id="admin-nombre" type="text" /></div>' +
     '<div class="campo"><label>Email</label><input id="admin-email" type="email" /></div>' +
     '<div class="campo"><label>Rol</label><select id="admin-rol">' +
@@ -1964,8 +1979,9 @@ function renderAdmin() {
     '<option value="DIRECCION">Dirección</option>' +
     '</select></div>' +
     '<div class="campo"><label>Contraseña temporal</label><input id="admin-pass" type="password" /></div>' +
+    '</div>' +
     '<div id="reglas-vivo">' + POLITICA_PASSWORD.map(function (r) { return '<div class="regla" id="regla-' + r.id + '">· ' + r.txt + '</div>'; }).join('') + '</div>' +
-    '<button class="btn-primario" id="btn-crear-usuario" style="margin-top:10px;" disabled>Crear usuario</button>' +
+    '<button class="btn-primario" id="btn-crear-usuario" style="margin-top:10px; max-width:280px;" disabled>Crear usuario</button>' +
     '<p id="msj-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Usuario creado (guardado en este navegador, no en el backend real).</p>' +
     '</div>' +
 
