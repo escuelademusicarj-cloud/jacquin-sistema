@@ -103,7 +103,7 @@
   #piano-fondo { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 1.6%; padding: 0 4%; opacity: 0.07; pointer-events: none; z-index: 0; }
   #piano-fondo .barra-grande { width: 3.2%; max-width: 34px; background: var(--azul-oscuro); border-radius: 6px 6px 0 0; animation: pulso-lento 6s ease-in-out infinite; transform-origin: bottom; }
   @keyframes pulso-lento { 0%, 100% { transform: scaleY(0.7); } 50% { transform: scaleY(1); } }
-  #contenido { position: relative; z-index: 1; padding: 32px; max-width: 1020px; margin: 0 auto; animation: aparecer 0.25s ease; }
+  #contenido { position: relative; z-index: 1; padding: 32px; max-width: 1280px; margin: 0 auto; animation: aparecer 0.25s ease; }
   #contenido.ancho-completo { max-width: 100%; margin: 0; }
   @keyframes aparecer { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .malla { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
@@ -321,7 +321,7 @@ var EMAIL_PRUEBA = 'admin@jacquin.local';
 var PASS_PRUEBA = 'CambiarEnPrimerIngreso123';
 
 var MODULOS = [
-  { key: 'dashboard', label: 'Dashboard', grupo: 'principal' },
+  { key: 'dashboard', label: 'Inicio', grupo: 'principal' },
   { key: 'estudiantes', label: 'Estudiantes', grupo: 'matricula' },
   { key: 'matricula', label: 'Matrícula', grupo: 'matricula' },
   { key: 'pagos', label: 'Pagos y cartera', grupo: 'matricula' },
@@ -1475,26 +1475,26 @@ function renderHorariosSemana(sesion) {
           return fechaEfectiva <= fechaColumna;
         });
         var nombresAlumnos = alumnosVisibles.map(function (idx) { return alumnos[idx].nombres + ' ' + alumnos[idx].apellidos.split(' ')[0]; });
-        return '<div class="celda-clase" data-clase-idx="' + o.i + '" style="font-size:11px; text-align:left; background:#fff; border-radius:5px; padding:4px 6px; margin-bottom:3px; cursor:pointer;">' +
+        return '<div class="celda-clase" data-clase-idx="' + o.i + '" style="font-size:13px; text-align:left; background:#fff; border-radius:7px; padding:8px 10px; margin-bottom:6px; cursor:pointer;">' +
           '<div style="font-weight:600;">' + o.c.programa + '</div>' +
           '<div style="color:var(--muted);">' + (prof ? prof.nombre : o.c.profesor) + '</div>' +
           (nombresAlumnos.length ? '<div style="color:var(--azul-oscuro);">' + nombresAlumnos.join(', ') + '</div>' : '<div style="color:var(--muted); font-style:italic;">sin estudiante todavía</div>') +
           '</div>';
       }).join('');
 
-      var celdaBtn = (!esProfesor) ? '<button class="btn-celda-agendar" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:11px; background:transparent; border:1px dashed var(--azul-claro); border-radius:5px; width:100%; padding:4px; color:var(--azul-oscuro); cursor:pointer; margin-top:2px;">+ Agendar</button>' : '';
-      var etiquetaHoraCelda = '<div style="font-size:10px; font-weight:700; color:' + (ocupada ? 'var(--rojo)' : 'var(--verde)') + '; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
+      var celdaBtn = (!esProfesor) ? '<button class="btn-celda-agendar" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:13px; background:transparent; border:1.5px dashed var(--azul-claro); border-radius:7px; width:100%; padding:8px; color:var(--azul-oscuro); cursor:pointer; margin-top:4px; font-weight:600;">+ Agendar</button>' : '';
+      var etiquetaHoraCelda = '<div style="font-size:12px; font-weight:700; color:' + (ocupada ? 'var(--rojo)' : 'var(--verde)') + '; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
 
-      return '<td style="border-left:3px solid ' + colorBorde + '; background:' + (ocupada ? '#fdf3f0' : '#f2f8f2') + '; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
+      return '<td style="border-left:4px solid ' + colorBorde + '; background:' + (ocupada ? '#fdf3f0' : '#f2f8f2') + '; padding:12px; vertical-align:top; min-width:200px; min-height:120px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
     }).join('');
 
-    return '<tr><td style="font-size:11px; color:var(--muted); font-weight:600; padding:6px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
+    return '<tr><td style="font-size:13px; color:var(--muted); font-weight:600; padding:12px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
   }).join('');
 
   var encabezado = '<tr><td></td>' + COLUMNAS_DIAS.map(function (d) {
     var fechaCol = sumarDiasFecha(semanaHorarioSeleccionada, d - 1);
-    return '<td style="font-size:12px; font-weight:700; text-align:center; padding:6px; color:var(--azul-oscuro);">' + DIAS_SEMANA[d] +
-      '<div style="font-size:10px; font-weight:500; color:var(--muted);">' + formatearFechaCorta(fechaCol) + '</div></td>';
+    return '<td style="font-size:15px; font-weight:700; text-align:center; padding:10px; color:var(--azul-oscuro);">' + DIAS_SEMANA[d] +
+      '<div style="font-size:12px; font-weight:500; color:var(--muted);">' + formatearFechaCorta(fechaCol) + '</div></td>';
   }).join('') + '</tr>';
 
   var selectorSemana = '<div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">' +
@@ -1514,7 +1514,7 @@ function renderHorariosSemana(sesion) {
   var grillaHtml =
     selectorSemana +
     botonesFiltro +
-    '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:4px; width:100%;">' + encabezado + filasGrilla + '</table></div>' +
+    '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:8px; width:100%; table-layout:fixed;">' + encabezado + filasGrilla + '</table></div>' +
     '<div style="display:flex; gap:16px; margin-top:10px; font-size:11px; color:var(--muted);">' +
     '<span><span style="display:inline-block; width:10px; height:10px; background:var(--verde); border-radius:2px; margin-right:4px;"></span>Disponible</span>' +
     '<span><span style="display:inline-block; width:10px; height:10px; background:var(--rojo); border-radius:2px; margin-right:4px;"></span>Ocupado</span>' +
@@ -1758,7 +1758,7 @@ function renderAsistencia(sesion) {
           return '' +
             '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:3px;">' +
             '<span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:78px;" title="' + alumno.nombres + ' ' + alumno.apellidos + '">' + alumno.nombres + ' ' + alumno.apellidos.split(' ')[0] + '</span>' +
-            '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '"' + (esColumnaActiva ? '' : ' disabled') + ' style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:78px;">' +
+            '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '" style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:78px;">' +
             opciones + '</select>' +
             '</div>';
         }).join('');
@@ -1771,7 +1771,7 @@ function renderAsistencia(sesion) {
 
       var etiquetaHoraCelda = '<div style="font-size:10px; font-weight:700; color:' + (esColumnaActiva ? 'var(--azul-oscuro)' : 'var(--muted)') + '; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
 
-      return '<td style="border-left:3px solid ' + (esColumnaActiva ? 'var(--azul-oscuro)' : '#ddd') + '; background:' + (esColumnaActiva ? '#fff' : '#f7f6f3') + '; opacity:' + (esColumnaActiva ? '1' : '0.55') + '; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + '</td>';
+      return '<td style="border-left:3px solid ' + (esColumnaActiva ? 'var(--azul-oscuro)' : '#ddd') + '; background:' + (esColumnaActiva ? '#fff' : '#f7f6f3') + '; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + '</td>';
     }).join('');
 
     return '<tr><td style="font-size:11px; color:var(--muted); font-weight:600; padding:6px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
@@ -1817,7 +1817,7 @@ function renderAsistencia(sesion) {
 
   return '' +
     '<div class="panel"><h2>Asistencia' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la fecha real de la clase — solo se habilita la columna del día que le corresponde. Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la fecha real de la clase — el día que le corresponde queda resaltado, pero podés registrar en cualquier columna cuando lo necesites (por ejemplo, para poner al día una clase atrasada). Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
     grillaHtml +
     '</div>' +
 
@@ -3382,9 +3382,9 @@ function renderContenido(clave) {
   if (visibles.indexOf(clave) === -1) clave = 'dashboard';
   var mod = MODULOS.find(function (m) { return m.key === clave; }) || MODULOS[0];
 
-  // Ancho completo en todos los módulos salvo Inicio y Horarios — pedido
-  // explícito del usuario para aprovechar mejor la pantalla en el resto.
-  document.getElementById('contenido').classList.toggle('ancho-completo', mod.key !== 'dashboard' && mod.key !== 'horarios');
+  // Ancho completo en todos los módulos salvo Inicio — Horarios también lo usa
+  // para que la grilla semanal sea más fácil de ver y registrar.
+  document.getElementById('contenido').classList.toggle('ancho-completo', mod.key !== 'dashboard');
 
   if (mod.key === 'dashboard') {
     document.getElementById('contenido').innerHTML = renderDashboard(sesion);
