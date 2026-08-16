@@ -2001,6 +2001,10 @@ function renderHorariosSemana(sesion) {
   var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
   var clases = cargarClases();
   var esProfesor = sesion.rol === 'PROFESOR';
+  // Respaldo para estudiantes viejos sin fecha registrada — el lunes de
+  // esta semana (no una fecha fija del pasado), para que sigan viéndose
+  // en la semana actual y en adelante, pero no en semanas ya pasadas.
+  var hoyStrHorario = lunesDeFecha(new Date().toISOString().slice(0, 10));
 
   var filasGrilla = FRANJAS.map(function (franja) {
     var celdas = COLUMNAS_DIAS.map(function (dia) {
@@ -2021,8 +2025,8 @@ function renderHorariosSemana(sesion) {
         var alumnosVisibles = (o.c.alumnos || []).filter(function (idx) {
           var al = alumnos[idx];
           if (!al) return false;
-          var fechaAlta = al.fechaMatricula || '2000-01-01';
-          var fechaAsignado = (o.c.alumnosFechas && o.c.alumnosFechas[idx]) || '2000-01-01';
+          var fechaAlta = al.fechaMatricula || hoyStrHorario;
+          var fechaAsignado = (o.c.alumnosFechas && o.c.alumnosFechas[idx]) || hoyStrHorario;
           var fechaEfectiva = fechaAlta > fechaAsignado ? fechaAlta : fechaAsignado;
           return fechaEfectiva <= fechaColumna;
         });
@@ -2295,6 +2299,9 @@ function renderAsistencia(sesion) {
 
   var semana = semanaAsistenciaSeleccionada;
   var hoyStr = new Date().toISOString().slice(0, 10);
+  // Respaldo para estudiantes viejos sin fecha registrada — el lunes de
+  // esta semana, para que sigan viéndose en la semana actual en adelante.
+  var respaldoFechaAsistencia = lunesDeFecha(hoyStr);
 
   var filasGrilla = FRANJAS.map(function (franja) {
     var celdas = COLUMNAS_DIAS.map(function (dia) {
@@ -2313,7 +2320,7 @@ function renderAsistencia(sesion) {
         var listaAlumnos = (o.c.alumnos || []).filter(function (idxAlumno) {
           var al = alumnos[idxAlumno];
           if (!al) return false;
-          var fechaAlta = al.fechaMatricula || '2000-01-01';
+          var fechaAlta = al.fechaMatricula || respaldoFechaAsistencia;
           return fechaAlta <= fechaCelda;
         });
         var filasEstudiantes = listaAlumnos.map(function (idxAlumno) {
