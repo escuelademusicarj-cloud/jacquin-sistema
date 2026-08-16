@@ -321,7 +321,7 @@ var EMAIL_PRUEBA = 'admin@jacquin.local';
 var PASS_PRUEBA = 'CambiarEnPrimerIngreso123';
 
 var MODULOS = [
-  { key: 'dashboard', label: 'Dashboard', grupo: 'principal' },
+  { key: 'dashboard', label: 'Inicio', grupo: 'principal' },
   { key: 'estudiantes', label: 'Estudiantes', grupo: 'matricula' },
   { key: 'matricula', label: 'Matrícula', grupo: 'matricula' },
   { key: 'pagos', label: 'Pagos y cartera', grupo: 'matricula' },
@@ -330,6 +330,7 @@ var MODULOS = [
   { key: 'cursos', label: 'Cursos y programas', grupo: 'academia' },
   { key: 'asistencia', label: 'Asistencia', grupo: 'academia' },
   { key: 'evaluacion', label: 'Avances académicos', grupo: 'seguimiento' },
+  { key: 'eventos', label: 'Eventos', grupo: 'seguimiento' },
   { key: 'comunicacion', label: 'Comunicación', grupo: 'seguimiento' },
   { key: 'inventario', label: 'Inventario', grupo: 'seguimiento' },
   { key: 'reportes', label: 'Reportes', grupo: 'seguimiento' },
@@ -344,7 +345,7 @@ var VISIBILIDAD_ROL = {
   // Secretaría ve Contabilidad, pero con visibilidad restringida (renderContabilidad
   // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
   // el resumen financiero — eso queda reservado al Administrador).
-  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario','contabilidad'],
+  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos'],
   PROFESOR: ['dashboard','estudiantes','profesores','asistencia','evaluacion']
 };
 
@@ -433,6 +434,35 @@ function guardarNomina(lista) { localStorage.setItem('jacquin_demo_nomina', JSON
 
 function formatearCOPContable(numero) {
   return '$ ' + Math.round(Number(numero) || 0).toLocaleString('es-CO');
+}
+
+// ---- Puente Pagos → Contabilidad ----------------------------------------
+// Cada vez que se registra un pago (matrícula pagada al inscribir, o un
+// abono/pago de cargo en el módulo Pagos y cartera), este puente crea
+// automáticamente el ingreso correspondiente en Contabilidad. Antes esto no
+// pasaba: un pago quedaba visible en Pagos pero nunca aparecía en
+// Contabilidad > Ingresos ni en los totales/KPIs. Se identifica con
+// origenAutomatico:true para poder distinguirlo si algún día hace falta.
+function categoriaIngresoDesdeConcepto(concepto) {
+  return CATEGORIAS_INGRESO.indexOf(concepto) !== -1 ? concepto : 'Otro';
+}
+
+function registrarIngresoDesdePago(alumnoIdx, concepto, valor, fecha, medioPago) {
+  if (!valor || valor <= 0) return; // no genera ingresos de $0
+  var alumno = cargarAlumnos()[alumnoIdx];
+  var ingresos = cargarIngresos();
+  ingresos.push({
+    fecha: fecha || new Date().toISOString().slice(0, 10),
+    concepto: concepto + (alumno ? ' — ' + alumno.nombres + ' ' + alumno.apellidos : ''),
+    programa: alumno ? alumno.programa : '',
+    categoria: categoriaIngresoDesdeConcepto(concepto),
+    cliente: alumno ? alumno.nombres + ' ' + alumno.apellidos : '',
+    metodo: medioPago || 'Efectivo',
+    estado: 'pagado',
+    valor: valor,
+    origenAutomatico: true
+  });
+  guardarIngresos(ingresos);
 }
 
 // ---- Inventario ----
@@ -620,6 +650,7 @@ var ICONOS_MODULO = {
   cursos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.2c0-.8.7-1.4 1.6-1.2 2 .4 4.3 1.2 6.4 2.6 2.1-1.4 4.4-2.2 6.4-2.6.9-.2 1.6.4 1.6 1.2v13c0 .7-.6 1.2-1.3 1.3-2 .3-4.4 1-6.7 2.5-2.3-1.5-4.7-2.2-6.7-2.5-.7-.1-1.3-.6-1.3-1.3v-13Z"/><path d="M12 6.6v13.4"/></svg>',
   asistencia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.3"/><path d="m8.3 12.3 2.5 2.5 5-5.2"/></svg>',
   evaluacion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V4.5M4 19.5h16"/><path d="M7.5 16.5v-4M11.8 16.5V8M16.1 16.5v-6.8M20.4 16.5V6"/></svg>',
+  eventos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="m8.5 14 2 2 4-4"/></svg>',
   comunicacion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v10.2H9.4L4 19.5V5.5Z"/><path d="M8 9.3h8M8 12.3h5"/></svg>',
   inventario: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.7 7.3 12 3l8.3 4.3v9.4L12 21l-8.3-4.3V7.3Z"/><path d="M3.7 7.3 12 11.6l8.3-4.3M12 11.6V21"/></svg>',
   reportes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 14.5v2.7M12 11v6.2M16 8.3v9.4"/></svg>',
@@ -657,6 +688,7 @@ var DESCRIPCION_MODULO = {
   cursos: 'Catálogo de programas y estudiantes por curso.',
   asistencia: 'Registro diario por clase y alumno.',
   evaluacion: 'Seguimiento cualitativo del progreso musical.',
+  eventos: 'Programa ensayos y presentaciones, y convoca por WhatsApp.',
   comunicacion: 'Mensajes y avisos a estudiantes y tutores.',
   inventario: 'Instrumentos y recursos de la academia.',
   reportes: 'Indicadores generales de la academia.',
@@ -1068,8 +1100,10 @@ function activarLogicaMatricula() {
       var alumnosLista = cargarAlumnos();
       if (pagado) {
         var pagos = cargarPagosRegistrados();
-        pagos.push({ alumnoIdx: alumnoIdx, concepto: 'Matrícula', valor: valorConDescuento, fecha: fechaPago, medioPago: document.getElementById('in-medio-pago').value });
+        var medioPagoInscripcion = document.getElementById('in-medio-pago').value;
+        pagos.push({ alumnoIdx: alumnoIdx, concepto: 'Matrícula', valor: valorConDescuento, fecha: fechaPago, medioPago: medioPagoInscripcion });
         guardarPagosRegistrados(pagos);
+        registrarIngresoDesdePago(alumnoIdx, 'Matrícula', valorConDescuento, fechaPago, medioPagoInscripcion);
         alumnosLista[alumnoIdx].estado = 'activo';
       } else {
         alumnosLista[alumnoIdx].estado = 'pendiente_matricula';
@@ -1169,7 +1203,7 @@ function renderPagosTab(alumnos, cargos) {
     '<div class="campo"><label>Medio de pago</label><select id="pg-medio"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div>' +
     '</div>' +
     '<button class="btn-primario" id="btn-registrar-pago" style="max-width:280px;">Registrar pago</button>' +
-    '<p id="msj-pago" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Pago registrado. Si el cargo quedó saldado y estaba ligado a una matrícula, el estudiante pasa a "Activo".</p>') +
+    '<p id="msj-pago" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Pago registrado y reflejado como ingreso en Contabilidad. Si el cargo quedó saldado y estaba ligado a una matrícula, el estudiante pasa a "Activo".</p>') +
     '</div>' +
 
     '<div class="panel"><h2>Comprobantes de pago</h2>' +
@@ -1248,9 +1282,11 @@ function activarLogicaPagos() {
       cargo.estado = cargo.saldo === 0 ? 'pagado' : 'parcial';
       guardarCargos(cargos);
 
+      var fechaPagoRegistrado = new Date().toISOString().slice(0, 10);
       var pagos = cargarPagosRegistrados();
-      pagos.push({ alumnoIdx: cargo.alumnoIdx, concepto: cargo.concepto, valor: valor, fecha: new Date().toISOString().slice(0, 10), medioPago: medioPago });
+      pagos.push({ alumnoIdx: cargo.alumnoIdx, concepto: cargo.concepto, valor: valor, fecha: fechaPagoRegistrado, medioPago: medioPago });
       guardarPagosRegistrados(pagos);
+      registrarIngresoDesdePago(cargo.alumnoIdx, cargo.concepto, valor, fechaPagoRegistrado, medioPago);
 
       document.getElementById('msj-pago').style.display = 'block';
       setTimeout(function () { renderContenido('pagos'); }, 700);
@@ -2174,6 +2210,21 @@ function renderEvaluacionMensualPanel(sesion) {
     '<button id="btn-cancelar-eval-mensual" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
     '</div></div>';
 
+  // Recuadro externo (modal) que muestra el resultado del avance al hacer
+  // clic en "Ver avance" — antes solo desplazaba la página hasta la tabla
+  // de historial; ahora además abre este panel con el detalle completo
+  // (las 8 preguntas respondidas + observaciones) de cada registro mensual
+  // del estudiante seleccionado.
+  var htmlModalVerAvance =
+    '<div id="modal-ver-avance" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.55); z-index:65; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:24px; width:100%; max-width:560px; max-height:88vh; overflow-y:auto;">' +
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">' +
+    '<h2 style="margin:0;" id="modal-ver-avance-titulo">Avance</h2>' +
+    '<button id="btn-cerrar-modal-ver-avance" style="background:transparent; border:none; font-size:20px; line-height:1; cursor:pointer; color:var(--muted);">×</button>' +
+    '</div>' +
+    '<div id="modal-ver-avance-cuerpo"></div>' +
+    '</div></div>';
+
   return '' +
     '<div class="panel"><h2>Estudiantes — ' + mesLegible + '</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">A cada estudiante hay que registrarle este avance al menos una vez por mes. Cuando empieza un mes nuevo, vuelve a aparecer como "Pendiente este mes" aunque ya se le haya hecho en meses anteriores.</p>' +
@@ -2184,20 +2235,69 @@ function renderEvaluacionMensualPanel(sesion) {
     (historialFilas ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Mes</th><th>Fecha registrada</th><th>Observaciones</th></tr></thead><tbody>' + historialFilas + '</tbody></table></div>'
       : '<p style="font-size:13px; color:var(--muted);">' + (alumnoFiltro ? 'Este estudiante todavía no tiene avances mensuales registrados.' : 'Sin avances mensuales registrados todavía.') + '</p>') +
     '</div>' +
-    htmlModal;
+    htmlModal +
+    htmlModalVerAvance;
+}
+
+// Arma el contenido interno del modal "Ver avance": un registro por mes,
+// con las 8 preguntas cualitativas respondidas y su color según escala.
+function renderCuerpoVerAvance(alumnoIdx) {
+  var alumno = cargarAlumnos()[alumnoIdx];
+  var evaluaciones = cargarEvaluacionesMensuales()
+    .filter(function (e) { return e.alumnoIdx === alumnoIdx; })
+    .sort(function (a, b) { return (b.mes || '').localeCompare(a.mes || ''); });
+
+  if (evaluaciones.length === 0) {
+    return '<p style="font-size:13px; color:var(--muted);">Este estudiante todavía no tiene avances mensuales registrados.</p>';
+  }
+
+  return evaluaciones.map(function (e) {
+    var mesLegible = new Date(e.mes + '-01T00:00:00').toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+    var filasPreguntas = PREGUNTAS_EVAL_MENSUAL.map(function (p) {
+      var valor = (e.respuestas && e.respuestas[p.id]) || 'normal';
+      return '<tr><td style="padding:5px 0; font-size:12.5px; color:var(--texto);">' + p.texto + '</td>' +
+        '<td style="padding:5px 0; text-align:right;"><span class="chip-rol" style="background:' + COLOR_ESCALA_MENSUAL[valor] + '; color:#fff;">' + ETIQUETA_ESCALA_MENSUAL[valor] + '</span></td></tr>';
+    }).join('');
+    return '' +
+      '<div class="panel" style="margin-bottom:14px; padding:16px;">' +
+      '<div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">' +
+      '<h3 style="margin:0; text-transform:capitalize; font-size:15px;">' + mesLegible + '</h3>' +
+      '<span style="font-size:11px; color:var(--muted);">Registrado el ' + (e.fecha || '—') + '</span>' +
+      '</div>' +
+      '<table style="width:100%; border-collapse:collapse;">' + filasPreguntas + '</table>' +
+      (e.observaciones ? '<p style="font-size:12.5px; margin:10px 0 0; padding-top:8px; border-top:1px solid #eef0f3;"><strong>Observaciones:</strong> ' + e.observaciones + '</p>' : '') +
+      '</div>';
+  }).join('') +
+  (alumno ? '' : '');
 }
 
 function activarLogicaEvaluacionMensual() {
   document.querySelectorAll('.btn-ver-avance-mensual').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      filtroHistorialAvanceIdx = Number(btn.getAttribute('data-alumno-idx'));
-      renderContenido('evaluacion');
-      setTimeout(function () {
-        var panel = document.getElementById('panel-historial-avances-mensuales');
-        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 30);
+      var alumnoIdx = Number(btn.getAttribute('data-alumno-idx'));
+      filtroHistorialAvanceIdx = alumnoIdx;
+      var alumno = cargarAlumnos()[alumnoIdx];
+      var modalVer = document.getElementById('modal-ver-avance');
+      if (modalVer) {
+        document.getElementById('modal-ver-avance-titulo').textContent = 'Avance — ' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '');
+        document.getElementById('modal-ver-avance-cuerpo').innerHTML = renderCuerpoVerAvance(alumnoIdx);
+        modalVer.style.display = 'flex';
+      }
     });
   });
+
+  var btnCerrarModalVerAvance = document.getElementById('btn-cerrar-modal-ver-avance');
+  if (btnCerrarModalVerAvance) {
+    btnCerrarModalVerAvance.addEventListener('click', function () {
+      document.getElementById('modal-ver-avance').style.display = 'none';
+    });
+  }
+  var modalVerAvanceFondo = document.getElementById('modal-ver-avance');
+  if (modalVerAvanceFondo) {
+    modalVerAvanceFondo.addEventListener('click', function (e) {
+      if (e.target === modalVerAvanceFondo) modalVerAvanceFondo.style.display = 'none';
+    });
+  }
 
   var btnQuitarFiltroAvance = document.getElementById('btn-quitar-filtro-avance');
   if (btnQuitarFiltroAvance) {
@@ -2451,6 +2551,252 @@ function activarLogicaEvaluacion() {
   }
 
   activarLogicaEvaluacionMensual();
+}
+
+// ==================== EVENTOS ====================
+// Módulo para programar ensayos, presentaciones y otros eventos (recitales,
+// reuniones), y convocar a estudiantes y profesores por WhatsApp con un
+// mensaje ya redactado — conectado al listado real de Estudiantes y
+// Profesores, para no tener que escribir a mano cada vez. Para que no quede
+// tan informal, cada evento lleva su propia lista de convocados con
+// registro de a quién ya se le envió la invitación (con fecha) y quién
+// confirmó asistencia, en vez de mensajes sueltos sin control.
+var TIPOS_EVENTO = ['Ensayo', 'Presentación', 'Otro'];
+var ETIQUETA_TIPO_EVENTO = { 'Ensayo': '🎼 Ensayo', 'Presentación': '🎤 Presentación', 'Otro': '📌 Otro' };
+var ESTADOS_EVENTO = ['programado', 'realizado', 'cancelado'];
+var ETIQUETA_ESTADO_EVENTO = { programado: 'Programado', realizado: 'Realizado', cancelado: 'Cancelado' };
+var COLOR_ESTADO_EVENTO = { programado: 'var(--azul-oscuro)', realizado: 'var(--verde)', cancelado: 'var(--rojo)' };
+
+function cargarEventos() {
+  var g = localStorage.getItem('jacquin_demo_eventos');
+  return g ? JSON.parse(g) : [];
+}
+function guardarEventos(lista) { localStorage.setItem('jacquin_demo_eventos', JSON.stringify(lista)); }
+
+function claveInvitadoEvento(tipoInvitado, id) { return (tipoInvitado === 'estudiante' ? 'e-' : 'p-') + id; }
+
+function fechaLegibleEvento(fechaStr) {
+  if (!fechaStr) return '—';
+  return new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// Redacta el mensaje de convocatoria — distinto según el tipo de evento — y
+// siempre pide confirmación de asistencia, para que quede formal y no como
+// un simple aviso suelto.
+function mensajeConvocatoriaEvento(evento, nombreDestino) {
+  var fechaTxt = fechaLegibleEvento(evento.fecha);
+  var horaTxt = evento.hora || 'hora por confirmar';
+  var lugarTxt = evento.lugar || 'la academia';
+  var intro;
+  if (evento.tipo === 'Ensayo') {
+    intro = 'Hola ' + nombreDestino + ', te esperamos en el ensayo "' + evento.titulo + '"';
+  } else if (evento.tipo === 'Presentación') {
+    intro = 'Hola ' + nombreDestino + ', te convocamos a la presentación "' + evento.titulo + '"';
+  } else {
+    intro = 'Hola ' + nombreDestino + ', te convocamos al evento "' + evento.titulo + '"';
+  }
+  var cuerpo = intro + ', el ' + fechaTxt + ' a las ' + horaTxt + ', en ' + lugarTxt + '.';
+  if (evento.notas) cuerpo += ' ' + evento.notas;
+  cuerpo += ' Por favor confirma tu asistencia respondiendo este mensaje. — Academia Musical Jacquin';
+  return cuerpo;
+}
+
+function renderEventos(sesion) {
+  var alumnos = cargarAlumnos();
+  var profesores = cargarUsuarios().filter(function (u) { return u.rol === 'PROFESOR'; });
+  var eventos = cargarEventos();
+
+  var formCrear =
+    '<div class="panel"><h2>Programar evento</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Ensayos, presentaciones u otros eventos (recitales, reuniones) — convocá a quien haga falta desde el listado real de estudiantes y profesores.</p>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Tipo de evento</label><select id="ev-tipo">' +
+    TIPOS_EVENTO.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Título</label><input id="ev-titulo" type="text" placeholder="Ej: Ensayo general de piano" /></div>' +
+    '<div class="campo"><label>Fecha</label><input id="ev-fecha" type="date" /></div>' +
+    '<div class="campo"><label>Hora</label><input id="ev-hora" type="time" /></div>' +
+    '<div class="campo"><label>Lugar / salón</label><input id="ev-lugar" type="text" placeholder="Ej: Salón principal" /></div>' +
+    '<div class="campo"><label>Profesor responsable (opcional)</label><select id="ev-profesor-responsable"><option value="">Sin asignar</option>' +
+    profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '</div>' +
+    '<div class="campo"><label>Nota adicional para el mensaje (opcional)</label><input id="ev-notas" type="text" placeholder="Ej: Traer el instrumento propio" /></div>' +
+
+    '<p style="font-size:12px; color:var(--muted); margin:14px 0 6px; font-weight:600;">Estudiantes a convocar</p>' +
+    (alumnos.length === 0 ? '<p style="font-size:12.5px; color:var(--muted);">No hay estudiantes registrados.</p>' :
+    '<div style="max-height:180px; overflow-y:auto; border:1px solid #e2e5ea; border-radius:8px; padding:10px;">' +
+    alumnos.map(function (a, i) {
+      return '<label style="display:flex; align-items:center; gap:8px; font-size:12.5px; padding:4px 0;"><input type="checkbox" class="chk-ev-estudiante" value="' + i + '" /> ' + a.nombres + ' ' + a.apellidos + ' <span style="color:var(--muted);">— ' + a.programa + '</span></label>';
+    }).join('') + '</div>') +
+
+    '<p style="font-size:12px; color:var(--muted); margin:14px 0 6px; font-weight:600;">Profesores a convocar</p>' +
+    (profesores.length === 0 ? '<p style="font-size:12.5px; color:var(--muted);">No hay profesores registrados.</p>' :
+    '<div style="border:1px solid #e2e5ea; border-radius:8px; padding:10px;">' +
+    profesores.map(function (p) {
+      return '<label style="display:flex; align-items:center; gap:8px; font-size:12.5px; padding:4px 0;"><input type="checkbox" class="chk-ev-profesor" value="' + p.email + '" /> ' + p.nombre + '</label>';
+    }).join('') + '</div>') +
+
+    '<button class="btn-primario" id="btn-crear-evento" style="max-width:280px; margin-top:14px;">Programar evento</button>' +
+    '<p id="msj-evento-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Evento programado. Ya podés enviar las invitaciones por WhatsApp desde la lista de abajo.</p>' +
+    '</div>';
+
+  var eventosVigentes = eventos.map(function (e, i) { return { e: e, i: i }; }).filter(function (o) { return o.e.estado === 'programado'; })
+    .sort(function (a, b) { return (a.e.fecha || '').localeCompare(b.e.fecha || ''); });
+  var eventosPasados = eventos.map(function (e, i) { return { e: e, i: i }; }).filter(function (o) { return o.e.estado !== 'programado'; })
+    .sort(function (a, b) { return (b.e.fecha || '').localeCompare(a.e.fecha || ''); });
+
+  var listaVigentes = eventosVigentes.length === 0
+    ? '<p style="font-size:13px; color:var(--muted);">No hay eventos programados todavía.</p>'
+    : eventosVigentes.map(function (o) { return renderTarjetaEvento(o.e, o.i, alumnos, profesores); }).join('');
+
+  var listaPasados = eventosPasados.length === 0
+    ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay eventos realizados o cancelados.</p>'
+    : eventosPasados.map(function (o) { return renderTarjetaEvento(o.e, o.i, alumnos, profesores); }).join('');
+
+  return formCrear +
+    '<div class="panel"><h2>Próximos eventos</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Convocá a cada estudiante o profesor por WhatsApp con un clic — el mensaje ya sale redactado y el sistema deja registrado a quién se le envió y quién confirmó.</p>' +
+    listaVigentes + '</div>' +
+    '<div class="panel"><h2>Historial de eventos</h2>' + listaPasados + '</div>';
+}
+
+function renderTarjetaEvento(evento, idx, alumnos, profesores) {
+  var invitaciones = evento.invitaciones || {};
+  var perfiles = cargarPerfilesProfesor();
+  var filasInvitados = [];
+
+  (evento.estudiantesIdx || []).forEach(function (aIdx) {
+    var a = alumnos[aIdx];
+    if (!a) return;
+    var clave = claveInvitadoEvento('estudiante', aIdx);
+    var inv = invitaciones[clave] || {};
+    var telefono = (a.telefono || a.celularAcudiente || '').replace(/\D/g, '');
+    filasInvitados.push(filaInvitadoEvento(idx, clave, a.nombres + ' ' + a.apellidos, 'Estudiante', telefono, inv));
+  });
+
+  (evento.profesoresEmails || []).forEach(function (email) {
+    var p = profesores.find(function (x) { return x.email === email; });
+    if (!p) return;
+    var clave = claveInvitadoEvento('profesor', email);
+    var inv = invitaciones[clave] || {};
+    var telefono = ((perfiles[email] && perfiles[email].telefono) || '').replace(/\D/g, '');
+    filasInvitados.push(filaInvitadoEvento(idx, clave, p.nombre, 'Profesor', telefono, inv));
+  });
+
+  var totalInvitados = filasInvitados.length;
+  var totalEnviados = 0, totalConfirmados = 0;
+  Object.keys(invitaciones).forEach(function (k) {
+    if (invitaciones[k].enviada) totalEnviados++;
+    if (invitaciones[k].confirmado) totalConfirmados++;
+  });
+
+  var profesorResp = evento.profesorResponsable ? (profesores.find(function (p) { return p.email === evento.profesorResponsable; }) || {}).nombre : null;
+
+  var selectorEstado = evento.estado === 'programado'
+    ? '<select class="sel-estado-evento" data-idx="' + idx + '" style="font-size:12px; padding:5px 8px; border-radius:6px; border:1.5px solid var(--azul-oscuro); color:var(--azul-oscuro);">' +
+      ESTADOS_EVENTO.map(function (s) { return '<option value="' + s + '"' + (s === evento.estado ? ' selected' : '') + '>' + ETIQUETA_ESTADO_EVENTO[s] + '</option>'; }).join('') + '</select>'
+    : '<span class="chip-rol" style="background:' + COLOR_ESTADO_EVENTO[evento.estado] + '; color:#fff;">' + ETIQUETA_ESTADO_EVENTO[evento.estado] + '</span>';
+
+  return '' +
+    '<div class="panel" style="margin-bottom:14px; border-left:4px solid ' + COLOR_ESTADO_EVENTO[evento.estado] + ';">' +
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">' +
+    '<div>' +
+    '<span class="chip-rol" style="background:var(--beige); color:var(--texto); margin-bottom:6px; display:inline-block;">' + ETIQUETA_TIPO_EVENTO[evento.tipo] + '</span>' +
+    '<h3 style="margin:4px 0 2px;">' + evento.titulo + '</h3>' +
+    '<p style="margin:0; font-size:12.5px; color:var(--muted); text-transform:capitalize;">' + fechaLegibleEvento(evento.fecha) + (evento.hora ? ' · ' + evento.hora : '') + (evento.lugar ? ' · ' + evento.lugar : '') + '</p>' +
+    (profesorResp ? '<p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Responsable: ' + profesorResp + '</p>' : '') +
+    '</div>' +
+    selectorEstado +
+    '</div>' +
+    '<p style="font-size:12px; color:var(--muted); margin:10px 0 8px;">' + totalEnviados + ' de ' + totalInvitados + ' invitaciones enviadas · ' + totalConfirmados + ' confirmadas</p>' +
+    (filasInvitados.length === 0 ? '<p style="font-size:12.5px; color:var(--muted);">No se convocó a nadie todavía.</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Tipo</th><th>Invitación</th><th>Confirmó</th><th></th></tr></thead><tbody>' + filasInvitados.join('') + '</tbody></table></div>') +
+    '</div>';
+}
+
+function filaInvitadoEvento(idxEvento, clave, nombre, tipoPersona, telefono, inv) {
+  var chipEnvio = inv.enviada
+    ? '<span class="chip-rol" style="background:var(--verde); color:#fff;">Invitado' + (inv.fechaEnvio ? ' el ' + inv.fechaEnvio : '') + '</span>'
+    : '<span class="chip-rol" style="background:var(--naranja); color:#fff;">Sin enviar</span>';
+  var checkboxConfirmado = '<input type="checkbox" class="chk-confirmado-evento" data-idx-evento="' + idxEvento + '" data-clave="' + clave + '"' + (inv.confirmado ? ' checked' : '') + (inv.enviada ? '' : ' disabled') + ' />';
+  var botonWhatsapp = telefono
+    ? '<button class="btn-whatsapp-evento" data-idx-evento="' + idxEvento + '" data-clave="' + clave + '" data-telefono="' + telefono + '" data-nombre="' + nombre.replace(/"/g, '&quot;') + '" style="font-size:11px; background:#25D366; color:#fff; border:none; border-radius:6px; padding:5px 9px; cursor:pointer;">WhatsApp</button>'
+    : '<span style="font-size:11px; color:var(--muted); font-style:italic;">sin teléfono</span>';
+  return '<tr><td>' + nombre + '</td><td>' + tipoPersona + '</td><td>' + chipEnvio + '</td><td>' + checkboxConfirmado + '</td><td>' + botonWhatsapp + '</td></tr>';
+}
+
+function activarLogicaEventos() {
+  var btnCrear = document.getElementById('btn-crear-evento');
+  if (btnCrear) {
+    btnCrear.addEventListener('click', function () {
+      var tipo = document.getElementById('ev-tipo').value;
+      var titulo = document.getElementById('ev-titulo').value.trim();
+      var fecha = document.getElementById('ev-fecha').value;
+      var hora = document.getElementById('ev-hora').value;
+      var lugar = document.getElementById('ev-lugar').value.trim();
+      var profesorResponsable = document.getElementById('ev-profesor-responsable').value;
+      var notas = document.getElementById('ev-notas').value.trim();
+      if (!titulo || !fecha) { alert('El título y la fecha son obligatorios.'); return; }
+
+      var estudiantesIdx = Array.prototype.slice.call(document.querySelectorAll('.chk-ev-estudiante:checked')).map(function (c) { return Number(c.value); });
+      var profesoresEmails = Array.prototype.slice.call(document.querySelectorAll('.chk-ev-profesor:checked')).map(function (c) { return c.value; });
+      if (estudiantesIdx.length === 0 && profesoresEmails.length === 0) { alert('Convocá al menos a un estudiante o profesor.'); return; }
+
+      var eventos = cargarEventos();
+      eventos.push({
+        tipo: tipo, titulo: titulo, fecha: fecha, hora: hora, lugar: lugar,
+        profesorResponsable: profesorResponsable, notas: notas,
+        estudiantesIdx: estudiantesIdx, profesoresEmails: profesoresEmails,
+        estado: 'programado', invitaciones: {}
+      });
+      guardarEventos(eventos);
+
+      document.getElementById('msj-evento-creado').style.display = 'block';
+      setTimeout(function () { renderContenido('eventos'); }, 700);
+    });
+  }
+
+  document.querySelectorAll('.sel-estado-evento').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var idx = Number(sel.getAttribute('data-idx'));
+      var eventos = cargarEventos();
+      eventos[idx].estado = sel.value;
+      guardarEventos(eventos);
+      renderContenido('eventos');
+    });
+  });
+
+  document.querySelectorAll('.btn-whatsapp-evento').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idxEvento = Number(btn.getAttribute('data-idx-evento'));
+      var clave = btn.getAttribute('data-clave');
+      var telefono = btn.getAttribute('data-telefono');
+      var nombreDestino = btn.getAttribute('data-nombre');
+      var eventos = cargarEventos();
+      var evento = eventos[idxEvento];
+      var mensaje = mensajeConvocatoriaEvento(evento, nombreDestino);
+      window.open('https://wa.me/' + telefono + '?text=' + encodeURIComponent(mensaje), '_blank');
+
+      if (!evento.invitaciones) evento.invitaciones = {};
+      evento.invitaciones[clave] = Object.assign({}, evento.invitaciones[clave], { enviada: true, fechaEnvio: new Date().toISOString().slice(0, 10) });
+      guardarEventos(eventos);
+      renderContenido('eventos');
+    });
+  });
+
+  document.querySelectorAll('.chk-confirmado-evento').forEach(function (chk) {
+    chk.addEventListener('change', function () {
+      var idxEvento = Number(chk.getAttribute('data-idx-evento'));
+      var clave = chk.getAttribute('data-clave');
+      var eventos = cargarEventos();
+      var evento = eventos[idxEvento];
+      if (!evento.invitaciones) evento.invitaciones = {};
+      if (!evento.invitaciones[clave]) evento.invitaciones[clave] = {};
+      evento.invitaciones[clave].confirmado = chk.checked;
+      guardarEventos(eventos);
+    });
+  });
 }
 
 // ==================== CONTABILIDAD ====================
@@ -3154,6 +3500,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'evaluacion') {
     document.getElementById('contenido').innerHTML = renderEvaluacion(sesion);
     activarLogicaEvaluacion();
+  } else if (mod.key === 'eventos') {
+    document.getElementById('contenido').innerHTML = renderEventos(sesion);
+    activarLogicaEventos();
   } else if (mod.key === 'contabilidad') {
     document.getElementById('contenido').innerHTML = renderContabilidad(sesion);
     activarLogicaContabilidad();
