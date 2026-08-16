@@ -329,7 +329,7 @@ var MODULOS = [
   { key: 'profesores', label: 'Profesores', grupo: 'academia' },
   { key: 'cursos', label: 'Cursos y programas', grupo: 'academia' },
   { key: 'asistencia', label: 'Asistencia', grupo: 'academia' },
-  { key: 'evaluacion', label: 'Evaluación académica', grupo: 'seguimiento' },
+  { key: 'evaluacion', label: 'Avances académicos', grupo: 'seguimiento' },
   { key: 'comunicacion', label: 'Comunicación', grupo: 'seguimiento' },
   { key: 'inventario', label: 'Inventario', grupo: 'seguimiento' },
   { key: 'reportes', label: 'Reportes', grupo: 'seguimiento' },
@@ -531,6 +531,41 @@ var UMBRAL_ALERTA_FALTAS = 3;
 // filtro por programa/"General".
 var fechaAsistenciaSeleccionada = new Date().toISOString().slice(0, 10);
 var filtroProgramaAsistencia = 'General';
+var semanaAsistenciaAncla = null; // lunes (yyyy-mm-dd) de la semana que se está revisando en la grilla
+var alumnoHistorialAsistenciaIdx = null; // estudiante elegido en el recuadro de historial individual
+
+function lunesDeFecha(fechaStr) {
+  var d = new Date(fechaStr + 'T00:00:00');
+  var dia = d.getDay(); // 0=domingo..6=sábado
+  var offset = dia === 0 ? -6 : 1 - dia;
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().slice(0, 10);
+}
+
+function sumarDiasFecha(fechaStr, dias) {
+  var d = new Date(fechaStr + 'T00:00:00');
+  d.setDate(d.getDate() + dias);
+  return d.toISOString().slice(0, 10);
+}
+
+function numeroSemanaISO(fechaStr) {
+  var d = new Date(fechaStr + 'T00:00:00');
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  var inicioAnio = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil((((d - inicioAnio) / 86400000) + 1) / 7);
+}
+
+function fechaDeColumnaSemana(lunesStr, diaIso) {
+  // diaIso: 1=lunes ... 6=sábado, igual que COLUMNAS_DIAS.
+  return sumarDiasFecha(lunesStr, diaIso - 1);
+}
+
+function etiquetaRangoSemana(lunesStr) {
+  var inicio = new Date(lunesStr + 'T00:00:00');
+  var fin = new Date(sumarDiasFecha(lunesStr, 5) + 'T00:00:00');
+  var opts = { day: 'numeric', month: 'short' };
+  return inicio.toLocaleDateString('es-CO', opts) + ' – ' + fin.toLocaleDateString('es-CO', opts);
+}
 
 function cargarAsistencias() {
   var g = localStorage.getItem('jacquin_demo_asistencias');
@@ -1599,26 +1634,27 @@ function renderAsistencia(sesion) {
   var asistencias = cargarAsistencias();
   var esProfesor = sesion.rol === 'PROFESOR';
 
-  var fecha = fechaAsistenciaSeleccionada;
-  var fechaObj = new Date(fecha + 'T00:00:00');
-  var diaSemanaSeleccionado = fechaObj.getDay(); // 0=domingo..6=sábado, coincide con clase.dia
+  if (!semanaAsistenciaAncla) semanaAsistenciaAncla = lunesDeFecha(new Date().toISOString().slice(0, 10));
+  var lunes = semanaAsistenciaAncla;
+  var numSemana = numeroSemanaISO(lunes);
+  var rangoTxt = etiquetaRangoSemana(lunes);
+  var esSemanaActual = lunes === lunesDeFecha(new Date().toISOString().slice(0, 10));
 
   var filasGrilla = FRANJAS.map(function (franja) {
     var celdas = COLUMNAS_DIAS.map(function (dia) {
       var esSabado = dia === 6;
       var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
+      var fechaColumna = fechaDeColumnaSemana(lunes, dia);
       var ocupantes = clasesDeCelda(clases, dia, hora);
       if (esProfesor) ocupantes = ocupantes.filter(function (o) { return o.c.profesor === sesion.email; });
       if (filtroProgramaAsistencia !== 'General') ocupantes = ocupantes.filter(function (o) { return o.c.programa === filtroProgramaAsistencia; });
-
-      var esColumnaActiva = dia === diaSemanaSeleccionado;
 
       var contenidoOcupantes = ocupantes.map(function (o) {
         var listaAlumnos = o.c.alumnos || [];
         var filasEstudiantes = listaAlumnos.map(function (idxAlumno) {
           var alumno = alumnos[idxAlumno];
           if (!alumno) return '';
-          var registro = asistencias.find(function (a) { return a.alumnoIdx === idxAlumno && a.claseIdx === o.i && a.fecha === fecha; });
+          var registro = asistencias.find(function (a) { return a.alumnoIdx === idxAlumno && a.claseIdx === o.i && a.fecha === fechaColumna; });
           var estadoActual = registro ? registro.estado : '';
           var colorEstado = estadoActual ? (COLOR_ESTADO_ASISTENCIA[estadoActual] || '#ccc') : '#ccc';
           var opciones = '<option value="">—</option>' +
@@ -1626,7 +1662,7 @@ function renderAsistencia(sesion) {
           return '' +
             '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:3px;">' +
             '<span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:78px;" title="' + alumno.nombres + ' ' + alumno.apellidos + '">' + alumno.nombres + ' ' + alumno.apellidos.split(' ')[0] + '</span>' +
-            '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '"' + (esColumnaActiva ? '' : ' disabled') + ' style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:78px;">' +
+            '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '" data-fecha="' + fechaColumna + '" style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:78px;">' +
             opciones + '</select>' +
             '</div>';
         }).join('');
@@ -1637,18 +1673,28 @@ function renderAsistencia(sesion) {
           '</div>';
       }).join('');
 
-      var etiquetaHoraCelda = '<div style="font-size:10px; font-weight:700; color:' + (esColumnaActiva ? 'var(--azul-oscuro)' : 'var(--muted)') + '; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
+      var etiquetaHoraCelda = '<div style="font-size:10px; font-weight:700; color:var(--azul-oscuro); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
 
-      return '<td style="border-left:3px solid ' + (esColumnaActiva ? 'var(--azul-oscuro)' : '#ddd') + '; background:' + (esColumnaActiva ? '#fff' : '#f7f6f3') + '; opacity:' + (esColumnaActiva ? '1' : '0.55') + '; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + '</td>';
+      return '<td style="border-left:3px solid var(--azul-oscuro); background:#fff; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + '</td>';
     }).join('');
 
     return '<tr><td style="font-size:11px; color:var(--muted); font-weight:600; padding:6px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
   }).join('');
 
   var encabezado = '<tr><td></td>' + COLUMNAS_DIAS.map(function (d) {
-    var activo = d === diaSemanaSeleccionado;
-    return '<td style="font-size:12px; font-weight:700; text-align:center; padding:6px; color:' + (activo ? 'var(--azul-oscuro)' : 'var(--muted)') + ';">' + DIAS_SEMANA[d] + (activo ? ' •' : '') + '</td>';
+    var fechaCol = fechaDeColumnaSemana(lunes, d);
+    var esHoy = fechaCol === new Date().toISOString().slice(0, 10);
+    return '<td style="font-size:12px; font-weight:700; text-align:center; padding:6px; color:var(--azul-oscuro);">' + DIAS_SEMANA[d] + (esHoy ? ' •' : '') +
+      '<div style="font-size:10px; font-weight:500; color:var(--muted); text-transform:none;">' + fechaCol.slice(8, 10) + '/' + fechaCol.slice(5, 7) + '</div></td>';
   }).join('') + '</tr>';
+
+  var navegacionSemana =
+    '<div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap;">' +
+    '<button type="button" id="asis-semana-prev" style="font-size:14px; font-weight:700; border-radius:6px; border:1.5px solid #ddd; background:#fff; color:var(--azul-oscuro); cursor:pointer; padding:5px 12px;">‹</button>' +
+    '<div style="font-size:13.5px; font-weight:700; color:var(--azul-oscuro); min-width:180px;">Semana ' + numSemana + '<span style="font-weight:400; color:var(--muted);"> · ' + rangoTxt + '</span></div>' +
+    '<button type="button" id="asis-semana-next" style="font-size:14px; font-weight:700; border-radius:6px; border:1.5px solid #ddd; background:#fff; color:var(--azul-oscuro); cursor:pointer; padding:5px 12px;">›</button>' +
+    (esSemanaActual ? '' : '<button type="button" id="asis-semana-hoy" style="font-size:12px; background:transparent; border:none; color:var(--azul-oscuro); text-decoration:underline; cursor:pointer;">Ir a esta semana</button>') +
+    '</div>';
 
   var botonesFiltro = '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;">' +
     ['General'].concat(PROGRAMAS).map(function (p) {
@@ -1664,16 +1710,58 @@ function renderAsistencia(sesion) {
     '</div>';
 
   var grillaHtml =
-    '<div class="campo" style="max-width:220px; margin-bottom:14px;"><label>Fecha a registrar</label><input id="asis-fecha-grilla" type="date" value="' + fecha + '" /></div>' +
+    navegacionSemana +
     botonesFiltro +
     '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:4px; width:100%;">' + encabezado + filasGrilla + '</table></div>' +
     leyenda;
 
-  // Historial completo (todas las fechas) — se conserva como consulta aparte de la grilla del día.
+  // Historial completo (todas las fechas) — se conserva como consulta aparte de la grilla semanal.
   var clasesVisiblesHistorial = esProfesor ? clases.filter(function (c) { return c.profesor === sesion.email; }) : clases;
   var asistenciasHistorial = esProfesor
     ? asistencias.filter(function (a) { return clasesVisiblesHistorial.indexOf(clases[a.claseIdx]) !== -1; })
     : asistencias;
+
+  // Estudiantes disponibles para el recuadro de historial individual.
+  var alumnosParaSelector = esProfesor
+    ? alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return clasesVisiblesHistorial.some(function (c) { return (c.alumnos || []).indexOf(o.i) !== -1; }); })
+    : alumnos.map(function (a, i) { return { a: a, i: i }; });
+
+  var opcionesAlumnoHistorial = '<option value="">Seleccioná un estudiante…</option>' +
+    alumnosParaSelector.map(function (o) { return '<option value="' + o.i + '"' + (o.i === alumnoHistorialAsistenciaIdx ? ' selected' : '') + '>' + o.a.nombres + ' ' + o.a.apellidos + '</option>'; }).join('');
+
+  var contenidoHistorialIndividual = '<p style="font-size:13px; color:var(--muted);">Elegí un estudiante para ver su historial de asistencias en orden.</p>';
+  var alumnoHistorial = alumnoHistorialAsistenciaIdx !== null ? alumnos[alumnoHistorialAsistenciaIdx] : null;
+
+  if (alumnoHistorial) {
+    var registrosAlumno = asistenciasHistorial.filter(function (a) { return a.alumnoIdx === alumnoHistorialAsistenciaIdx; }).slice().sort(function (a, b) { return a.fecha.localeCompare(b.fecha); });
+    if (registrosAlumno.length === 0) {
+      contenidoHistorialIndividual = '<p style="font-size:13px; color:var(--muted);">Este estudiante todavía no tiene asistencias registradas.</p>';
+    } else {
+      var conteos = {};
+      ESTADOS_ASISTENCIA_RAPIDA.forEach(function (e) { conteos[e] = 0; });
+      var filasAlumno = registrosAlumno.map(function (a) {
+        var clase = clases[a.claseIdx];
+        var color = COLOR_ESTADO_ASISTENCIA[a.estado] || 'var(--muted)';
+        conteos[a.estado] = (conteos[a.estado] || 0) + 1;
+        var diaTxt = DIAS_SEMANA[new Date(a.fecha + 'T00:00:00').getDay()];
+        return '<tr><td>' + a.fecha + '</td><td>' + diaTxt + '</td><td>' + (clase ? clase.programa : '—') + '</td>' +
+          '<td><span style="display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; color:#fff; background:' + color + ';">' + ETIQUETA_ASISTENCIA[a.estado] + '</span></td></tr>';
+      }).join('');
+      var resumenTxt = ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return ETIQUETA_ASISTENCIA[e] + ': ' + (conteos[e] || 0); }).join(' · ');
+      contenidoHistorialIndividual = '' +
+        '<p style="font-size:12px; color:var(--muted); margin-bottom:10px;">' + registrosAlumno.length + ' registro' + (registrosAlumno.length === 1 ? '' : 's') + ' — ' + resumenTxt + '</p>' +
+        '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Día</th><th>Programa</th><th>Estado</th></tr></thead><tbody>' + filasAlumno + '</tbody></table></div>';
+    }
+  }
+
+  var panelHistorialIndividual =
+    '<div class="panel"><h2>Historial por estudiante</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí un estudiante para ver su histórico de asistencias en orden e imprimirlo o descargarlo en PDF.</p>' +
+    '<div class="campo" style="max-width:320px;"><label>Estudiante</label><select id="asis-alumno-historial">' + opcionesAlumnoHistorial + '</select></div>' +
+    '<div id="asis-historial-individual-contenido">' + contenidoHistorialIndividual + '</div>' +
+    (alumnoHistorial ? '<button class="btn-primario" id="btn-asis-historial-pdf" style="max-width:260px; margin-top:12px;">Imprimir / descargar PDF</button>' : '') +
+    '</div>';
+
   var filasHistorial = asistenciasHistorial.slice().reverse().map(function (a) {
     var alumno = alumnos[a.alumnoIdx];
     var clase = clases[a.claseIdx];
@@ -1685,21 +1773,67 @@ function renderAsistencia(sesion) {
 
   return '' +
     '<div class="panel"><h2>Asistencia' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la fecha real de la clase — solo se habilita la columna del día que le corresponde. Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Navegá entre semanas con las flechas — todas las columnas quedan siempre habilitadas para que puedas revisar o corregir cualquier día. Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
     grillaHtml +
     '</div>' +
+
+    panelHistorialIndividual +
 
     '<div class="panel"><h2>Historial de asistencia</h2>' +
     (filasHistorial ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Programa</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>' + filasHistorial + '</tbody></table></div>'
       : '<p style="font-size:13px; color:var(--muted);">Sin registros todavía.</p>') +
+    '</div>' +
+
+    '<div id="comprobante-imprimir" style="display:none;"></div>';
+}
+
+function generarHtmlHistorialAsistencia(alumno, registros) {
+  var filas = registros.map(function (a, i) {
+    var color = COLOR_ESTADO_ASISTENCIA[a.estado] || '#666';
+    return '<tr><td style="padding:4px 0;">' + a.fecha + '</td><td style="padding:4px 0;">' + DIAS_SEMANA[new Date(a.fecha + 'T00:00:00').getDay()] + '</td>' +
+      '<td style="padding:4px 0; text-align:right; color:' + color + '; font-weight:600;">' + ETIQUETA_ASISTENCIA[a.estado] + '</td></tr>';
+  }).join('');
+
+  var conteos = {};
+  ESTADOS_ASISTENCIA_RAPIDA.forEach(function (e) { conteos[e] = 0; });
+  registros.forEach(function (a) { conteos[a.estado] = (conteos[a.estado] || 0) + 1; });
+  var resumenTxt = ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return ETIQUETA_ASISTENCIA[e] + ': ' + (conteos[e] || 0); }).join(' · ');
+
+  return '' +
+    '<div style="font-family:Arial,sans-serif; max-width:420px; margin:0 auto; padding:24px; border:1px solid #ccc;">' +
+    '<div style="text-align:center; border-bottom:2px solid #223F61; padding-bottom:12px; margin-bottom:16px;">' +
+    '<div style="font-size:20px; font-weight:bold; color:#223F61;">Jacquin</div>' +
+    '<div style="font-size:11px; letter-spacing:2px; color:#666;">ACADEMIA MUSICAL</div>' +
+    '</div>' +
+    '<h3 style="text-align:center; margin:0 0 6px;">Historial de asistencia</h3>' +
+    '<p style="text-align:center; font-size:13px; color:#666; margin:0 0 10px;">' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '') + ' — ' + (alumno ? alumno.programa : '') + '</p>' +
+    '<p style="text-align:center; font-size:11.5px; color:#666; margin:0 0 16px;">' + resumenTxt + '</p>' +
+    '<table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666;">Fecha</td><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666;">Día</td><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666; text-align:right;">Estado</td></tr></thead><tbody>' + filas + '</tbody></table>' +
+    '<p style="text-align:center; font-size:11px; color:#999; margin-top:20px;">Academia Musical Jacquin — historial de asistencia</p>' +
     '</div>';
 }
 
 function activarLogicaAsistencia() {
-  var campoFecha = document.getElementById('asis-fecha-grilla');
-  if (campoFecha) {
-    campoFecha.addEventListener('change', function () {
-      fechaAsistenciaSeleccionada = this.value;
+  var btnPrev = document.getElementById('asis-semana-prev');
+  if (btnPrev) {
+    btnPrev.addEventListener('click', function () {
+      semanaAsistenciaAncla = sumarDiasFecha(semanaAsistenciaAncla, -7);
+      renderContenido('asistencia');
+    });
+  }
+
+  var btnNext = document.getElementById('asis-semana-next');
+  if (btnNext) {
+    btnNext.addEventListener('click', function () {
+      semanaAsistenciaAncla = sumarDiasFecha(semanaAsistenciaAncla, 7);
+      renderContenido('asistencia');
+    });
+  }
+
+  var btnHoy = document.getElementById('asis-semana-hoy');
+  if (btnHoy) {
+    btnHoy.addEventListener('click', function () {
+      semanaAsistenciaAncla = lunesDeFecha(new Date().toISOString().slice(0, 10));
       renderContenido('asistencia');
     });
   }
@@ -1715,10 +1849,11 @@ function activarLogicaAsistencia() {
     select.addEventListener('change', function () {
       var alumnoIdx = Number(this.getAttribute('data-alumno-idx'));
       var claseIdx = Number(this.getAttribute('data-clase-idx'));
+      var fechaCelda = this.getAttribute('data-fecha');
       var estado = this.value;
 
       var asistencias = cargarAsistencias();
-      var existenteIdx = asistencias.findIndex(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fechaAsistenciaSeleccionada; });
+      var existenteIdx = asistencias.findIndex(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fechaCelda; });
 
       if (!estado) {
         // Volver a "—" borra el registro de ese día.
@@ -1726,7 +1861,7 @@ function activarLogicaAsistencia() {
       } else if (existenteIdx !== -1) {
         asistencias[existenteIdx].estado = estado;
       } else {
-        asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fechaAsistenciaSeleccionada, estado: estado });
+        asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fechaCelda, estado: estado });
       }
       guardarAsistencias(asistencias);
 
@@ -1740,6 +1875,26 @@ function activarLogicaAsistencia() {
       renderContenido('asistencia');
     });
   });
+
+  var selectAlumnoHistorial = document.getElementById('asis-alumno-historial');
+  if (selectAlumnoHistorial) {
+    selectAlumnoHistorial.addEventListener('change', function () {
+      alumnoHistorialAsistenciaIdx = this.value === '' ? null : Number(this.value);
+      renderContenido('asistencia');
+    });
+  }
+
+  var btnHistorialPdf = document.getElementById('btn-asis-historial-pdf');
+  if (btnHistorialPdf) {
+    btnHistorialPdf.addEventListener('click', function () {
+      var alumno = cargarAlumnos()[alumnoHistorialAsistenciaIdx];
+      var asistencias = cargarAsistencias().filter(function (a) { return a.alumnoIdx === alumnoHistorialAsistenciaIdx; }).slice().sort(function (a, b) { return a.fecha.localeCompare(b.fecha); });
+      if (asistencias.length === 0) { alert('Este estudiante todavía no tiene asistencias registradas.'); return; }
+
+      document.getElementById('comprobante-imprimir').innerHTML = generarHtmlHistorialAsistencia(alumno, asistencias);
+      window.print();
+    });
+  }
 }
 
 function renderProfesores(sesion) {
@@ -1952,6 +2107,7 @@ function activarLogicaCursos() {
 }
 
 var tabEvaluacionActiva = 'mensual';
+var filtroHistorialAvanceIdx = null; // idx del estudiante para filtrar "Historial de avances mensuales" (botón "Ver avance")
 
 function cambiarTabEvaluacion(tab) {
   tabEvaluacionActiva = tab;
@@ -1982,13 +2138,23 @@ function renderEvaluacionMensualPanel(sesion) {
     var curso = o.a.programa + (o.a.programa2 ? ' + ' + o.a.programa2 : '');
     var evaluado = evaluacionesDelMes.find(function (e) { return e.alumnoIdx === o.i; });
     var chip = evaluado
-      ? '<span class="chip-rol" style="background:var(--verde); color:#fff;">Evaluado este mes</span>'
+      ? '<span class="chip-rol" style="background:var(--verde); color:#fff;">Avance registrado este mes</span>'
       : '<span class="chip-rol" style="background:var(--naranja); color:#fff;">Pendiente este mes</span>';
-    var boton = '<button class="btn-primario btn-evaluar-mensual" data-alumno-idx="' + o.i + '" style="max-width:150px; font-size:12px; padding:6px 10px;">' + (evaluado ? 'Editar' : 'Evaluar') + '</button>';
-    return '<tr><td>' + o.a.nombres + ' ' + o.a.apellidos + '</td><td>' + edadTxt + '</td><td>' + curso + '</td><td>' + chip + '</td><td>' + boton + '</td></tr>';
+    var boton = '<button class="btn-primario btn-evaluar-mensual" data-alumno-idx="' + o.i + '" style="max-width:150px; font-size:12px; padding:6px 10px;">' + (evaluado ? 'Editar' : 'Registrar avance') + '</button>';
+    var botonVerAvance = '<button class="btn-ver-avance-mensual" data-alumno-idx="' + o.i + '" style="max-width:110px; font-size:12px; padding:6px 10px; border-radius:6px; border:1.5px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer;">Ver avance</button>';
+    return '<tr><td>' + o.a.nombres + ' ' + o.a.apellidos + '</td><td>' + edadTxt + '</td><td>' + curso + '</td><td>' + chip + '</td><td style="display:flex; gap:6px; flex-wrap:wrap;">' + boton + botonVerAvance + '</td></tr>';
   }).join('');
 
-  var historialFilas = evaluacionesMensuales.slice().sort(function (a, b) { return (b.mes || '').localeCompare(a.mes || ''); }).map(function (e) {
+  var historialCompleto = evaluacionesMensuales.slice().sort(function (a, b) { return (b.mes || '').localeCompare(a.mes || ''); });
+  var historialFiltrado = filtroHistorialAvanceIdx === null ? historialCompleto : historialCompleto.filter(function (e) { return e.alumnoIdx === filtroHistorialAvanceIdx; });
+  var alumnoFiltro = filtroHistorialAvanceIdx !== null ? alumnos[filtroHistorialAvanceIdx] : null;
+  var avisoFiltro = alumnoFiltro
+    ? '<div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12.5px;">' +
+      '<span>Mostrando el avance de <strong>' + alumnoFiltro.nombres + ' ' + alumnoFiltro.apellidos + '</strong></span>' +
+      '<button id="btn-quitar-filtro-avance" style="font-size:12px; background:transparent; border:none; color:var(--azul-oscuro); text-decoration:underline; cursor:pointer;">Ver todos</button>' +
+      '</div>'
+    : '';
+  var historialFilas = historialFiltrado.map(function (e) {
     var alumno = alumnos[e.alumnoIdx];
     return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td><td>' + e.mes + '</td><td>' + (e.fecha || '—') + '</td><td>' + (e.observaciones || '—') + '</td></tr>';
   }).join('');
@@ -1996,7 +2162,7 @@ function renderEvaluacionMensualPanel(sesion) {
   var htmlModal =
     '<div id="modal-eval-mensual" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
     '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto;">' +
-    '<h2 style="margin-top:0;" id="modal-eval-mensual-titulo">Evaluación mensual</h2>' +
+    '<h2 style="margin-top:0;" id="modal-eval-mensual-titulo">Avance mensual</h2>' +
     '<p id="modal-eval-mensual-mes" style="font-size:12px; color:var(--muted); margin-top:-8px;">' + mesLegible + '</p>' +
     PREGUNTAS_EVAL_MENSUAL.map(function (p) {
       return '<div class="campo"><label>' + p.texto + '</label><select id="evm-' + p.id + '">' +
@@ -2004,23 +2170,43 @@ function renderEvaluacionMensualPanel(sesion) {
         '</select></div>';
     }).join('') +
     '<div class="campo"><label>Observaciones (opcional)</label><input id="evm-observaciones" type="text" /></div>' +
-    '<button class="btn-primario" id="btn-guardar-eval-mensual">Guardar evaluación</button>' +
+    '<button class="btn-primario" id="btn-guardar-eval-mensual">Guardar avance</button>' +
     '<button id="btn-cancelar-eval-mensual" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
     '</div></div>';
 
   return '' +
     '<div class="panel"><h2>Estudiantes — ' + mesLegible + '</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">A cada estudiante hay que hacerle esta evaluación al menos una vez por mes. Cuando empieza un mes nuevo, vuelve a aparecer como "Pendiente este mes" aunque ya se le haya hecho en meses anteriores.</p>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">A cada estudiante hay que registrarle este avance al menos una vez por mes. Cuando empieza un mes nuevo, vuelve a aparecer como "Pendiente este mes" aunque ya se le haya hecho en meses anteriores.</p>' +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Edad</th><th>Curso</th><th>Estado del mes</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
     '</div>' +
-    '<div class="panel"><h2>Historial de evaluaciones mensuales</h2>' +
+    '<div class="panel" id="panel-historial-avances-mensuales"><h2>Historial de avances mensuales</h2>' +
+    avisoFiltro +
     (historialFilas ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Mes</th><th>Fecha registrada</th><th>Observaciones</th></tr></thead><tbody>' + historialFilas + '</tbody></table></div>'
-      : '<p style="font-size:13px; color:var(--muted);">Sin evaluaciones mensuales registradas todavía.</p>') +
+      : '<p style="font-size:13px; color:var(--muted);">' + (alumnoFiltro ? 'Este estudiante todavía no tiene avances mensuales registrados.' : 'Sin avances mensuales registrados todavía.') + '</p>') +
     '</div>' +
     htmlModal;
 }
 
 function activarLogicaEvaluacionMensual() {
+  document.querySelectorAll('.btn-ver-avance-mensual').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      filtroHistorialAvanceIdx = Number(btn.getAttribute('data-alumno-idx'));
+      renderContenido('evaluacion');
+      setTimeout(function () {
+        var panel = document.getElementById('panel-historial-avances-mensuales');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 30);
+    });
+  });
+
+  var btnQuitarFiltroAvance = document.getElementById('btn-quitar-filtro-avance');
+  if (btnQuitarFiltroAvance) {
+    btnQuitarFiltroAvance.addEventListener('click', function () {
+      filtroHistorialAvanceIdx = null;
+      renderContenido('evaluacion');
+    });
+  }
+
   var modal = document.getElementById('modal-eval-mensual');
   if (!modal) return;
 
@@ -2032,7 +2218,7 @@ function activarLogicaEvaluacionMensual() {
       var existente = cargarEvaluacionesMensuales().find(function (e) { return e.alumnoIdx === alumnoIdx && e.mes === mesActual; });
 
       modal.setAttribute('data-alumno-idx', alumnoIdx);
-      document.getElementById('modal-eval-mensual-titulo').textContent = 'Evaluación mensual — ' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '');
+      document.getElementById('modal-eval-mensual-titulo').textContent = 'Avance mensual — ' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '');
 
       PREGUNTAS_EVAL_MENSUAL.forEach(function (p) {
         var select = document.getElementById('evm-' + p.id);
@@ -2138,7 +2324,7 @@ function renderEvaluacionLineaPanel(sesion) {
   }).join('');
 
   return '' +
-    '<div class="panel"><p style="font-size:12px; color:var(--muted); margin:0;">Método propio de Jacquin — cualitativo, por observación del profesor. No es examen ni nota numérica. Es un seguimiento aparte de la evaluación mensual, con más detalle por indicador.</p>' +
+    '<div class="panel"><p style="font-size:12px; color:var(--muted); margin:0;">Método propio de Jacquin — cualitativo, por observación del profesor. No es examen ni nota numérica. Es un seguimiento aparte del avance mensual, con más detalle por indicador.</p>' +
     '<div class="campo" style="margin-top:10px;"><label>Estudiante</label><select id="ev-alumno-ver">' +
     alumnosVisibles.map(function (o) { return '<option value="' + o.i + '">' + o.a.nombres + ' ' + o.a.apellidos + '</option>'; }).join('') +
     '</select></div>' +
@@ -2148,7 +2334,7 @@ function renderEvaluacionLineaPanel(sesion) {
     renderLineaTiempoEvaluacion(evaluacionesAlumno) +
     '</div>' +
 
-    '<div class="panel"><h2>Nueva evaluación</h2>' +
+    '<div class="panel"><h2>Nuevo avance</h2>' +
     '<div class="grilla-2col">' +
     '<div class="campo"><label>Fecha</label><input id="ev-fecha" type="date" value="' + new Date().toISOString().slice(0, 10) + '" /></div>' +
     INDICADORES_EVALUACION.map(function (ind) {
@@ -2158,8 +2344,8 @@ function renderEvaluacionLineaPanel(sesion) {
     }).join('') +
     '<div class="campo"><label>Observaciones</label><input id="ev-observaciones" type="text" placeholder="Notas del profesor sobre esta evaluación..." /></div>' +
     '</div>' +
-    '<button class="btn-primario" id="btn-guardar-evaluacion" style="max-width:280px;">Guardar evaluación</button>' +
-    '<p id="msj-evaluacion-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Evaluación registrada — la línea de tiempo ya se actualizó.</p>' +
+    '<button class="btn-primario" id="btn-guardar-evaluacion" style="max-width:280px;">Guardar avance</button>' +
+    '<p id="msj-evaluacion-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Avance registrado — la línea de tiempo ya se actualizó.</p>' +
     '</div>' +
 
     '<div class="panel"><h2>Historial</h2>' +
@@ -2177,7 +2363,7 @@ function renderEvaluacionLineaPanel(sesion) {
 
 function renderEvaluacion(sesion) {
   var pestañas = ['mensual', 'linea'];
-  var etiquetaPestaña = { mensual: 'Evaluación mensual', linea: 'Seguimiento por indicadores' };
+  var etiquetaPestaña = { mensual: 'Avances mensuales', linea: 'Seguimiento por indicadores' };
 
   var botonesPestañas = pestañas.map(function (p) {
     var activa = p === tabEvaluacionActiva;
@@ -2190,7 +2376,7 @@ function renderEvaluacion(sesion) {
   var contenido = tabEvaluacionActiva === 'mensual' ? renderEvaluacionMensualPanel(sesion) : renderEvaluacionLineaPanel(sesion);
 
   return '' +
-    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Evaluación académica</h1>' +
+    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Avances académicos</h1>' +
     '<div style="display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;">' + botonesPestañas + '</div>' +
     contenido;
 }
@@ -2209,11 +2395,11 @@ function generarHtmlInformeEvaluacion(alumno, evaluaciones) {
     '<div style="font-size:20px; font-weight:bold; color:#223F61;">Jacquin</div>' +
     '<div style="font-size:11px; letter-spacing:2px; color:#666;">ACADEMIA MUSICAL</div>' +
     '</div>' +
-    '<h3 style="text-align:center; margin:0 0 6px;">Informe de evaluación académica</h3>' +
+    '<h3 style="text-align:center; margin:0 0 6px;">Informe de avance académico</h3>' +
     '<p style="text-align:center; font-size:13px; color:#666; margin:0 0 16px;">' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '') + ' — ' + (alumno ? alumno.programa : '') + '</p>' +
     '<p style="text-align:center; font-size:14px; margin:0 0 16px;">Nivel actual: <strong>' + nivelTxt + '</strong></p>' +
     '<table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666;">Fecha</td><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666; text-align:right;">Promedio</td><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666;">Observaciones</td></tr></thead><tbody>' + filas + '</tbody></table>' +
-    '<p style="text-align:center; font-size:11px; color:#999; margin-top:20px;">Academia Musical Jacquin — evaluación cualitativa por observación del profesor</p>' +
+    '<p style="text-align:center; font-size:11px; color:#999; margin-top:20px;">Academia Musical Jacquin — avance cualitativo por observación del profesor</p>' +
     '</div>';
 }
 
@@ -2249,7 +2435,7 @@ function activarLogicaEvaluacion() {
       var alumnoIdx = Number(document.getElementById('ev-alumno-ver').value);
       var alumno = cargarAlumnos()[alumnoIdx];
       var evaluaciones = cargarEvaluaciones().filter(function (e) { return e.alumnoIdx === alumnoIdx; });
-      if (evaluaciones.length === 0) { alert('Este estudiante todavía no tiene evaluaciones registradas.'); return; }
+      if (evaluaciones.length === 0) { alert('Este estudiante todavía no tiene avances registrados.'); return; }
 
       document.getElementById('comprobante-imprimir').innerHTML = generarHtmlInformeEvaluacion(alumno, evaluaciones);
       window.print();
