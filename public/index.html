@@ -87,7 +87,7 @@
   nav.nav-modulos {
     background: #fff; border-bottom: 1px solid #e2e5ea; padding: 0 20px; display: flex; align-items: center;
     gap: 2px; overflow-x: auto; position: sticky; top: 55px; z-index: 19; -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    scrollbar-width: none; transition: background 0.2s, border-color 0.2s;
   }
   nav.nav-modulos::-webkit-scrollbar { display: none; }
   nav.nav-modulos a {
@@ -98,6 +98,22 @@
   nav.nav-modulos a.activo { color: var(--azul-oscuro); border-bottom-color: var(--naranja); font-weight: 700; }
   nav.nav-modulos a.separador-grupo { border-left: 1px solid #e2e5ea; margin-left: 8px; padding-left: 16px; }
   nav.nav-modulos .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--azul-claro); flex-shrink: 0; }
+
+  /* Modo "sobre la foto": solo en el Dashboard — el nav queda flotando,
+     transparente e integrado con el hero, sin franja blanca detrás. */
+  nav.nav-modulos.nav-sobre-foto {
+    background: linear-gradient(180deg, rgba(21,42,68,0.55) 0%, rgba(21,42,68,0.08) 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.16);
+    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+    margin-bottom: -56px; position: relative;
+  }
+  nav.nav-modulos.nav-sobre-foto a {
+    color: rgba(255,255,255,0.92); text-shadow: 0 1px 6px rgba(0,0,0,0.35); font-weight: 600;
+  }
+  nav.nav-modulos.nav-sobre-foto a:hover { color: #fff; }
+  nav.nav-modulos.nav-sobre-foto a.activo { color: #fff; border-bottom-color: var(--naranja); }
+  nav.nav-modulos.nav-sobre-foto a.separador-grupo { border-left-color: rgba(255,255,255,0.28); }
+  nav.nav-modulos.nav-sobre-foto .dot { background: rgba(255,255,255,0.75); }
 
   main.contenido { position: relative; overflow: hidden; min-height: calc(100vh - 55px); }
   #piano-fondo { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 1.6%; padding: 0 4%; opacity: 0.07; pointer-events: none; z-index: 0; }
@@ -239,6 +255,72 @@
   .placeholder { background: #fff; border: 1px dashed #cfd3da; border-radius: 14px; padding: 48px 24px; text-align: center; }
   .placeholder h1 { font-family: var(--font-wordmark); font-weight: 500; font-size: 22px; margin: 0 0 6px; }
   .placeholder p { color: var(--muted); font-size: 13px; margin: 0; }
+
+  /* ---------- Tarjeta partida estilo "login moderno" (Estudiantes / Matrícula) ---------- */
+  .fondo-decorado {
+    position: relative; border-radius: 30px; overflow: hidden; isolation: isolate;
+    background: linear-gradient(135deg, var(--azul-claro) 0%, var(--azul-oscuro) 48%, var(--azul-noche) 100%);
+    padding: clamp(24px, 4vw, 46px); margin-bottom: 22px;
+  }
+  .fondo-decorado svg.lineas-fondo { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.35; pointer-events: none; z-index: 0; }
+  .fondo-decorado .blob { position: absolute; border-radius: 50%; pointer-events: none; z-index: 0; }
+  .fondo-decorado .blob-1 { width: 190px; height: 190px; top: -70px; left: -50px; background: rgba(255,255,255,0.10); }
+  .fondo-decorado .blob-2 { width: 130px; height: 130px; bottom: -40px; right: 70px; background: rgba(231,140,59,0.22); }
+  .fondo-decorado .blob-3 { width: 16px; height: 16px; top: 34px; right: 130px; background: #fff; opacity: 0.55; }
+  .fondo-decorado .blob-4 { width: 9px; height: 9px; bottom: 60px; left: 90px; background: #fff; opacity: 0.4; }
+
+  .tarjeta-split {
+    position: relative; z-index: 1; display: flex; background: #fff; border-radius: 22px; overflow: hidden;
+    box-shadow: 0 30px 60px rgba(11,22,38,0.30);
+  }
+  .split-izq {
+    width: 38%; flex-shrink: 0; padding: clamp(28px, 3vw, 44px) clamp(24px, 3vw, 36px);
+    background: linear-gradient(165deg, var(--azul-oscuro) 0%, var(--azul-noche) 100%);
+    color: #fff; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden;
+  }
+  .split-izq .marca-mini { display: flex; align-items: center; gap: 9px; font-family: var(--font-wordmark); font-size: 15px; font-weight: 600; opacity: 0.92; }
+  .split-izq .marca-mini .punto { width: 8px; height: 8px; border-radius: 50%; background: var(--naranja); }
+  .split-izq h3 {
+    font-family: var(--font-wordmark); font-weight: 500; font-style: italic; color: #fff;
+    font-size: clamp(21px, 2.2vw, 27px); line-height: 1.22; margin: 22px 0 10px;
+  }
+  .split-izq p.bajada { font-size: 12.5px; color: rgba(255,255,255,0.72); line-height: 1.65; max-width: 260px; margin: 0; }
+  .split-izq .ilustracion { margin-top: 22px; display: flex; justify-content: center; }
+  .split-der { width: 62%; padding: clamp(26px, 3vw, 44px); }
+  .split-der h2 {
+    font-family: var(--font-wordmark); font-weight: 500; font-size: 19px; color: var(--azul-oscuro); margin: 0 0 4px;
+  }
+  .split-der p.ayuda { font-size: 12px; color: var(--muted); margin: 0 0 20px; }
+
+  .grilla-moderna { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 16px; }
+  .campo-moderno { margin-bottom: 14px; }
+  .campo-moderno label {
+    display: block; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+  .campo-moderno input, .campo-moderno select {
+    width: 100%; height: 46px; border-radius: 14px; border: 1px solid #e7eaf0; background: var(--beige);
+    padding: 0 16px; font-size: 13.5px; font-family: var(--font-ui); color: var(--texto); box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  }
+  .campo-moderno input:focus, .campo-moderno select:focus {
+    outline: none; border-color: var(--azul-claro); background: #fff; box-shadow: 0 0 0 3px rgba(147,182,238,0.30);
+  }
+  .campo-moderno input[readonly] { color: var(--azul-oscuro); font-weight: 600; }
+  .btn-moderno {
+    width: 100%; height: 48px; border-radius: 14px; border: none; background: var(--azul-oscuro); color: #fff;
+    font-weight: 700; font-size: 13.5px; font-family: var(--font-ui); cursor: pointer; margin-top: 6px;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .btn-moderno:hover { background: var(--azul-noche); }
+  .btn-moderno:active { transform: translateY(1px); }
+
+  @media (max-width: 860px) {
+    .tarjeta-split { flex-direction: column; }
+    .split-izq, .split-der { width: 100%; }
+    .split-izq { padding-bottom: 26px; }
+    .grilla-moderna { grid-template-columns: 1fr; }
+  }
 
   .panel { background: #fff; border: 1px solid #e2e5ea; border-radius: 14px; padding: 20px; margin-bottom: 18px; box-shadow: 0 2px 10px rgba(34,63,97,0.05); }
 
@@ -623,6 +705,8 @@ function renderNavModulos(activo) {
     html += '<a href="#' + m.key + '" class="' + clases.trim() + '"><span class="dot"></span>' + m.label + badge + '</a>';
   });
   document.getElementById('nav-modulos').innerHTML = html;
+  // En el Dashboard el nav flota transparente, integrado con la foto del hero.
+  document.getElementById('nav-modulos').classList.toggle('nav-sobre-foto', activo === 'dashboard');
 }
 
 // Un ícono distinto por módulo (líneas simples, heredan el color vía
@@ -739,6 +823,51 @@ var ICONO_DIF_PLAN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 var ICONO_DIF_EQUIPO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.9 2.1 6.5 5.5"/><circle cx="17.5" cy="9" r="2.4"/><path d="M15.8 14.5c2.4.3 4.1 1.9 4.7 5"/></svg>';
 var ICONO_DIF_METODO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.6 6.2L21 9l-5 4.4L17.4 20 12 16.6 6.6 20 8 13.4 3 9l6.4-.8z"/></svg>';
 
+// ---------- Fondo decorado + tarjeta partida (Estudiantes / Matrícula) ----------
+// Líneas curvas suaves de fondo, estilo referencia, en blanco translúcido.
+var SVG_LINEAS_FONDO =
+  '<svg class="lineas-fondo" viewBox="0 0 900 500" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M-20 380 C 180 300, 320 460, 560 360 S 860 260, 940 340" stroke="#fff" stroke-width="1.4" fill="none"/>' +
+    '<path d="M-20 420 C 200 340, 340 500, 580 400 S 880 300, 940 380" stroke="#fff" stroke-width="1" fill="none" opacity="0.6"/>' +
+    '<path d="M-20 60 C 160 -10, 300 120, 520 40 S 800 -30, 940 60" stroke="#fff" stroke-width="1.2" fill="none" opacity="0.7"/>' +
+    '<path d="M-20 100 C 180 30, 320 160, 560 80 S 840 10, 940 100" stroke="#fff" stroke-width="0.9" fill="none" opacity="0.45"/>' +
+  '</svg>';
+
+function bloquesFondoDecorado() {
+  return SVG_LINEAS_FONDO +
+    '<div class="blob blob-1"></div><div class="blob blob-2"></div>' +
+    '<div class="blob blob-3"></div><div class="blob blob-4"></div>';
+}
+
+// Ilustración del panel izquierdo — Estudiantes: perfil de alumno + nota musical.
+var ILUSTRACION_ESTUDIANTES =
+  '<svg width="168" height="150" viewBox="0 0 168 150" xmlns="http://www.w3.org/2000/svg">' +
+    '<ellipse cx="84" cy="130" rx="62" ry="12" fill="rgba(0,0,0,0.18)"/>' +
+    '<rect x="18" y="18" width="100" height="100" rx="24" fill="var(--azul-claro)" opacity="0.9"/>' +
+    '<circle cx="68" cy="58" r="20" fill="#fff"/>' +
+    '<circle cx="68" cy="52" r="9" fill="var(--azul-oscuro)"/>' +
+    '<path d="M50 84c0-11 8-18 18-18s18 7 18 18" fill="var(--azul-oscuro)"/>' +
+    '<rect x="118" y="70" width="34" height="44" rx="10" fill="var(--naranja)"/>' +
+    '<path d="M138 78v20a6 6 0 1 1-3-5.2V82h6v-4h-3z" fill="#fff"/>' +
+    '<circle cx="30" cy="34" r="5" fill="#fff" opacity="0.8"/>' +
+    '<circle cx="140" cy="30" r="4" fill="#fff" opacity="0.6"/>' +
+  '</svg>';
+
+// Ilustración del panel izquierdo — Matrícula: planilla con check + nota musical.
+var ILUSTRACION_MATRICULA =
+  '<svg width="168" height="150" viewBox="0 0 168 150" xmlns="http://www.w3.org/2000/svg">' +
+    '<ellipse cx="84" cy="130" rx="62" ry="12" fill="rgba(0,0,0,0.18)"/>' +
+    '<rect x="30" y="14" width="86" height="112" rx="14" fill="#fff"/>' +
+    '<rect x="30" y="14" width="86" height="112" rx="14" fill="var(--azul-claro)" opacity="0.85"/>' +
+    '<rect x="58" y="8" width="30" height="14" rx="6" fill="var(--azul-oscuro)"/>' +
+    '<rect x="44" y="44" width="58" height="7" rx="3.5" fill="#fff"/>' +
+    '<rect x="44" y="62" width="58" height="7" rx="3.5" fill="#fff" opacity="0.75"/>' +
+    '<rect x="44" y="80" width="36" height="7" rx="3.5" fill="#fff" opacity="0.55"/>' +
+    '<circle cx="120" cy="96" r="26" fill="var(--naranja)"/>' +
+    '<path d="M109 96l8 8 16-17" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>' +
+    '<circle cx="24" cy="30" r="5" fill="#fff" opacity="0.7"/>' +
+  '</svg>';
+
 function renderDashboard(sesion) {
   var visibles = modulosVisibles(sesion.rol);
   var modulos = MODULOS.filter(function (m) { return m.key !== 'dashboard' && visibles.indexOf(m.key) !== -1; });
@@ -816,34 +945,48 @@ function renderEstudiantes() {
   }).join('');
 
   return '' +
-    '<div class="panel"><h2>Nuevo estudiante</h2>' +
-    '<div class="grilla-2col">' +
-    '<div class="campo"><label>Nombres</label><input id="al-nombres" type="text" /></div>' +
-    '<div class="campo"><label>Apellidos</label><input id="al-apellidos" type="text" /></div>' +
-    '<div class="campo"><label>Documento</label><input id="al-documento" type="text" /></div>' +
-    '<div class="campo"><label>Fecha de nacimiento</label><input id="al-nacimiento" type="date" /></div>' +
-    '<div class="campo"><label>Edad</label><input id="al-edad" type="text" readonly style="background:var(--beige);" /></div>' +
-    '<div class="campo"><label>Programa 1</label><select id="al-programa">' +
-    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
-    '</select></div>' +
-    '<div class="campo"><label>Programa 2 (opcional)</label><select id="al-programa2">' +
-    '<option value="">Ninguno</option>' +
-    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
-    '</select></div>' +
-    '<div class="campo"><label>Profesor asignado (opcional)</label><select id="al-profesor">' +
-    '<option value="">Sin asignar todavía</option>' +
-    profesoresDisponibles.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
-    '</select></div>' +
-    '<div class="campo"><label>Teléfono de contacto</label><input id="al-telefono" type="text" /></div>' +
-    '<div class="campo"><label>Correo electrónico</label><input id="al-correo" type="email" /></div>' +
-    '<div class="campo"><label>Dirección</label><input id="al-direccion" type="text" /></div>' +
-    '<div class="campo"><label id="lbl-acudiente">Nombre del acudiente (opcional)</label><input id="al-acudiente" type="text" /></div>' +
-    '<div class="campo"><label>Celular del acudiente</label><input id="al-celular-acudiente" type="text" /></div>' +
-    '<div class="campo"><label>Observaciones</label><input id="al-obs" type="text" /></div>' +
+    '<div class="fondo-decorado">' + bloquesFondoDecorado() +
+    '<div class="tarjeta-split">' +
+      '<div class="split-izq">' +
+        '<div class="marca-mini"><span class="punto"></span>Jacquin — Estudiantes</div>' +
+        '<div>' +
+          '<h3>Sumá un nuevo alumno a la academia.</h3>' +
+          '<p class="bajada">Cargá sus datos y el programa musical que va a cursar — el estado inicial queda como "Preinscrito" hasta completar la Matrícula.</p>' +
+          '<div class="ilustracion">' + ILUSTRACION_ESTUDIANTES + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="split-der">' +
+        '<h2>Nuevo estudiante</h2>' +
+        '<p class="ayuda">Todos los campos con * son obligatorios.</p>' +
+        '<div class="grilla-moderna">' +
+        '<div class="campo-moderno"><label>Nombres</label><input id="al-nombres" type="text" /></div>' +
+        '<div class="campo-moderno"><label>Apellidos</label><input id="al-apellidos" type="text" /></div>' +
+        '<div class="campo-moderno"><label>Documento</label><input id="al-documento" type="text" /></div>' +
+        '<div class="campo-moderno"><label>Fecha de nacimiento</label><input id="al-nacimiento" type="date" /></div>' +
+        '<div class="campo-moderno"><label>Edad</label><input id="al-edad" type="text" readonly /></div>' +
+        '<div class="campo-moderno"><label>Programa 1</label><select id="al-programa">' +
+        PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="campo-moderno"><label>Programa 2 (opcional)</label><select id="al-programa2">' +
+        '<option value="">Ninguno</option>' +
+        PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="campo-moderno"><label>Profesor asignado (opcional)</label><select id="al-profesor">' +
+        '<option value="">Sin asignar todavía</option>' +
+        profesoresDisponibles.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="campo-moderno"><label>Teléfono de contacto</label><input id="al-telefono" type="text" /></div>' +
+        '<div class="campo-moderno"><label>Correo electrónico</label><input id="al-correo" type="email" /></div>' +
+        '<div class="campo-moderno"><label>Dirección</label><input id="al-direccion" type="text" /></div>' +
+        '<div class="campo-moderno"><label id="lbl-acudiente">Nombre del acudiente (opcional)</label><input id="al-acudiente" type="text" /></div>' +
+        '<div class="campo-moderno"><label>Celular del acudiente</label><input id="al-celular-acudiente" type="text" /></div>' +
+        '<div class="campo-moderno"><label>Observaciones</label><input id="al-obs" type="text" /></div>' +
+        '</div>' +
+        '<p id="aviso-menor" style="font-size:12px; color:var(--naranja); display:none; margin:-4px 0 10px;">Alumno menor de edad: el acudiente es obligatorio.</p>' +
+        '<button class="btn-moderno" id="btn-crear-alumno">Registrar estudiante</button>' +
+        '<p id="msj-alumno-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Estudiante registrado (guardado en este navegador, no en el backend real).</p>' +
+      '</div>' +
     '</div>' +
-    '<p id="aviso-menor" style="font-size:12px; color:var(--naranja); display:none; margin:-4px 0 10px;">Alumno menor de edad: el acudiente es obligatorio.</p>' +
-    '<button class="btn-primario" id="btn-crear-alumno" style="max-width:280px;">Registrar estudiante</button>' +
-    '<p id="msj-alumno-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Estudiante registrado (guardado en este navegador, no en el backend real).</p>' +
     '</div>' +
 
     '<div class="panel"><h2>Estudiantes (' + alumnos.length + ')</h2>' +
@@ -960,26 +1103,40 @@ function renderMatricula(sesion) {
   // registrado (no se vuelve a pedir) — sólo falta elegir el tipo de
   // plan real de la academia; horas/valor se autocompletan solos.
   var panelInscribir =
-    '<div class="panel"><h2>Inscribir estudiante</h2>' +
-    (alumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Primero registrá un estudiante en el módulo Estudiantes.</p>' :
-    '<div class="grilla-2col">' +
-    '<div class="campo"><label>Estudiante</label><select id="in-alumno">' +
-    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + ' — ' + a.programa + '</option>'; }).join('') +
-    '</select></div>' +
-    '<div class="campo"><label>Programa</label><input id="in-programa" type="text" readonly style="background:var(--beige);" /></div>' +
-    '<div class="campo"><label>Tipo de plan</label><select id="in-tipo-plan"></select></div>' +
-    '<div class="campo"><label>Horas por semana</label><input id="in-horas" type="text" readonly style="background:var(--beige);" /></div>' +
-    '<div class="campo"><label>Valor (mensualidad)</label><input id="in-valor" type="text" readonly style="background:var(--beige);" /></div>' +
-    '<div class="campo"><label>Descuento (%)</label><input id="in-descuento" type="number" min="0" max="100" value="0" /></div>' +
-    '<div class="campo"><label>Total con descuento</label><input id="in-total" type="text" readonly style="background:var(--beige); color:var(--azul-oscuro); font-weight:700;" /></div>' +
-    '<div class="campo"><label>Fecha de inicio</label><input id="in-fecha" type="date" /></div>' +
-    '<div class="campo"><label>¿Ya pagó?</label><select id="in-pagado"><option value="no">No, todavía no</option><option value="si">Sí, ya pagó</option></select></div>' +
-    '<div class="campo"><label id="lbl-fecha-pago">Fecha límite de pago</label><input id="in-fecha-pago" type="date" /></div>' +
-    '<div class="campo" id="campo-medio-pago" style="display:none;"><label>Medio de pago</label><select id="in-medio-pago"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div>' +
+    '<div class="fondo-decorado">' + bloquesFondoDecorado() +
+    '<div class="tarjeta-split">' +
+      '<div class="split-izq">' +
+        '<div class="marca-mini"><span class="punto"></span>Jacquin — Matrícula</div>' +
+        '<div>' +
+          '<h3>Formalizá la matrícula del alumno.</h3>' +
+          '<p class="bajada">Elegí el plan real de la academia — horas y valor se completan solos — y quedará activo apenas se registre el pago.</p>' +
+          '<div class="ilustracion">' + ILUSTRACION_MATRICULA + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="split-der">' +
+        '<h2>Inscribir estudiante</h2>' +
+        (alumnos.length === 0 ? '<p class="ayuda">Primero registrá un estudiante en el módulo Estudiantes.</p>' :
+        '<p class="ayuda">El programa se toma del estudiante elegido.</p>' +
+        '<div class="grilla-moderna">' +
+        '<div class="campo-moderno"><label>Estudiante</label><select id="in-alumno">' +
+        alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + ' — ' + a.programa + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="campo-moderno"><label>Programa</label><input id="in-programa" type="text" readonly /></div>' +
+        '<div class="campo-moderno"><label>Tipo de plan</label><select id="in-tipo-plan"></select></div>' +
+        '<div class="campo-moderno"><label>Horas por semana</label><input id="in-horas" type="text" readonly /></div>' +
+        '<div class="campo-moderno"><label>Valor (mensualidad)</label><input id="in-valor" type="text" readonly /></div>' +
+        '<div class="campo-moderno"><label>Descuento (%)</label><input id="in-descuento" type="number" min="0" max="100" value="0" /></div>' +
+        '<div class="campo-moderno"><label>Total con descuento</label><input id="in-total" type="text" readonly style="color:var(--azul-oscuro); font-weight:700;" /></div>' +
+        '<div class="campo-moderno"><label>Fecha de inicio</label><input id="in-fecha" type="date" /></div>' +
+        '<div class="campo-moderno"><label>¿Ya pagó?</label><select id="in-pagado"><option value="no">No, todavía no</option><option value="si">Sí, ya pagó</option></select></div>' +
+        '<div class="campo-moderno"><label id="lbl-fecha-pago">Fecha límite de pago</label><input id="in-fecha-pago" type="date" /></div>' +
+        '<div class="campo-moderno" id="campo-medio-pago" style="display:none;"><label>Medio de pago</label><select id="in-medio-pago"><option>Efectivo</option><option>Transferencia</option><option>Tarjeta</option></select></div>' +
+        '</div>' +
+        '<p id="in-nota-tipo" style="font-size:11px; color:var(--naranja); margin:6px 0 10px; display:none;"></p>' +
+        '<button class="btn-moderno" id="btn-inscribir">Inscribir</button>' +
+        '<p id="msj-inscripcion" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;"></p>') +
+      '</div>' +
     '</div>' +
-    '<p id="in-nota-tipo" style="font-size:11px; color:var(--naranja); margin:6px 0 10px; display:none;"></p>' +
-    '<button class="btn-primario" id="btn-inscribir" style="max-width:280px;">Inscribir</button>' +
-    '<p id="msj-inscripcion" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;"></p>') +
     '</div>';
 
   return '' +
