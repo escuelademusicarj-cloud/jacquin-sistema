@@ -182,13 +182,14 @@
   .carta-modulo2 .icono-modulo svg { width: 100%; height: 100%; }
   .carta-modulo2 p.nombre { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--texto); }
   .carta-modulo2 p.descripcion { margin: 0 0 12px; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
-  .carta-modulo2 span.entrar { font-size: 11.5px; color: var(--naranja); font-weight: 600; }
+  .carta-modulo2 span.entrar { font-size: 11.5px; color: var(--azul-oscuro); font-weight: 600; }
 
   .carta-modulo2.oscura { background: var(--azul-oscuro); border: 1px solid rgba(255,255,255,0.14); box-shadow: none; }
   .carta-modulo2.oscura:hover { border-color: var(--naranja); }
   .carta-modulo2.oscura .icono-modulo { color: #fff; }
   .carta-modulo2.oscura p.nombre { color: #fff; }
   .carta-modulo2.oscura p.descripcion { color: rgba(255,255,255,0.68); }
+  .carta-modulo2.oscura span.entrar { color: #fff; }
 
   @media (max-width: 900px) and (min-width: 721px) {
     .grilla-modulos { grid-template-columns: repeat(2, 1fr); }
@@ -332,6 +333,7 @@ var MODULOS = [
   { key: 'comunicacion', label: 'Comunicación', grupo: 'seguimiento' },
   { key: 'inventario', label: 'Inventario', grupo: 'seguimiento' },
   { key: 'reportes', label: 'Reportes', grupo: 'seguimiento' },
+  { key: 'contabilidad', label: 'Contabilidad', grupo: 'admin' },
   { key: 'admin', label: 'Admin (tenant)', grupo: 'admin' },
   { key: 'usuarios-permisos', label: 'Usuarios y permisos', grupo: 'admin' }
 ];
@@ -339,7 +341,10 @@ var MODULOS = [
 var VISIBILIDAD_ROL = {
   ADMINISTRADOR: MODULOS.map(function (m) { return m.key; }),
   DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes'],
-  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario'],
+  // Secretaría ve Contabilidad, pero con visibilidad restringida (renderContabilidad
+  // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
+  // el resumen financiero — eso queda reservado al Administrador).
+  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario','contabilidad'],
   PROFESOR: ['dashboard','estudiantes','profesores','asistencia','evaluacion']
 };
 
@@ -393,6 +398,42 @@ function cargarInscripciones() {
 function guardarInscripciones(lista) { localStorage.setItem('jacquin_demo_inscripciones', JSON.stringify(lista)); }
 
 var CONCEPTOS_PAGO = ['Matrícula', 'Mensualidad', 'Clase suelta', 'Programa especial', 'Eventos', 'Libros', 'Uniformes'];
+
+// ---- Contabilidad — categorías adaptadas al lenguaje de la academia,
+// tomando como referencia el módulo de contabilidad de otro proyecto
+// (ingresos/gastos/compras/nómina/categorías/KPIs) ya construido antes.
+var METODOS_PAGO_CONTABLE = ['Efectivo', 'Transferencia', 'Tarjeta'];
+var CATEGORIAS_INGRESO = ['Matrícula', 'Mensualidad', 'Clase suelta', 'Eventos', 'Venta de material', 'Otro'];
+var CATEGORIAS_GASTO = ['Nómina', 'Arriendo', 'Servicios públicos', 'Mantenimiento de instrumentos', 'Marketing', 'Insumos de oficina', 'Otro'];
+var CATEGORIAS_COMPRA = ['Instrumentos', 'Partituras y libros', 'Mobiliario', 'Insumos', 'Tecnología', 'Otro'];
+
+function cargarIngresos() {
+  var g = localStorage.getItem('jacquin_demo_ingresos');
+  return g ? JSON.parse(g) : [];
+}
+function guardarIngresos(lista) { localStorage.setItem('jacquin_demo_ingresos', JSON.stringify(lista)); }
+
+function cargarGastos() {
+  var g = localStorage.getItem('jacquin_demo_gastos');
+  return g ? JSON.parse(g) : [];
+}
+function guardarGastos(lista) { localStorage.setItem('jacquin_demo_gastos', JSON.stringify(lista)); }
+
+function cargarCompras() {
+  var g = localStorage.getItem('jacquin_demo_compras');
+  return g ? JSON.parse(g) : [];
+}
+function guardarCompras(lista) { localStorage.setItem('jacquin_demo_compras', JSON.stringify(lista)); }
+
+function cargarNomina() {
+  var g = localStorage.getItem('jacquin_demo_nomina');
+  return g ? JSON.parse(g) : [];
+}
+function guardarNomina(lista) { localStorage.setItem('jacquin_demo_nomina', JSON.stringify(lista)); }
+
+function formatearCOPContable(numero) {
+  return '$ ' + Math.round(Number(numero) || 0).toLocaleString('es-CO');
+}
 
 function cargarPagosRegistrados() {
   var g = localStorage.getItem('jacquin_demo_pagos_registrados');
@@ -504,6 +545,7 @@ var ICONOS_MODULO = {
   inventario: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.7 7.3 12 3l8.3 4.3v9.4L12 21l-8.3-4.3V7.3Z"/><path d="M3.7 7.3 12 11.6l8.3-4.3M12 11.6V21"/></svg>',
   reportes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 14.5v2.7M12 11v6.2M16 8.3v9.4"/></svg>',
   admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6"/><path d="M12 3.5v2.3M12 18.2v2.3M20.5 12h-2.3M5.8 12H3.5M17.7 6.3l-1.6 1.6M7.9 16.1l-1.6 1.6M17.7 17.7l-1.6-1.6M7.9 7.9 6.3 6.3"/></svg>',
+  contabilidad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/><circle cx="16.2" cy="16.5" r="0.3" fill="currentColor"/></svg>',
   'usuarios-permisos': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 19.5 6v6c0 4.5-3.1 7.1-7.5 8.5-4.4-1.4-7.5-4-7.5-8.5V6L12 3.5Z"/><path d="m9.3 12 1.9 1.9 3.5-3.7"/></svg>'
 };
 
@@ -539,9 +581,61 @@ var DESCRIPCION_MODULO = {
   comunicacion: 'Mensajes y avisos a estudiantes y tutores.',
   inventario: 'Instrumentos y recursos de la academia.',
   reportes: 'Indicadores generales de la academia.',
+  contabilidad: 'Ingresos, gastos, compras y nómina de la academia.',
   admin: 'Configuración general del sistema.',
   'usuarios-permisos': 'Roles, permisos y accesos del sistema.'
 };
+
+function calcularEdadDesdeFecha(fechaStr) {
+  var nacimiento = new Date(fechaStr);
+  var hoy = new Date();
+  var edad = hoy.getFullYear() - nacimiento.getFullYear();
+  var m = hoy.getMonth() - nacimiento.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) edad--;
+  return edad;
+}
+
+function esCumpleañosHoy(fechaStr) {
+  if (!fechaStr) return false;
+  var nacimiento = new Date(fechaStr);
+  var hoy = new Date();
+  return nacimiento.getMonth() === hoy.getMonth() && nacimiento.getDate() === hoy.getDate();
+}
+
+// Recorre estudiantes y personal (usuarios + perfiles de profesor) y arma la
+// lista de quienes cumplen años hoy. Solo se muestra el día exacto.
+function cumpleañosDeHoy() {
+  var resultado = [];
+  cargarAlumnos().forEach(function (a) {
+    if (esCumpleañosHoy(a.nacimiento)) {
+      resultado.push({ nombre: a.nombres + ' ' + a.apellidos, tipo: 'Estudiante', edad: calcularEdadDesdeFecha(a.nacimiento) });
+    }
+  });
+  var perfiles = cargarPerfilesProfesor();
+  cargarUsuarios().forEach(function (u) {
+    var fechaNacimiento = u.nacimiento || (perfiles[u.email] && perfiles[u.email].nacimiento);
+    if (esCumpleañosHoy(fechaNacimiento)) {
+      resultado.push({ nombre: u.nombre, tipo: 'Personal', edad: calcularEdadDesdeFecha(fechaNacimiento) });
+    }
+  });
+  return resultado;
+}
+
+function renderBannerCumpleaños() {
+  var cumples = cumpleañosDeHoy();
+  if (cumples.length === 0) return '';
+  var nombres = cumples.map(function (c) {
+    return '<strong>' + c.nombre + '</strong> (' + c.tipo + ', ' + c.edad + ' años)';
+  }).join(' · ');
+  return '' +
+    '<div class="banner-cumpleaños" style="background:linear-gradient(120deg, var(--naranja), var(--azul-claro)); color:#fff; border-radius:18px; padding:20px 26px; margin-bottom:22px; box-shadow:0 10px 24px rgba(0,0,0,0.18); display:flex; align-items:center; gap:14px;">' +
+      '<span style="font-size:34px; line-height:1;">🎂</span>' +
+      '<div>' +
+        '<p style="margin:0 0 4px; font-family:var(--font-wordmark); font-weight:600; font-size:19px;">¡Hoy cumple años!</p>' +
+        '<p style="margin:0; font-size:13.5px;">' + nombres + '</p>' +
+      '</div>' +
+    '</div>';
+}
 
 function renderDashboard(sesion) {
   var visibles = modulosVisibles(sesion.rol);
@@ -564,6 +658,7 @@ function renderDashboard(sesion) {
   }).join('');
 
   return '' +
+    renderBannerCumpleaños() +
     '<div class="hero-about">' +
       '<span class="pildora-eyebrow">Sobre Jacquin</span>' +
       '<h1>' + (primerNombre ? 'Hola, ' + primerNombre + '. ' : '') + 'Un equipo cercano, con método propio.</h1>' +
@@ -599,7 +694,8 @@ function renderEstudiantes() {
   var alumnos = cargarAlumnos();
   var profesoresDisponibles = cargarUsuarios().filter(function (u) { return u.rol === 'PROFESOR'; });
   var filas = alumnos.map(function (a, i) {
-    return '<tr><td>' + a.nombres + ' ' + a.apellidos + '</td><td>' + a.programa + '</td>' +
+    var programaTxto = a.programa + (a.programa2 ? ' + ' + a.programa2 : '');
+    return '<tr><td>' + a.nombres + ' ' + a.apellidos + '</td><td>' + programaTxto + '</td>' +
       '<td><span class="chip-rol">' + ETIQUETA_ESTADO[a.estado] + '</span></td>' +
       '<td>' + (a.acudiente || '—') + '</td><td>' + (a.profesor ? (profesoresDisponibles.find(function (p) { return p.email === a.profesor; }) || {}).nombre || a.profesor : '—') + '</td></tr>';
   }).join('');
@@ -611,7 +707,12 @@ function renderEstudiantes() {
     '<div class="campo"><label>Apellidos</label><input id="al-apellidos" type="text" /></div>' +
     '<div class="campo"><label>Documento</label><input id="al-documento" type="text" /></div>' +
     '<div class="campo"><label>Fecha de nacimiento</label><input id="al-nacimiento" type="date" /></div>' +
-    '<div class="campo"><label>Programa</label><select id="al-programa">' +
+    '<div class="campo"><label>Edad</label><input id="al-edad" type="text" readonly style="background:var(--beige);" /></div>' +
+    '<div class="campo"><label>Programa 1</label><select id="al-programa">' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Programa 2 (opcional)</label><select id="al-programa2">' +
+    '<option value="">Ninguno</option>' +
     PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Profesor asignado (opcional)</label><select id="al-profesor">' +
@@ -619,7 +720,10 @@ function renderEstudiantes() {
     profesoresDisponibles.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Teléfono de contacto</label><input id="al-telefono" type="text" /></div>' +
+    '<div class="campo"><label>Correo electrónico</label><input id="al-correo" type="email" /></div>' +
+    '<div class="campo"><label>Dirección</label><input id="al-direccion" type="text" /></div>' +
     '<div class="campo"><label id="lbl-acudiente">Nombre del acudiente (opcional)</label><input id="al-acudiente" type="text" /></div>' +
+    '<div class="campo"><label>Celular del acudiente</label><input id="al-celular-acudiente" type="text" /></div>' +
     '<div class="campo"><label>Observaciones</label><input id="al-obs" type="text" /></div>' +
     '</div>' +
     '<p id="aviso-menor" style="font-size:12px; color:var(--naranja); display:none; margin:-4px 0 10px;">Alumno menor de edad: el acudiente es obligatorio.</p>' +
@@ -648,11 +752,26 @@ function activarLogicaEstudiantes(volverA) {
     return edad < 18;
   }
 
-  document.getElementById('al-nacimiento').addEventListener('change', function () {
-    var menor = esMenor(this.value);
-    document.getElementById('aviso-menor').style.display = menor ? 'block' : 'none';
-    document.getElementById('lbl-acudiente').textContent = menor ? 'Nombre del acudiente (obligatorio)' : 'Nombre del acudiente (opcional)';
-  });
+  function calcularEdadTexto(fechaStr) {
+    if (!fechaStr) return '';
+    var nacimiento = new Date(fechaStr);
+    var hoy = new Date();
+    var edad = hoy.getFullYear() - nacimiento.getFullYear();
+    var m = hoy.getMonth() - nacimiento.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) edad--;
+    return edad + ' años';
+  }
+
+  var campoNacimiento = document.getElementById('al-nacimiento');
+  var campoEdad = document.getElementById('al-edad');
+  if (campoNacimiento && campoEdad) {
+    campoNacimiento.addEventListener('change', function () {
+      var menor = esMenor(this.value);
+      document.getElementById('aviso-menor').style.display = menor ? 'block' : 'none';
+      document.getElementById('lbl-acudiente').textContent = menor ? 'Nombre del acudiente (obligatorio)' : 'Nombre del acudiente (opcional)';
+      campoEdad.value = calcularEdadTexto(this.value);
+    });
+  }
 
   document.getElementById('btn-crear-alumno').addEventListener('click', function () {
     var nombres = document.getElementById('al-nombres').value.trim();
@@ -662,6 +781,10 @@ function activarLogicaEstudiantes(volverA) {
     if (!nombres || !apellidos) return;
     if (!nacimiento) { alert('La fecha de nacimiento es obligatoria (determina si necesita acudiente).'); return; }
     if (esMenor(nacimiento) && !acudiente) { alert('El alumno es menor de edad: el acudiente es obligatorio.'); return; }
+    var campoPrograma2 = document.getElementById('al-programa2');
+    var campoCorreo = document.getElementById('al-correo');
+    var campoDireccion = document.getElementById('al-direccion');
+    var campoCelularAcudiente = document.getElementById('al-celular-acudiente');
     var alumnos = cargarAlumnos();
     alumnos.push({
       nombres: nombres,
@@ -669,9 +792,13 @@ function activarLogicaEstudiantes(volverA) {
       documento: document.getElementById('al-documento').value.trim(),
       nacimiento: nacimiento,
       programa: document.getElementById('al-programa').value,
+      programa2: campoPrograma2 ? campoPrograma2.value : '',
       profesor: document.getElementById('al-profesor').value,
       telefono: document.getElementById('al-telefono').value.trim(),
+      correo: campoCorreo ? campoCorreo.value.trim() : '',
+      direccion: campoDireccion ? campoDireccion.value.trim() : '',
       acudiente: acudiente,
+      celularAcudiente: campoCelularAcudiente ? campoCelularAcudiente.value.trim() : '',
       observaciones: document.getElementById('al-obs').value.trim(),
       estado: 'preinscrito'
     });
@@ -1636,6 +1763,7 @@ function renderProfesores(sesion) {
     '</select></div>' +
     '<div class="campo"><label>Teléfono</label><input id="pf-telefono" type="text" /></div>' +
     '<div class="campo"><label>Experiencia</label><input id="pf-experiencia" type="text" placeholder="Ej: 8 años enseñando piano clásico" /></div>' +
+    '<div class="campo"><label>Fecha de nacimiento (opcional)</label><input id="pf-nacimiento" type="date" /></div>' +
     '</div>' +
     '<button class="btn-primario" id="btn-guardar-perfil" style="max-width:280px;">Guardar perfil</button>' +
     '<p id="msj-perfil-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Perfil actualizado.</p>' +
@@ -1675,7 +1803,8 @@ function activarLogicaProfesores() {
     perfiles[email] = {
       instrumentos: instrumentosPrevios, // se define al agregar el profesor, no se edita acá
       telefono: document.getElementById('pf-telefono').value.trim(),
-      experiencia: document.getElementById('pf-experiencia').value.trim()
+      experiencia: document.getElementById('pf-experiencia').value.trim(),
+      nacimiento: document.getElementById('pf-nacimiento').value
     };
     guardarPerfilesProfesor(perfiles);
     document.getElementById('msj-perfil-ok').style.display = 'block';
@@ -1732,7 +1861,12 @@ function renderCursos() {
     '<div class="campo"><label>Apellidos</label><input id="al-apellidos" type="text" /></div>' +
     '<div class="campo"><label>Documento</label><input id="al-documento" type="text" /></div>' +
     '<div class="campo"><label>Fecha de nacimiento</label><input id="al-nacimiento" type="date" /></div>' +
-    '<div class="campo"><label>Programa</label><select id="al-programa">' +
+    '<div class="campo"><label>Edad</label><input id="al-edad" type="text" readonly style="background:var(--beige);" /></div>' +
+    '<div class="campo"><label>Programa 1</label><select id="al-programa">' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Programa 2 (opcional)</label><select id="al-programa2">' +
+    '<option value="">Ninguno</option>' +
     PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Profesor asignado (opcional)</label><select id="al-profesor">' +
@@ -1740,7 +1874,10 @@ function renderCursos() {
     profesoresDisponibles.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Teléfono de contacto</label><input id="al-telefono" type="text" /></div>' +
+    '<div class="campo"><label>Correo electrónico</label><input id="al-correo" type="email" /></div>' +
+    '<div class="campo"><label>Dirección</label><input id="al-direccion" type="text" /></div>' +
     '<div class="campo"><label id="lbl-acudiente">Nombre del acudiente (opcional)</label><input id="al-acudiente" type="text" /></div>' +
+    '<div class="campo"><label>Celular del acudiente</label><input id="al-celular-acudiente" type="text" /></div>' +
     '<p id="aviso-menor" style="font-size:12px; color:var(--naranja); display:none; margin:-4px 0 10px;">Alumno menor de edad: el acudiente es obligatorio.</p>' +
     '<div class="campo"><label>Observaciones</label><input id="al-obs" type="text" /></div>' +
     '<button class="btn-primario" id="btn-crear-alumno">Registrar estudiante</button>' +
@@ -1953,6 +2090,331 @@ function activarLogicaEvaluacion() {
   }
 }
 
+// ==================== CONTABILIDAD ====================
+// Módulo tomado como referencia de otro proyecto (Neuro Tone — Administración,
+// sección de contabilidad: ingresos/gastos/compras/nómina/categorías/KPIs) y
+// adaptado al lenguaje de la academia de música. Visible completo solo para
+// ADMINISTRADOR; SECRETARIA solo puede registrar (sin ver tablas ni resumen).
+var tabContabilidadActiva = 'ingresos';
+
+function cambiarTabContabilidad(tab) {
+  tabContabilidadActiva = tab;
+  renderContenido('contabilidad');
+}
+
+function filaTablaContable(celdas) {
+  return '<tr>' + celdas.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>';
+}
+
+function panelIngresos(esAdmin) {
+  var form =
+    '<div class="panel"><h2>Registrar ingreso</h2>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Fecha</label><input id="ing-fecha" type="date" /></div>' +
+    '<div class="campo"><label>Concepto</label><input id="ing-concepto" type="text" placeholder="Ej: Mensualidad de piano" /></div>' +
+    '<div class="campo"><label>Programa (opcional)</label><select id="ing-programa"><option value="">General</option>' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Categoría</label><select id="ing-categoria">' +
+    CATEGORIAS_INGRESO.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estudiante / cliente (opcional)</label><input id="ing-cliente" type="text" /></div>' +
+    '<div class="campo"><label>Método de pago</label><select id="ing-metodo">' +
+    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estado</label><select id="ing-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>' +
+    '<div class="campo"><label>Valor</label><input id="ing-valor" type="number" min="0" /></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-crear-ingreso" style="max-width:280px;">Registrar ingreso</button>' +
+    '<p id="msj-ingreso-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Ingreso registrado.</p>' +
+    '</div>';
+
+  if (!esAdmin) return form;
+
+  var ingresos = cargarIngresos();
+  var total = ingresos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var filas = ingresos.map(function (r, i) {
+    return filaTablaContable([r.fecha || '—', r.concepto, r.programa || '—', r.categoria, r.cliente || '—', r.metodo,
+      '<span class="chip-rol">' + (r.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong>' + formatearCOPContable(r.valor) + '</strong>']).replace('<tr>', '<tr data-idx-ingreso="' + i + '">');
+  }).join('');
+
+  return form +
+    '<div class="panel"><h2>Ingresos registrados (' + ingresos.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
+    (ingresos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay ingresos registrados.</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Concepto</th><th>Programa</th><th>Categoría</th><th>Cliente</th><th>Método</th><th>Estado</th><th>Valor</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+    '</div>';
+}
+
+function panelGastos(esAdmin) {
+  var form =
+    '<div class="panel"><h2>Registrar gasto</h2>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Fecha</label><input id="gas-fecha" type="date" /></div>' +
+    '<div class="campo"><label>Concepto</label><input id="gas-concepto" type="text" /></div>' +
+    '<div class="campo"><label>Categoría</label><select id="gas-categoria">' +
+    CATEGORIAS_GASTO.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Proveedor (opcional)</label><input id="gas-proveedor" type="text" /></div>' +
+    '<div class="campo"><label>Método de pago</label><select id="gas-metodo">' +
+    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estado</label><select id="gas-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>' +
+    '<div class="campo"><label>Valor</label><input id="gas-valor" type="number" min="0" /></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-crear-gasto" style="max-width:280px;">Registrar gasto</button>' +
+    '<p id="msj-gasto-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Gasto registrado.</p>' +
+    '</div>';
+
+  if (!esAdmin) return form;
+
+  var gastos = cargarGastos();
+  var total = gastos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var filas = gastos.map(function (r) {
+    return filaTablaContable([r.fecha || '—', r.concepto, r.categoria, r.proveedor || '—', r.metodo,
+      '<span class="chip-rol">' + (r.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong>' + formatearCOPContable(r.valor) + '</strong>']);
+  }).join('');
+
+  return form +
+    '<div class="panel"><h2>Gastos registrados (' + gastos.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
+    (gastos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay gastos registrados.</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Proveedor</th><th>Método</th><th>Estado</th><th>Valor</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+    '</div>';
+}
+
+function panelCompras(esAdmin) {
+  var form =
+    '<div class="panel"><h2>Registrar compra</h2>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Fecha</label><input id="com-fecha" type="date" /></div>' +
+    '<div class="campo"><label>Artículo</label><input id="com-articulo" type="text" placeholder="Ej: Cuerdas de guitarra" /></div>' +
+    '<div class="campo"><label>Categoría</label><select id="com-categoria">' +
+    CATEGORIAS_COMPRA.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Proveedor (opcional)</label><input id="com-proveedor" type="text" /></div>' +
+    '<div class="campo"><label>Cantidad</label><input id="com-cantidad" type="number" min="1" value="1" /></div>' +
+    '<div class="campo"><label>Valor unitario</label><input id="com-valor-unit" type="number" min="0" /></div>' +
+    '<div class="campo"><label>Método de pago</label><select id="com-metodo">' +
+    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estado</label><select id="com-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-crear-compra" style="max-width:280px;">Registrar compra</button>' +
+    '<p id="msj-compra-creada" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Compra registrada.</p>' +
+    '</div>';
+
+  if (!esAdmin) return form;
+
+  var compras = cargarCompras();
+  var total = compras.reduce(function (s, r) { return s + Number(r.valorTotal || 0); }, 0);
+  var filas = compras.map(function (r) {
+    return filaTablaContable([r.fecha || '—', r.articulo, r.categoria, r.proveedor || '—', r.cantidad,
+      formatearCOPContable(r.valorUnit), r.metodo,
+      '<span class="chip-rol">' + (r.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong>' + formatearCOPContable(r.valorTotal) + '</strong>']);
+  }).join('');
+
+  return form +
+    '<div class="panel"><h2>Compras registradas (' + compras.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
+    (compras.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay compras registradas.</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Artículo</th><th>Categoría</th><th>Proveedor</th><th>Cant.</th><th>V. unitario</th><th>Método</th><th>Estado</th><th>Total</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+    '</div>';
+}
+
+function panelNomina(esAdmin) {
+  var usuarios = cargarUsuarios();
+  var form =
+    '<div class="panel"><h2>Registrar pago de nómina</h2>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Mes</label><input id="nom-mes" type="month" /></div>' +
+    '<div class="campo"><label>Empleado</label><select id="nom-empleado">' +
+    usuarios.map(function (u) { return '<option value="' + u.email + '">' + u.nombre + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Cargo</label><input id="nom-cargo" type="text" placeholder="Ej: Profesor de piano" /></div>' +
+    '<div class="campo"><label>Horas</label><input id="nom-horas" type="number" min="0" /></div>' +
+    '<div class="campo"><label>Tarifa por hora</label><input id="nom-tarifa" type="number" min="0" /></div>' +
+    '<div class="campo"><label>Bonos</label><input id="nom-bonos" type="number" min="0" value="0" /></div>' +
+    '<div class="campo"><label>Descuentos</label><input id="nom-descuentos" type="number" min="0" value="0" /></div>' +
+    '<div class="campo"><label>Método de pago</label><select id="nom-metodo">' +
+    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estado</label><select id="nom-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-crear-nomina" style="max-width:280px;">Registrar pago</button>' +
+    '<p id="msj-nomina-creada" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Pago de nómina registrado.</p>' +
+    '</div>';
+
+  if (!esAdmin) return form;
+
+  var nomina = cargarNomina();
+  var total = nomina.reduce(function (s, r) { return s + Number(r.neto || 0); }, 0);
+  var filas = nomina.map(function (r) {
+    var nombreEmpleado = (usuarios.find(function (u) { return u.email === r.empleado; }) || {}).nombre || r.empleado;
+    return filaTablaContable([r.mes || '—', nombreEmpleado, r.cargo || '—', r.horas,
+      formatearCOPContable(r.basico), formatearCOPContable(r.bonos), formatearCOPContable(r.descuentos),
+      '<span class="chip-rol">' + (r.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong>' + formatearCOPContable(r.neto) + '</strong>']);
+  }).join('');
+
+  return form +
+    '<div class="panel"><h2>Pagos de nómina (' + nomina.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
+    (nomina.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay pagos de nómina registrados.</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Mes</th><th>Empleado</th><th>Cargo</th><th>Horas</th><th>Básico</th><th>Bonos</th><th>Descuentos</th><th>Estado</th><th>Neto</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+    '</div>';
+}
+
+function panelResumenContable() {
+  var totalIngresos = cargarIngresos().reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var totalGastos = cargarGastos().reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var totalCompras = cargarCompras().reduce(function (s, r) { return s + Number(r.valorTotal || 0); }, 0);
+  var totalNomina = cargarNomina().reduce(function (s, r) { return s + Number(r.neto || 0); }, 0);
+  var balance = totalIngresos - totalGastos - totalCompras - totalNomina;
+
+  function tarjetaKPI(titulo, valor, color) {
+    return '<div class="panel" style="border-top:4px solid ' + color + ';">' +
+      '<p style="font-size:12px; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:0.04em;">' + titulo + '</p>' +
+      '<p style="margin:0; font-size:22px; font-weight:700; color:' + color + ';">' + formatearCOPContable(valor) + '</p>' +
+      '</div>';
+  }
+
+  return '' +
+    '<div class="grilla-2col" style="align-items:stretch;">' +
+      tarjetaKPI('Total ingresos', totalIngresos, 'var(--verde)') +
+      tarjetaKPI('Total gastos', totalGastos, 'var(--rojo)') +
+      tarjetaKPI('Total compras', totalCompras, 'var(--naranja)') +
+      tarjetaKPI('Total nómina', totalNomina, 'var(--azul-oscuro)') +
+    '</div>' +
+    '<div class="panel" style="border-top:4px solid ' + (balance >= 0 ? 'var(--verde)' : 'var(--rojo)') + ';">' +
+      '<p style="font-size:12px; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:0.04em;">Balance (ingresos − gastos − compras − nómina)</p>' +
+      '<p style="margin:0; font-size:26px; font-weight:700; color:' + (balance >= 0 ? 'var(--verde)' : 'var(--rojo)') + ';">' + formatearCOPContable(balance) + '</p>' +
+    '</div>' +
+    '<p style="font-size:11px; color:var(--muted);">Resumen financiero visible solo para Administración — la Secretaría puede registrar movimientos pero no ve estos totales.</p>';
+}
+
+function renderContabilidad(sesion) {
+  var esAdmin = sesion.rol === 'ADMINISTRADOR';
+  var pestañas = ['ingresos', 'gastos', 'compras', 'nomina'];
+  if (esAdmin) pestañas.push('resumen');
+  var etiquetaPestaña = { ingresos: 'Ingresos', gastos: 'Gastos', compras: 'Compras', nomina: 'Nómina', resumen: 'Resumen' };
+  if (!esAdmin && tabContabilidadActiva === 'resumen') tabContabilidadActiva = 'ingresos';
+
+  var botonesPestañas = pestañas.map(function (p) {
+    var activa = p === tabContabilidadActiva;
+    return '<button type="button" onclick="cambiarTabContabilidad(\'' + p + '\')" style="' +
+      'padding:8px 16px; border-radius:8px; border:1px solid ' + (activa ? 'var(--azul-oscuro)' : '#e2e5ea') + ';' +
+      'background:' + (activa ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activa ? '#fff' : 'var(--texto)') + ';' +
+      'font-size:12.5px; font-weight:600; cursor:pointer; font-family:var(--font-ui);">' + etiquetaPestaña[p] + '</button>';
+  }).join('');
+
+  var contenido = '';
+  if (tabContabilidadActiva === 'ingresos') contenido = panelIngresos(esAdmin);
+  else if (tabContabilidadActiva === 'gastos') contenido = panelGastos(esAdmin);
+  else if (tabContabilidadActiva === 'compras') contenido = panelCompras(esAdmin);
+  else if (tabContabilidadActiva === 'nomina') contenido = panelNomina(esAdmin);
+  else if (tabContabilidadActiva === 'resumen' && esAdmin) contenido = panelResumenContable();
+
+  return '' +
+    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Contabilidad</h1>' +
+    (esAdmin ? '' : '<p style="font-size:12px; color:var(--muted); margin:0 0 16px;">Podés registrar ingresos, gastos, compras y nómina. El resumen financiero completo lo ve solo Administración.</p>') +
+    '<div style="display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;">' + botonesPestañas + '</div>' +
+    contenido;
+}
+
+function activarLogicaContabilidad() {
+  var btnIngreso = document.getElementById('btn-crear-ingreso');
+  if (btnIngreso) {
+    btnIngreso.addEventListener('click', function () {
+      var valor = Number(document.getElementById('ing-valor').value) || 0;
+      var concepto = document.getElementById('ing-concepto').value.trim();
+      if (!concepto || !valor) { alert('Concepto y valor son obligatorios.'); return; }
+      var lista = cargarIngresos();
+      lista.push({
+        fecha: document.getElementById('ing-fecha').value,
+        concepto: concepto,
+        programa: document.getElementById('ing-programa').value,
+        categoria: document.getElementById('ing-categoria').value,
+        cliente: document.getElementById('ing-cliente').value.trim(),
+        metodo: document.getElementById('ing-metodo').value,
+        estado: document.getElementById('ing-estado').value,
+        valor: valor
+      });
+      guardarIngresos(lista);
+      document.getElementById('msj-ingreso-creado').style.display = 'block';
+      setTimeout(function () { renderContenido('contabilidad'); }, 500);
+    });
+  }
+
+  var btnGasto = document.getElementById('btn-crear-gasto');
+  if (btnGasto) {
+    btnGasto.addEventListener('click', function () {
+      var valor = Number(document.getElementById('gas-valor').value) || 0;
+      var concepto = document.getElementById('gas-concepto').value.trim();
+      if (!concepto || !valor) { alert('Concepto y valor son obligatorios.'); return; }
+      var lista = cargarGastos();
+      lista.push({
+        fecha: document.getElementById('gas-fecha').value,
+        concepto: concepto,
+        categoria: document.getElementById('gas-categoria').value,
+        proveedor: document.getElementById('gas-proveedor').value.trim(),
+        metodo: document.getElementById('gas-metodo').value,
+        estado: document.getElementById('gas-estado').value,
+        valor: valor
+      });
+      guardarGastos(lista);
+      document.getElementById('msj-gasto-creado').style.display = 'block';
+      setTimeout(function () { renderContenido('contabilidad'); }, 500);
+    });
+  }
+
+  var btnCompra = document.getElementById('btn-crear-compra');
+  if (btnCompra) {
+    btnCompra.addEventListener('click', function () {
+      var articulo = document.getElementById('com-articulo').value.trim();
+      var cantidad = Number(document.getElementById('com-cantidad').value) || 0;
+      var valorUnit = Number(document.getElementById('com-valor-unit').value) || 0;
+      if (!articulo || !cantidad || !valorUnit) { alert('Artículo, cantidad y valor unitario son obligatorios.'); return; }
+      var lista = cargarCompras();
+      lista.push({
+        fecha: document.getElementById('com-fecha').value,
+        articulo: articulo,
+        categoria: document.getElementById('com-categoria').value,
+        proveedor: document.getElementById('com-proveedor').value.trim(),
+        cantidad: cantidad,
+        valorUnit: valorUnit,
+        valorTotal: cantidad * valorUnit,
+        metodo: document.getElementById('com-metodo').value,
+        estado: document.getElementById('com-estado').value
+      });
+      guardarCompras(lista);
+      document.getElementById('msj-compra-creada').style.display = 'block';
+      setTimeout(function () { renderContenido('contabilidad'); }, 500);
+    });
+  }
+
+  var btnNomina = document.getElementById('btn-crear-nomina');
+  if (btnNomina) {
+    btnNomina.addEventListener('click', function () {
+      var horas = Number(document.getElementById('nom-horas').value) || 0;
+      var tarifa = Number(document.getElementById('nom-tarifa').value) || 0;
+      var bonos = Number(document.getElementById('nom-bonos').value) || 0;
+      var descuentos = Number(document.getElementById('nom-descuentos').value) || 0;
+      if (!horas || !tarifa) { alert('Horas y tarifa son obligatorias.'); return; }
+      var basico = horas * tarifa;
+      var neto = basico + bonos - descuentos;
+      var lista = cargarNomina();
+      lista.push({
+        mes: document.getElementById('nom-mes').value,
+        empleado: document.getElementById('nom-empleado').value,
+        cargo: document.getElementById('nom-cargo').value.trim(),
+        horas: horas,
+        tarifa: tarifa,
+        basico: basico,
+        bonos: bonos,
+        descuentos: descuentos,
+        neto: neto,
+        metodo: document.getElementById('nom-metodo').value,
+        estado: document.getElementById('nom-estado').value
+      });
+      guardarNomina(lista);
+      document.getElementById('msj-nomina-creada').style.display = 'block';
+      setTimeout(function () { renderContenido('contabilidad'); }, 500);
+    });
+  }
+}
+// ==================== FIN CONTABILIDAD ====================
+
 function renderAdmin() {
   var usuarios = cargarUsuarios();
   var filas = usuarios.map(function (u) {
@@ -1979,6 +2441,7 @@ function renderAdmin() {
     '<option value="DIRECCION">Dirección</option>' +
     '</select></div>' +
     '<div class="campo"><label>Contraseña temporal</label><input id="admin-pass" type="password" /></div>' +
+    '<div class="campo"><label>Fecha de nacimiento (opcional)</label><input id="admin-nacimiento" type="date" /></div>' +
     '</div>' +
     '<div id="reglas-vivo">' + POLITICA_PASSWORD.map(function (r) { return '<div class="regla" id="regla-' + r.id + '">· ' + r.txt + '</div>'; }).join('') + '</div>' +
     '<button class="btn-primario" id="btn-crear-usuario" style="margin-top:10px; max-width:280px;" disabled>Crear usuario</button>' +
@@ -2024,8 +2487,9 @@ function activarLogicaAdmin() {
     var email = document.getElementById('admin-email').value.trim();
     var rol = document.getElementById('admin-rol').value;
     if (!nombre || !email) return;
+    var nacimiento = document.getElementById('admin-nacimiento').value;
     var usuarios = cargarUsuarios();
-    usuarios.push({ nombre: nombre, email: email, rol: rol });
+    usuarios.push({ nombre: nombre, email: email, rol: rol, nacimiento: nacimiento });
     guardarUsuarios(usuarios);
     document.getElementById('msj-creado').style.display = 'block';
     setTimeout(function () { renderContenido('admin'); }, 600);
@@ -2086,6 +2550,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'evaluacion') {
     document.getElementById('contenido').innerHTML = renderEvaluacion(sesion);
     activarLogicaEvaluacion();
+  } else if (mod.key === 'contabilidad') {
+    document.getElementById('contenido').innerHTML = renderContabilidad(sesion);
+    activarLogicaContabilidad();
   } else {
     var nota = '';
     if (mod.key === 'estudiantes' && sesion.rol === 'PROFESOR') nota = '<p style="margin-top:8px;">Acotado a los alumnos de tu salón (el filtrado real depende de datos que todavía no existen).</p>';
