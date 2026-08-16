@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;0,600;1,400&family=Caveat:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root {
     --azul-oscuro: #223F61;
@@ -984,12 +985,30 @@ function activarLogicaDashboard() {}
 function renderEstudiantes() {
   var alumnos = cargarAlumnos();
   var profesoresDisponibles = cargarUsuarios().filter(function (u) { return u.rol === 'PROFESOR'; });
+  var inscripciones = cargarInscripciones();
   var filas = alumnos.map(function (a, i) {
     var programaTxto = a.programa + (a.programa2 ? ' + ' + a.programa2 : '');
     return '<tr><td>' + a.nombres + ' ' + a.apellidos + '</td><td>' + programaTxto + '</td>' +
       '<td><span class="chip-rol">' + ETIQUETA_ESTADO[a.estado] + '</span></td>' +
       '<td>' + (a.acudiente || '—') + '</td><td>' + (a.profesor ? (profesoresDisponibles.find(function (p) { return p.email === a.profesor; }) || {}).nombre || a.profesor : '—') + '</td></tr>';
   }).join('');
+
+  // Editor de matriculados: solo estudiantes que ya tienen registro Y
+  // al menos una inscripción de Matrícula — ahí se puede editar todo
+  // (datos del registro + datos de la matrícula), menos lo que se
+  // calcula solo (valor pagado, cargos/saldo — eso vive en Pagos).
+  var matriculados = alumnos.map(function (a, i) { return { a: a, i: i }; })
+    .filter(function (o) { return inscripciones.some(function (ins) { return ins.alumnoIdx === o.i; }); });
+
+  var filasEditor = matriculados.map(function (o) {
+    var ins = inscripciones.filter(function (x) { return x.alumnoIdx === o.i; }).slice(-1)[0];
+    return '<tr><td>' + o.a.nombres + ' ' + o.a.apellidos + '</td><td>' + o.a.programa + '</td>' +
+      '<td>' + (ins ? ins.tipoPlanNombre : '—') + '</td>' +
+      '<td><span class="chip-rol">' + ETIQUETA_ESTADO[o.a.estado] + '</span></td>' +
+      '<td><button class="btn-editar-matriculado" data-alumno-idx="' + o.i + '" style="font-size:12px; padding:6px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui);">Editar</button></td></tr>';
+  }).join('');
+
+  var htmlModalEditor = renderModalEditorEstudiante(profesoresDisponibles);
 
   return '' +
     '<div class="fondo-decorado">' + bloquesFondoDecorado() +
@@ -1003,9 +1022,14 @@ function renderEstudiantes() {
         '</div>' +
       '</div>' +
       '<div class="split-der">' +
-        '<h2>Nuevo estudiante</h2>' +
-        '<p class="ayuda">Todos los campos con * son obligatorios.</p>' +
-        '<div class="grilla-moderna">' +
+        '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">' +
+        '<div><h2 style="margin-bottom:2px;">Nuevo estudiante</h2><p class="ayuda" style="margin-bottom:0;">Todos los campos con * son obligatorios.</p></div>' +
+        '<div>' +
+        '<input type="file" id="input-excel-estudiantes" accept=".xlsx,.xls,.csv" style="display:none;" />' +
+        '<button type="button" id="btn-subir-excel-estudiantes" style="font-size:12px; padding:8px 14px; border-radius:10px; border:1px solid var(--naranja); background:#fff; color:var(--naranja); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">⬆ Subir por Excel</button>' +
+        '</div></div>' +
+        '<p id="msj-excel-estudiantes" style="font-size:12px; color:var(--verde); display:none; margin:8px 0 0;"></p>' +
+        '<div class="grilla-moderna" style="margin-top:16px;">' +
         '<div class="campo-moderno"><label>Nombres</label><input id="al-nombres" type="text" /></div>' +
         '<div class="campo-moderno"><label>Apellidos</label><input id="al-apellidos" type="text" /></div>' +
         '<div class="campo-moderno"><label>Documento</label><input id="al-documento" type="text" /></div>' +
@@ -1042,7 +1066,60 @@ function renderEstudiantes() {
       : '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Programa</th><th>Estado</th><th>Acudiente</th><th>Profesor</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>' +
 
-    '<p style="font-size:11px; color:var(--muted);">Estado inicial siempre "Preinscrito" — pasa a "Activo" cuando se complete la Matrícula (próximo módulo a construir). Nunca se borra un estudiante: los estados quedan en historial.</p>';
+    '<div class="panel"><h2>Editor de estudiantes matriculados (' + matriculados.length + ')</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Estudiantes que ya completaron registro e inscripción de Matrícula. Podés editar cualquier dato — menos lo que se calcula solo (valor pagado, cargos y saldo, eso se maneja desde Pagos y cartera).</p>' +
+    (matriculados.length === 0
+      ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay estudiantes matriculados.</p>'
+      : '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Programa</th><th>Plan</th><th>Estado</th><th></th></tr></thead><tbody>' + filasEditor + '</tbody></table></div>') +
+    '</div>' +
+
+    '<p style="font-size:11px; color:var(--muted);">Estado inicial siempre "Preinscrito" — pasa a "Activo" cuando se complete la Matrícula. Nunca se borra un estudiante: los estados quedan en historial.</p>' +
+    htmlModalEditor;
+}
+
+// Modal del editor de estudiantes matriculados — datos del registro +
+// datos de la matrícula, todo editable salvo lo que se calcula solo.
+function renderModalEditorEstudiante(profesoresDisponibles) {
+  return '' +
+    '<div id="modal-editar-estudiante" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.55); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:14px; padding:26px; width:100%; max-width:640px; max-height:90vh; overflow-y:auto;">' +
+    '<h2 style="margin-top:0;" id="ed-titulo">Editar estudiante</h2>' +
+    '<p style="font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:16px 0 8px;">Datos del estudiante</p>' +
+    '<div class="grilla-moderna">' +
+    '<div class="campo-moderno"><label>Nombres</label><input id="ed-nombres" type="text" /></div>' +
+    '<div class="campo-moderno"><label>Apellidos</label><input id="ed-apellidos" type="text" /></div>' +
+    '<div class="campo-moderno"><label>Documento</label><input id="ed-documento" type="text" /></div>' +
+    '<div class="campo-moderno"><label>Fecha de nacimiento</label><input id="ed-nacimiento" type="date" /></div>' +
+    '<div class="campo-moderno"><label>Programa 1</label><select id="ed-programa">' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo-moderno"><label>Programa 2 (opcional)</label><select id="ed-programa2">' +
+    '<option value="">Ninguno</option>' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo-moderno"><label>Profesor asignado</label><select id="ed-profesor">' +
+    '<option value="">Sin asignar</option>' +
+    profesoresDisponibles.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo-moderno"><label>Teléfono de contacto</label><input id="ed-telefono" type="text" /></div>' +
+    '<div class="campo-moderno"><label>Correo electrónico</label><input id="ed-correo" type="email" /></div>' +
+    '<div class="campo-moderno"><label>Dirección</label><input id="ed-direccion" type="text" /></div>' +
+    '<div class="campo-moderno"><label>Nombre del acudiente</label><input id="ed-acudiente" type="text" /></div>' +
+    '<div class="campo-moderno"><label>Celular del acudiente</label><input id="ed-celular-acudiente" type="text" /></div>' +
+    '<div class="campo-moderno"><label>Observaciones</label><input id="ed-obs" type="text" /></div>' +
+    '</div>' +
+    '<p style="font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:18px 0 8px;">Datos de la matrícula</p>' +
+    '<div class="grilla-moderna">' +
+    '<div class="campo-moderno"><label>Tipo de plan</label><select id="ed-tipo-plan"></select></div>' +
+    '<div class="campo-moderno"><label>Horas por semana</label><input id="ed-horas" type="text" readonly /></div>' +
+    '<div class="campo-moderno"><label>Valor (mensualidad)</label><input id="ed-valor" type="text" readonly /></div>' +
+    '<div class="campo-moderno"><label>Descuento (%)</label><input id="ed-descuento" type="number" min="0" max="100" /></div>' +
+    '<div class="campo-moderno"><label>Fecha de inicio</label><input id="ed-fecha-inicio" type="date" /></div>' +
+    '<div class="campo-moderno"><label>Estado (calculado)</label><input id="ed-estado-txt" type="text" readonly /></div>' +
+    '</div>' +
+    '<button class="btn-moderno" id="btn-guardar-editor-estudiante">Guardar cambios</button>' +
+    '<button id="btn-cancelar-editor-estudiante" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '</div></div>';
 }
 
 function activarLogicaEstudiantes(volverA) {
@@ -1111,6 +1188,183 @@ function activarLogicaEstudiantes(volverA) {
     document.getElementById('msj-alumno-creado').style.display = 'block';
     setTimeout(function () { renderContenido(volverA); }, 500);
   });
+
+  // ---- Carga masiva por Excel — solo REGISTRA estudiantes (igual que el
+  // formulario manual, estado "preinscrito"); la matrícula se sigue
+  // haciendo alumno por alumno desde el módulo Matrícula. ----
+  var btnSubirExcel = document.getElementById('btn-subir-excel-estudiantes');
+  var inputExcel = document.getElementById('input-excel-estudiantes');
+  if (btnSubirExcel && inputExcel) {
+    btnSubirExcel.addEventListener('click', function () { inputExcel.click(); });
+    inputExcel.addEventListener('change', function () {
+      var archivo = this.files[0];
+      if (!archivo) return;
+      if (typeof XLSX === 'undefined') { alert('No se pudo cargar el lector de Excel — revisá tu conexión a internet e intentá de nuevo.'); return; }
+
+      var lector = new FileReader();
+      lector.onload = function (e) {
+        try {
+          var datos = new Uint8Array(e.target.result);
+          var libro = XLSX.read(datos, { type: 'array', cellDates: true });
+          var hoja = libro.Sheets[libro.SheetNames[0]];
+          var filas = XLSX.utils.sheet_to_json(hoja, { defval: '' });
+
+          function buscarCampo(fila, nombres) {
+            var claves = Object.keys(fila);
+            for (var i = 0; i < nombres.length; i++) {
+              var clave = claves.find(function (k) { return k.trim().toLowerCase() === nombres[i]; });
+              if (clave) return String(fila[clave]).trim();
+            }
+            return '';
+          }
+          function formatearFecha(valor) {
+            if (!valor) return '';
+            if (valor instanceof Date) return valor.toISOString().slice(0, 10);
+            var texto = String(valor).trim();
+            var m = texto.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+            if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+            if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto;
+            return '';
+          }
+
+          var alumnos = cargarAlumnos();
+          var importados = 0, omitidos = 0;
+          filas.forEach(function (fila) {
+            var nombres = buscarCampo(fila, ['nombres', 'nombre']);
+            var apellidos = buscarCampo(fila, ['apellidos', 'apellido']);
+            if (!nombres || !apellidos) { omitidos++; return; }
+            var programa = buscarCampo(fila, ['programa', 'programa 1', 'programa1']);
+            if (PROGRAMAS.indexOf(programa) === -1) programa = PROGRAMAS[0];
+            alumnos.push({
+              nombres: nombres,
+              apellidos: apellidos,
+              documento: buscarCampo(fila, ['documento', 'documento de identidad', 'cedula', 'cédula']),
+              nacimiento: formatearFecha(buscarCampo(fila, ['fecha de nacimiento', 'nacimiento', 'fecha nacimiento'])),
+              programa: programa,
+              programa2: '',
+              profesor: '',
+              telefono: buscarCampo(fila, ['telefono', 'teléfono', 'telefono de contacto', 'celular']),
+              correo: buscarCampo(fila, ['correo', 'correo electronico', 'correo electrónico', 'email']),
+              direccion: buscarCampo(fila, ['direccion', 'dirección']),
+              acudiente: buscarCampo(fila, ['acudiente', 'nombre del acudiente']),
+              celularAcudiente: buscarCampo(fila, ['celular del acudiente', 'celular acudiente', 'telefono acudiente']),
+              observaciones: buscarCampo(fila, ['observaciones', 'observacion', 'observación']),
+              estado: 'preinscrito'
+            });
+            importados++;
+          });
+          guardarAlumnos(alumnos);
+
+          var msj = document.getElementById('msj-excel-estudiantes');
+          msj.textContent = importados + ' estudiante(s) registrados desde el Excel' + (omitidos ? ' — ' + omitidos + ' fila(s) omitida(s) por falta de nombre/apellido.' : '.');
+          msj.style.display = 'block';
+          setTimeout(function () { renderContenido('estudiantes'); }, 900);
+        } catch (err) {
+          alert('No se pudo leer el archivo. Revisá que sea un Excel/CSV válido, con columnas como Nombres, Apellidos, Programa, etc.');
+        }
+      };
+      lector.readAsArrayBuffer(archivo);
+    });
+  }
+
+  // ---- Editor de estudiantes matriculados ----
+  var modalEditor = document.getElementById('modal-editar-estudiante');
+  if (modalEditor) {
+    document.querySelectorAll('.btn-editar-matriculado').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = Number(btn.getAttribute('data-alumno-idx'));
+        var alumno = cargarAlumnos()[idx];
+        var inscripciones = cargarInscripciones().filter(function (x) { return x.alumnoIdx === idx; });
+        var ins = inscripciones[inscripciones.length - 1];
+        if (!alumno || !ins) return;
+
+        modalEditor.setAttribute('data-alumno-idx', idx);
+        document.getElementById('ed-titulo').textContent = 'Editar — ' + alumno.nombres + ' ' + alumno.apellidos;
+        document.getElementById('ed-nombres').value = alumno.nombres || '';
+        document.getElementById('ed-apellidos').value = alumno.apellidos || '';
+        document.getElementById('ed-documento').value = alumno.documento || '';
+        document.getElementById('ed-nacimiento').value = alumno.nacimiento || '';
+        document.getElementById('ed-programa').value = alumno.programa || PROGRAMAS[0];
+        document.getElementById('ed-programa2').value = alumno.programa2 || '';
+        document.getElementById('ed-profesor').value = alumno.profesor || '';
+        document.getElementById('ed-telefono').value = alumno.telefono || '';
+        document.getElementById('ed-correo').value = alumno.correo || '';
+        document.getElementById('ed-direccion').value = alumno.direccion || '';
+        document.getElementById('ed-acudiente').value = alumno.acudiente || '';
+        document.getElementById('ed-celular-acudiente').value = alumno.celularAcudiente || '';
+        document.getElementById('ed-obs').value = alumno.observaciones || '';
+
+        function formatearCOP(numero) { return '$ ' + Number(numero).toLocaleString('es-CO'); }
+        function repoblarTiposPlan() {
+          var selectTipo = document.getElementById('ed-tipo-plan');
+          var tipos = tiposPlanParaPrograma(alumno.programa);
+          selectTipo.innerHTML = tipos.map(function (t) { return '<option value="' + t.nombre + '">' + t.nombre + ' (' + t.horasSemana + 'h/sem)</option>'; }).join('');
+          selectTipo.value = ins.tipoPlanNombre;
+          if (selectTipo.value !== ins.tipoPlanNombre) selectTipo.selectedIndex = 0;
+          aplicarTipoEdicion();
+        }
+        function aplicarTipoEdicion() {
+          var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === document.getElementById('ed-tipo-plan').value; });
+          if (!tipo) return;
+          document.getElementById('ed-horas').value = tipo.horasSemana + ' h/semana';
+          document.getElementById('ed-valor').value = formatearCOP(tipo.valor);
+        }
+        repoblarTiposPlan();
+        document.getElementById('ed-tipo-plan').addEventListener('change', aplicarTipoEdicion);
+        document.getElementById('ed-descuento').value = ins.descuentoPorcentaje || 0;
+        document.getElementById('ed-fecha-inicio').value = ins.fechaInicio || '';
+        document.getElementById('ed-estado-txt').value = ETIQUETA_ESTADO[alumno.estado] || alumno.estado;
+
+        modalEditor.style.display = 'flex';
+      });
+    });
+
+    var btnCancelarEditor = document.getElementById('btn-cancelar-editor-estudiante');
+    if (btnCancelarEditor) btnCancelarEditor.addEventListener('click', function () { modalEditor.style.display = 'none'; });
+
+    var btnGuardarEditor = document.getElementById('btn-guardar-editor-estudiante');
+    if (btnGuardarEditor) {
+      btnGuardarEditor.addEventListener('click', function () {
+        var idx = Number(modalEditor.getAttribute('data-alumno-idx'));
+        var nombres = document.getElementById('ed-nombres').value.trim();
+        var apellidos = document.getElementById('ed-apellidos').value.trim();
+        if (!nombres || !apellidos) { alert('Nombres y apellidos son obligatorios.'); return; }
+
+        var alumnos = cargarAlumnos();
+        var alumno = alumnos[idx];
+        alumno.nombres = nombres;
+        alumno.apellidos = apellidos;
+        alumno.documento = document.getElementById('ed-documento').value.trim();
+        alumno.nacimiento = document.getElementById('ed-nacimiento').value;
+        alumno.programa = document.getElementById('ed-programa').value;
+        alumno.programa2 = document.getElementById('ed-programa2').value;
+        alumno.profesor = document.getElementById('ed-profesor').value;
+        alumno.telefono = document.getElementById('ed-telefono').value.trim();
+        alumno.correo = document.getElementById('ed-correo').value.trim();
+        alumno.direccion = document.getElementById('ed-direccion').value.trim();
+        alumno.acudiente = document.getElementById('ed-acudiente').value.trim();
+        alumno.celularAcudiente = document.getElementById('ed-celular-acudiente').value.trim();
+        alumno.observaciones = document.getElementById('ed-obs').value.trim();
+        guardarAlumnos(alumnos);
+
+        var inscripciones = cargarInscripciones();
+        var indicesIns = inscripciones.map(function (x, i) { return x.alumnoIdx === idx ? i : -1; }).filter(function (i) { return i !== -1; });
+        var ultimoIdx = indicesIns[indicesIns.length - 1];
+        if (ultimoIdx !== undefined) {
+          var tipoPlanNombre = document.getElementById('ed-tipo-plan').value;
+          var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === tipoPlanNombre; });
+          inscripciones[ultimoIdx].tipoPlanNombre = tipoPlanNombre;
+          if (tipo) { inscripciones[ultimoIdx].horas = tipo.horasSemana; inscripciones[ultimoIdx].valor = tipo.valor; }
+          inscripciones[ultimoIdx].descuentoPorcentaje = Number(document.getElementById('ed-descuento').value || 0);
+          inscripciones[ultimoIdx].fechaInicio = document.getElementById('ed-fecha-inicio').value;
+          guardarInscripciones(inscripciones);
+        }
+
+        modalEditor.style.display = 'none';
+        renderContenido('estudiantes');
+      });
+    }
+  }
 }
 
 function renderMatricula(sesion) {
