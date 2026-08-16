@@ -100,20 +100,23 @@
   nav.nav-modulos .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--azul-claro); flex-shrink: 0; }
 
   /* Modo "sobre la foto": solo en el Dashboard — el nav queda flotando,
-     transparente e integrado con el hero, sin franja blanca detrás. */
+     transparente e integrado con el hero, pegado justo debajo de la
+     franja azul del logo. */
   nav.nav-modulos.nav-sobre-foto {
-    background: linear-gradient(180deg, rgba(21,42,68,0.55) 0%, rgba(21,42,68,0.08) 100%);
-    border-bottom: 1px solid rgba(255,255,255,0.16);
-    backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
-    margin-bottom: -56px; position: relative;
+    background: linear-gradient(180deg, rgba(15,30,50,0.72) 0%, rgba(15,30,50,0.22) 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.22);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   }
   nav.nav-modulos.nav-sobre-foto a {
-    color: rgba(255,255,255,0.92); text-shadow: 0 1px 6px rgba(0,0,0,0.35); font-weight: 600;
+    color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,0.55); font-weight: 700;
   }
   nav.nav-modulos.nav-sobre-foto a:hover { color: #fff; }
   nav.nav-modulos.nav-sobre-foto a.activo { color: #fff; border-bottom-color: var(--naranja); }
-  nav.nav-modulos.nav-sobre-foto a.separador-grupo { border-left-color: rgba(255,255,255,0.28); }
-  nav.nav-modulos.nav-sobre-foto .dot { background: rgba(255,255,255,0.75); }
+  nav.nav-modulos.nav-sobre-foto a.separador-grupo { border-left-color: rgba(255,255,255,0.32); }
+  nav.nav-modulos.nav-sobre-foto .dot { background: #fff; }
+  /* Sube el contenido (la foto del hero) para que quede justo debajo del
+     nav, sin usar margin negativo sobre el propio nav sticky (poco fiable). */
+  nav.nav-modulos.nav-sobre-foto ~ main.contenido { margin-top: -46px; }
 
   main.contenido { position: relative; overflow: hidden; min-height: calc(100vh - 55px); }
   #piano-fondo { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 1.6%; padding: 0 4%; opacity: 0.07; pointer-events: none; z-index: 0; }
@@ -220,11 +223,12 @@
   .carta-modulo2 {
     background: #fff; border: none; border-radius: 16px; padding: 24px 22px; text-decoration: none; display: block;
     box-shadow: 0 10px 24px rgba(0,0,0,0.18); transition: transform 0.15s, box-shadow 0.15s;
+    text-align: center;
   }
   .carta-modulo2:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(0,0,0,0.28); }
   .carta-modulo2 .icono-modulo {
     width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: var(--azul-oscuro);
-    margin-bottom: 16px;
+    margin: 0 auto 16px;
   }
   .carta-modulo2 .icono-modulo svg { width: 100%; height: 100%; }
   .carta-modulo2 p.nombre { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--texto); }
@@ -280,6 +284,10 @@
   }
   .split-izq .marca-mini { display: flex; align-items: center; gap: 9px; font-family: var(--font-wordmark); font-size: 15px; font-weight: 600; opacity: 0.92; }
   .split-izq .marca-mini .punto { width: 8px; height: 8px; border-radius: 50%; background: var(--naranja); }
+  .split-izq .foto-lateral-form {
+    width: 100%; height: clamp(140px, 22vw, 220px); object-fit: cover; border-radius: 16px;
+    margin: 16px 0 6px; box-shadow: 0 10px 26px rgba(0,0,0,0.28); display: block;
+  }
   .split-izq h3 {
     font-family: var(--font-wordmark); font-weight: 500; font-style: italic; color: #fff;
     font-size: clamp(21px, 2.2vw, 27px); line-height: 1.22; margin: 22px 0 10px;
@@ -443,7 +451,7 @@ var MODULOS = [
   { key: 'profesores', label: 'Profesores', grupo: 'academia' },
   { key: 'cursos', label: 'Cursos y programas', grupo: 'academia' },
   { key: 'asistencia', label: 'Asistencia', grupo: 'academia' },
-  { key: 'evaluacion', label: 'Evaluación académica', grupo: 'seguimiento' },
+  { key: 'evaluacion', label: 'Avances académicos', grupo: 'seguimiento' },
   { key: 'comunicacion', label: 'Comunicación', grupo: 'seguimiento' },
   { key: 'inventario', label: 'Inventario', grupo: 'seguimiento' },
   { key: 'reportes', label: 'Reportes', grupo: 'seguimiento' },
@@ -643,11 +651,39 @@ var ETIQUETA_ASISTENCIA = { asistio:'Asistió', falta:'Falta', excusa:'Excusa', 
 // usar desde el registro manual si hiciera falta en el futuro).
 var ESTADOS_ASISTENCIA_RAPIDA = ['asistio', 'falta', 'excusa', 'recuperada', 'reprogramada'];
 var UMBRAL_ALERTA_FALTAS = 3;
-// Estado de la grilla de Asistencia (mismo patrón que Horarios): fecha real
-// que se está registrando (para saber qué día de la semana habilitar) y
-// filtro por programa/"General".
-var fechaAsistenciaSeleccionada = new Date().toISOString().slice(0, 10);
+// Estado de la grilla de Asistencia (mismo patrón que Horarios): la
+// asistencia se registra por SEMANA — cada columna (lunes a sábado) usa
+// su propia fecha real dentro de la semana elegida — y filtro por programa/"General".
+var semanaAsistenciaSeleccionada = semanaActualStr();
 var filtroProgramaAsistencia = 'General';
+
+// ---- Helpers de semana ISO (input type="week") ----
+function semanaActualStr() {
+  var hoy = new Date();
+  var d = new Date(Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()));
+  var dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  var inicioAnio = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  var numSemana = Math.ceil((((d - inicioAnio) / 86400000) + 1) / 7);
+  return d.getUTCFullYear() + '-W' + (numSemana < 10 ? '0' + numSemana : numSemana);
+}
+function lunesDeSemana(semanaStr) {
+  var partes = semanaStr.split('-W');
+  var anio = parseInt(partes[0], 10);
+  var semana = parseInt(partes[1], 10);
+  var simple = new Date(anio, 0, 1 + (semana - 1) * 7);
+  var diaSemana = simple.getDay();
+  var lunes = new Date(simple);
+  if (diaSemana <= 4) lunes.setDate(simple.getDate() - diaSemana + 1);
+  else lunes.setDate(simple.getDate() + 8 - diaSemana);
+  return lunes;
+}
+function fechaColumnaSemana(semanaStr, diaIndice) {
+  var lunes = lunesDeSemana(semanaStr);
+  var d = new Date(lunes);
+  d.setDate(d.getDate() + (diaIndice - 1));
+  return d.toISOString().slice(0, 10);
+}
 
 function cargarAsistencias() {
   var g = localStorage.getItem('jacquin_demo_asistencias');
@@ -705,8 +741,19 @@ function renderNavModulos(activo) {
     html += '<a href="#' + m.key + '" class="' + clases.trim() + '"><span class="dot"></span>' + m.label + badge + '</a>';
   });
   document.getElementById('nav-modulos').innerHTML = html;
-  // En el Dashboard el nav flota transparente, integrado con la foto del hero.
-  document.getElementById('nav-modulos').classList.toggle('nav-sobre-foto', activo === 'dashboard');
+  // En el Dashboard el nav flota transparente, integrado con la foto del hero,
+  // pegado justo debajo de la franja azul (se mide su alto real en vez de
+  // asumir un valor fijo, para que quede exacto en cualquier navegador).
+  var navEl = document.getElementById('nav-modulos');
+  var main = document.querySelector('main.contenido');
+  navEl.classList.toggle('nav-sobre-foto', activo === 'dashboard');
+  if (activo === 'dashboard') {
+    requestAnimationFrame(function () {
+      if (main) main.style.marginTop = '-' + navEl.offsetHeight + 'px';
+    });
+  } else if (main) {
+    main.style.marginTop = '';
+  }
 }
 
 // Un ícono distinto por módulo (líneas simples, heredan el color vía
@@ -755,7 +802,7 @@ var DESCRIPCION_MODULO = {
   horarios: 'Agenda semanal y calendario del año.',
   profesores: 'Perfiles, disponibilidad y espacio de trabajo.',
   cursos: 'Catálogo de programas y estudiantes por curso.',
-  asistencia: 'Registro diario por clase y alumno.',
+  asistencia: 'Registro semanal por clase y alumno.',
   evaluacion: 'Seguimiento cualitativo del progreso musical.',
   comunicacion: 'Mensajes y avisos a estudiantes y tutores.',
   inventario: 'Instrumentos y recursos de la academia.',
@@ -949,10 +996,10 @@ function renderEstudiantes() {
     '<div class="tarjeta-split">' +
       '<div class="split-izq">' +
         '<div class="marca-mini"><span class="punto"></span>Jacquin — Estudiantes</div>' +
+        '<img class="foto-lateral-form" src="evento-jacquin.jpg" alt="Recital de fin de año — Jacquin Academia Musical" />' +
         '<div>' +
           '<h3>Sumá un nuevo alumno a la academia.</h3>' +
           '<p class="bajada">Cargá sus datos y el programa musical que va a cursar — el estado inicial queda como "Preinscrito" hasta completar la Matrícula.</p>' +
-          '<div class="ilustracion">' + ILUSTRACION_ESTUDIANTES + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="split-der">' +
@@ -1140,13 +1187,11 @@ function renderMatricula(sesion) {
     '</div>';
 
   return '' +
-    '<div class="ancho-matricula">' +
-    panelBusqueda +
     panelInscribir +
+    panelBusqueda +
     '<div class="panel"><h2>Inscripciones (' + inscripciones.length + ')</h2>' +
     (inscripciones.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay inscripciones.</p>' :
      '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Plan</th><th>Inicio</th><th>Estado</th></tr></thead><tbody>' + filasInscripciones + '</tbody></table></div>') +
-    '</div>' +
     '</div>';
 }
 
@@ -1752,12 +1797,14 @@ function renderHorariosSemana(sesion) {
   var htmlModalAsignar =
     '<div id="modal-asignar" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:50; align-items:center; justify-content:center; padding:20px;">' +
     '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px;">' +
-    '<h2 style="margin-top:0;">Asignar estudiante</h2>' +
+    '<h2 style="margin-top:0;">Agregar estudiante</h2>' +
     '<p id="modal-asignar-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
-    '<div class="campo"><label>Estudiante</label><select id="as-nuevo-alumno">' +
-    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+    '<div class="campo"><label>Nombre de estudiante</label><input id="as-nombre" type="text" /></div>' +
+    '<div class="campo"><label>Programa</label><select id="as-programa">' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
     '</select></div>' +
-    '<button class="btn-primario" id="btn-confirmar-asignar">Asignar</button>' +
+    '<div class="campo"><label>Observaciones (opcional)</label><input id="as-observaciones" type="text" /></div>' +
+    '<button class="btn-primario" id="btn-confirmar-asignar">Agregar</button>' +
     '<button id="btn-cancelar-asignar" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
     '</div></div>';
 
@@ -1890,6 +1937,9 @@ function activarLogicaHorarios() {
       var clases = cargarClases();
       var c = clases[idx];
       document.getElementById('modal-asignar-info').textContent = c.programa + ' — ' + DIAS_SEMANA[c.dia] + ' ' + c.hora;
+      document.getElementById('as-nombre').value = '';
+      document.getElementById('as-programa').value = c.programa;
+      document.getElementById('as-observaciones').value = '';
       modalAsignar.style.display = 'flex';
     });
   });
@@ -1900,21 +1950,33 @@ function activarLogicaHorarios() {
   if (btnConfirmarAsignar) {
     btnConfirmarAsignar.addEventListener('click', function () {
       var idxClase = Number(modalAsignar.getAttribute('data-clase-idx'));
-      var idxAlumno = Number(document.getElementById('as-nuevo-alumno').value);
+      var nombreCompleto = document.getElementById('as-nombre').value.trim();
+      var programaElegido = document.getElementById('as-programa').value;
+      var observaciones = document.getElementById('as-observaciones').value.trim();
+      if (!nombreCompleto) { alert('El nombre del estudiante es obligatorio.'); return; }
+
+      // El horario es solo un espacio de tiempo — no se liga a un profesor
+      // fijo (los profesores pueden ir variando) — por eso acá solo se pide
+      // nombre, programa y observaciones, sin tocar clase.profesor.
+      var partes = nombreCompleto.split(' ');
+      var alumnos = cargarAlumnos();
+      var nuevoIdx = alumnos.length;
+      alumnos.push({
+        nombres: partes[0] || nombreCompleto,
+        apellidos: partes.slice(1).join(' '),
+        documento: '', nacimiento: '', programa: programaElegido, programa2: '',
+        profesor: '', telefono: '', correo: '', direccion: '', acudiente: '', celularAcudiente: '',
+        observaciones: observaciones, estado: 'activo', fechaMatricula: new Date().toISOString().slice(0, 10)
+      });
+      guardarAlumnos(alumnos);
+
       var clases = cargarClases();
       var c = clases[idxClase];
       c.alumnos = c.alumnos || [];
       c.alumnosFechas = c.alumnosFechas || {};
-      if (c.alumnos.indexOf(idxAlumno) === -1) {
-        c.alumnos.push(idxAlumno);
-        c.alumnosFechas[idxAlumno] = new Date().toISOString().slice(0, 10);
-      }
+      c.alumnos.push(nuevoIdx);
+      c.alumnosFechas[nuevoIdx] = new Date().toISOString().slice(0, 10);
       guardarClases(clases);
-
-      // Mismo criterio: asignar acá también sincroniza el profesor del estudiante.
-      var alumnos = cargarAlumnos();
-      alumnos[idxAlumno].profesor = c.profesor;
-      guardarAlumnos(alumnos);
 
       modalAsignar.style.display = 'none';
       renderContenido('horarios');
@@ -1933,19 +1995,19 @@ function renderAsistencia(sesion) {
   var asistencias = cargarAsistencias();
   var esProfesor = sesion.rol === 'PROFESOR';
 
-  var fecha = fechaAsistenciaSeleccionada;
-  var fechaObj = new Date(fecha + 'T00:00:00');
-  var diaSemanaSeleccionado = fechaObj.getDay(); // 0=domingo..6=sábado, coincide con clase.dia
+  var semana = semanaAsistenciaSeleccionada;
+  var hoyStr = new Date().toISOString().slice(0, 10);
 
   var filasGrilla = FRANJAS.map(function (franja) {
     var celdas = COLUMNAS_DIAS.map(function (dia) {
       var esSabado = dia === 6;
       var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
+      var fechaCelda = fechaColumnaSemana(semana, dia);
       var ocupantes = clasesDeCelda(clases, dia, hora);
       if (esProfesor) ocupantes = ocupantes.filter(function (o) { return o.c.profesor === sesion.email; });
       if (filtroProgramaAsistencia !== 'General') ocupantes = ocupantes.filter(function (o) { return o.c.programa === filtroProgramaAsistencia; });
 
-      var esColumnaActiva = dia === diaSemanaSeleccionado;
+      var esHoy = fechaCelda === hoyStr;
 
       var contenidoOcupantes = ocupantes.map(function (o) {
         // Un estudiante solo debe salir para tomar asistencia desde el día
@@ -1954,12 +2016,12 @@ function renderAsistencia(sesion) {
           var al = alumnos[idxAlumno];
           if (!al) return false;
           var fechaAlta = al.fechaMatricula || '2000-01-01';
-          return fechaAlta <= fecha;
+          return fechaAlta <= fechaCelda;
         });
         var filasEstudiantes = listaAlumnos.map(function (idxAlumno) {
           var alumno = alumnos[idxAlumno];
           if (!alumno) return '';
-          var registro = asistencias.find(function (a) { return a.alumnoIdx === idxAlumno && a.claseIdx === o.i && a.fecha === fecha; });
+          var registro = asistencias.find(function (a) { return a.alumnoIdx === idxAlumno && a.claseIdx === o.i && a.fecha === fechaCelda; });
           var estadoActual = registro ? registro.estado : '';
           var colorEstado = estadoActual ? (COLOR_ESTADO_ASISTENCIA[estadoActual] || '#ccc') : '#ccc';
           var opciones = '<option value="">—</option>' +
@@ -1967,7 +2029,7 @@ function renderAsistencia(sesion) {
           return '' +
             '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:3px;">' +
             '<span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:78px;" title="' + alumno.nombres + ' ' + alumno.apellidos + '">' + alumno.nombres + ' ' + alumno.apellidos.split(' ')[0] + '</span>' +
-            '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '" style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:78px;">' +
+            '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '" data-fecha="' + fechaCelda + '" style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:78px;">' +
             opciones + '</select>' +
             '</div>';
         }).join('');
@@ -1978,17 +2040,19 @@ function renderAsistencia(sesion) {
           '</div>';
       }).join('');
 
-      var etiquetaHoraCelda = '<div style="font-size:10px; font-weight:700; color:' + (esColumnaActiva ? 'var(--azul-oscuro)' : 'var(--muted)') + '; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
+      var etiquetaHoraCelda = '<div style="font-size:10px; font-weight:700; color:' + (esHoy ? 'var(--azul-oscuro)' : 'var(--muted)') + '; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
 
-      return '<td style="border-left:3px solid ' + (esColumnaActiva ? 'var(--azul-oscuro)' : '#ddd') + '; background:' + (esColumnaActiva ? '#fff' : '#f7f6f3') + '; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + '</td>';
+      return '<td style="border-left:3px solid ' + (esHoy ? 'var(--naranja)' : '#ddd') + '; background:#fff; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + '</td>';
     }).join('');
 
     return '<tr><td style="font-size:11px; color:var(--muted); font-weight:600; padding:6px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
   }).join('');
 
   var encabezado = '<tr><td></td>' + COLUMNAS_DIAS.map(function (d) {
-    var activo = d === diaSemanaSeleccionado;
-    return '<td style="font-size:12px; font-weight:700; text-align:center; padding:6px; color:' + (activo ? 'var(--azul-oscuro)' : 'var(--muted)') + ';">' + DIAS_SEMANA[d] + (activo ? ' •' : '') + '</td>';
+    var fechaCol = fechaColumnaSemana(semana, d);
+    var esHoy = fechaCol === hoyStr;
+    var fechaCorta = fechaCol.slice(8, 10) + '/' + fechaCol.slice(5, 7);
+    return '<td style="font-size:12px; font-weight:700; text-align:center; padding:6px; color:' + (esHoy ? 'var(--naranja)' : 'var(--azul-oscuro)') + ';">' + DIAS_SEMANA[d] + '<br><span style="font-size:10.5px; font-weight:600; color:var(--muted);">' + fechaCorta + '</span></td>';
   }).join('') + '</tr>';
 
   var botonesFiltro = '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;">' +
@@ -2005,12 +2069,12 @@ function renderAsistencia(sesion) {
     '</div>';
 
   var grillaHtml =
-    '<div class="campo" style="max-width:220px; margin-bottom:14px;"><label>Fecha a registrar</label><input id="asis-fecha-grilla" type="date" value="' + fecha + '" /></div>' +
+    '<div class="campo" style="max-width:220px; margin-bottom:14px;"><label>Semana a registrar</label><input id="asis-semana-grilla" type="week" value="' + semana + '" /></div>' +
     botonesFiltro +
     '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:4px; width:100%;">' + encabezado + filasGrilla + '</table></div>' +
     leyenda;
 
-  // Historial completo (todas las fechas) — se conserva como consulta aparte de la grilla del día.
+  // Historial completo (todas las fechas) — se conserva como consulta aparte de la grilla de la semana.
   var clasesVisiblesHistorial = esProfesor ? clases.filter(function (c) { return c.profesor === sesion.email; }) : clases;
   var asistenciasHistorial = esProfesor
     ? asistencias.filter(function (a) { return clasesVisiblesHistorial.indexOf(clases[a.claseIdx]) !== -1; })
@@ -2026,7 +2090,7 @@ function renderAsistencia(sesion) {
 
   return '' +
     '<div class="panel"><h2>Asistencia' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la fecha real de la clase — el día que le corresponde queda resaltado, pero podés registrar en cualquier columna cuando lo necesites (por ejemplo, para poner al día una clase atrasada). Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la semana a registrar — cada columna usa su fecha real (lunes a sábado). El día de hoy queda resaltado en naranja. Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
     grillaHtml +
     '</div>' +
 
@@ -2037,10 +2101,10 @@ function renderAsistencia(sesion) {
 }
 
 function activarLogicaAsistencia() {
-  var campoFecha = document.getElementById('asis-fecha-grilla');
-  if (campoFecha) {
-    campoFecha.addEventListener('change', function () {
-      fechaAsistenciaSeleccionada = this.value;
+  var campoSemana = document.getElementById('asis-semana-grilla');
+  if (campoSemana) {
+    campoSemana.addEventListener('change', function () {
+      if (this.value) semanaAsistenciaSeleccionada = this.value;
       renderContenido('asistencia');
     });
   }
@@ -2056,10 +2120,11 @@ function activarLogicaAsistencia() {
     select.addEventListener('change', function () {
       var alumnoIdx = Number(this.getAttribute('data-alumno-idx'));
       var claseIdx = Number(this.getAttribute('data-clase-idx'));
+      var fechaCelda = this.getAttribute('data-fecha');
       var estado = this.value;
 
       var asistencias = cargarAsistencias();
-      var existenteIdx = asistencias.findIndex(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fechaAsistenciaSeleccionada; });
+      var existenteIdx = asistencias.findIndex(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fechaCelda; });
 
       if (!estado) {
         // Volver a "—" borra el registro de ese día.
@@ -2067,7 +2132,7 @@ function activarLogicaAsistencia() {
       } else if (existenteIdx !== -1) {
         asistencias[existenteIdx].estado = estado;
       } else {
-        asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fechaAsistenciaSeleccionada, estado: estado });
+        asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fechaCelda, estado: estado });
       }
       guardarAsistencias(asistencias);
 
@@ -2325,13 +2390,17 @@ function renderEvaluacionMensualPanel(sesion) {
     var chip = evaluado
       ? '<span class="chip-rol" style="background:var(--verde); color:#fff;">Evaluado este mes</span>'
       : '<span class="chip-rol" style="background:var(--naranja); color:#fff;">Pendiente este mes</span>';
-    var boton = '<button class="btn-primario btn-evaluar-mensual" data-alumno-idx="' + o.i + '" style="max-width:150px; font-size:12px; padding:6px 10px;">' + (evaluado ? 'Editar' : 'Evaluar') + '</button>';
-    return '<tr><td>' + o.a.nombres + ' ' + o.a.apellidos + '</td><td>' + edadTxt + '</td><td>' + curso + '</td><td>' + chip + '</td><td>' + boton + '</td></tr>';
+    var botones = '<div style="display:flex; gap:6px; flex-wrap:wrap;">' +
+      '<button class="btn-primario btn-evaluar-mensual" data-alumno-idx="' + o.i + '" style="max-width:110px; font-size:12px; padding:6px 10px;">' + (evaluado ? 'Editar' : 'Evaluar') + '</button>' +
+      (evaluado ? '<button class="btn-ver-resultado-mensual" data-alumno-idx="' + o.i + '" data-mes="' + mesActual + '" style="font-size:12px; padding:6px 10px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">Ver avance</button>' : '') +
+      '</div>';
+    return '<tr><td>' + o.a.nombres + ' ' + o.a.apellidos + '</td><td>' + edadTxt + '</td><td>' + curso + '</td><td>' + chip + '</td><td>' + botones + '</td></tr>';
   }).join('');
 
   var historialFilas = evaluacionesMensuales.slice().sort(function (a, b) { return (b.mes || '').localeCompare(a.mes || ''); }).map(function (e) {
     var alumno = alumnos[e.alumnoIdx];
-    return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td><td>' + e.mes + '</td><td>' + (e.fecha || '—') + '</td><td>' + (e.observaciones || '—') + '</td></tr>';
+    var boton = '<button class="btn-ver-resultado-mensual" data-alumno-idx="' + e.alumnoIdx + '" data-mes="' + e.mes + '" style="font-size:11px; padding:5px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">Ver avance</button>';
+    return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td><td>' + e.mes + '</td><td>' + (e.fecha || '—') + '</td><td>' + (e.observaciones || '—') + '</td><td>' + boton + '</td></tr>';
   }).join('');
 
   var htmlModal =
@@ -2349,16 +2418,29 @@ function renderEvaluacionMensualPanel(sesion) {
     '<button id="btn-cancelar-eval-mensual" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
     '</div></div>';
 
+  // Recuadro externo (modal de solo lectura) para ver el detalle completo
+  // de un avance ya realizado — las 8 respuestas + observaciones.
+  var htmlModalResultado =
+    '<div id="modal-ver-resultado-mensual" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto;">' +
+    '<h2 style="margin-top:0;" id="modal-ver-resultado-titulo">Resultado del avance</h2>' +
+    '<p id="modal-ver-resultado-sub" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
+    '<div id="modal-ver-resultado-respuestas"></div>' +
+    '<p style="font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:14px 0 4px;">Observaciones</p>' +
+    '<p id="modal-ver-resultado-obs" style="font-size:13px; margin:0 0 16px;">—</p>' +
+    '<button id="btn-cerrar-ver-resultado" style="width:100%; background:var(--azul-oscuro); color:#fff; border:none; border-radius:8px; height:38px; font-size:13px; cursor:pointer; font-family:var(--font-ui);">Cerrar</button>' +
+    '</div></div>';
+
   return '' +
     '<div class="panel"><h2>Estudiantes — ' + mesLegible + '</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">A cada estudiante hay que hacerle esta evaluación al menos una vez por mes. Cuando empieza un mes nuevo, vuelve a aparecer como "Pendiente este mes" aunque ya se le haya hecho en meses anteriores.</p>' +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Edad</th><th>Curso</th><th>Estado del mes</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
     '</div>' +
-    '<div class="panel"><h2>Historial de evaluaciones mensuales</h2>' +
-    (historialFilas ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Mes</th><th>Fecha registrada</th><th>Observaciones</th></tr></thead><tbody>' + historialFilas + '</tbody></table></div>'
+    '<div class="panel"><h2>Historial de avances académicos</h2>' +
+    (historialFilas ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Mes</th><th>Fecha registrada</th><th>Observaciones</th><th></th></tr></thead><tbody>' + historialFilas + '</tbody></table></div>'
       : '<p style="font-size:13px; color:var(--muted);">Sin evaluaciones mensuales registradas todavía.</p>') +
     '</div>' +
-    htmlModal;
+    htmlModal + htmlModalResultado;
 }
 
 function activarLogicaEvaluacionMensual() {
@@ -2406,6 +2488,41 @@ function activarLogicaEvaluacionMensual() {
       modal.style.display = 'none';
       renderContenido('evaluacion');
     });
+  }
+
+  // Recuadro externo "Ver resultado" — muestra el detalle completo (8
+  // respuestas + observaciones) de un avance ya realizado, sin editarlo.
+  var modalResultado = document.getElementById('modal-ver-resultado-mensual');
+  if (modalResultado) {
+    document.querySelectorAll('.btn-ver-resultado-mensual').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var alumnoIdx = Number(btn.getAttribute('data-alumno-idx'));
+        var mes = btn.getAttribute('data-mes');
+        var alumno = cargarAlumnos()[alumnoIdx];
+        var registro = cargarEvaluacionesMensuales().find(function (e) { return e.alumnoIdx === alumnoIdx && e.mes === mes; });
+        if (!registro) return;
+
+        var mesLegibleReg = new Date(mes + '-01T00:00:00').toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+        document.getElementById('modal-ver-resultado-titulo').textContent = 'Resultado — ' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '');
+        document.getElementById('modal-ver-resultado-sub').textContent = mesLegibleReg + ' · registrado el ' + (registro.fecha || '—');
+
+        var htmlRespuestas = PREGUNTAS_EVAL_MENSUAL.map(function (p) {
+          var valor = (registro.respuestas && registro.respuestas[p.id]) || 'normal';
+          var color = COLOR_ESCALA_MENSUAL[valor] || 'var(--muted)';
+          return '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #eee;">' +
+            '<span style="font-size:12.5px;">' + p.texto + '</span>' +
+            '<span style="font-size:11px; font-weight:700; color:#fff; background:' + color + '; padding:3px 10px; border-radius:10px; white-space:nowrap;">' + ETIQUETA_ESCALA_MENSUAL[valor] + '</span>' +
+            '</div>';
+        }).join('');
+        document.getElementById('modal-ver-resultado-respuestas').innerHTML = htmlRespuestas;
+        document.getElementById('modal-ver-resultado-obs').textContent = registro.observaciones || '—';
+
+        modalResultado.style.display = 'flex';
+      });
+    });
+
+    var btnCerrarResultado = document.getElementById('btn-cerrar-ver-resultado');
+    if (btnCerrarResultado) btnCerrarResultado.addEventListener('click', function () { modalResultado.style.display = 'none'; });
   }
 }
 
@@ -2531,7 +2648,7 @@ function renderEvaluacion(sesion) {
   var contenido = tabEvaluacionActiva === 'mensual' ? renderEvaluacionMensualPanel(sesion) : renderEvaluacionLineaPanel(sesion);
 
   return '' +
-    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Evaluación académica</h1>' +
+    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Avances académicos</h1>' +
     '<div style="display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;">' + botonesPestañas + '</div>' +
     contenido;
 }
