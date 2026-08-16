@@ -435,6 +435,16 @@ function formatearCOPContable(numero) {
   return '$ ' + Math.round(Number(numero) || 0).toLocaleString('es-CO');
 }
 
+// ---- Inventario ----
+var CATEGORIAS_INVENTARIO = ['Instrumento musical', 'Mobiliario', 'Tecnología y audio', 'Material didáctico', 'Insumos y accesorios', 'Otro'];
+var ESTADOS_INVENTARIO = ['Nuevo', 'Bueno', 'Regular', 'Dañado', 'Fuera de servicio'];
+
+function cargarInventario() {
+  var g = localStorage.getItem('jacquin_demo_inventario');
+  return g ? JSON.parse(g) : [];
+}
+function guardarInventario(lista) { localStorage.setItem('jacquin_demo_inventario', JSON.stringify(lista)); }
+
 function cargarPagosRegistrados() {
   var g = localStorage.getItem('jacquin_demo_pagos_registrados');
   return g ? JSON.parse(g) : [];
@@ -1390,7 +1400,6 @@ function renderHorariosSemana(sesion) {
     '</select></div>' +
     '<button class="btn-primario" id="btn-confirmar-agendar">Confirmar</button>' +
     '<button id="btn-cancelar-agendar" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
-    '<p id="msj-cruce" style="font-size:12px; color:var(--rojo); display:none; margin-top:8px;">Ese profesor ya tiene una clase en ese día y horario.</p>' +
     '</div></div>';
 
   var htmlModalAsignar =
@@ -1471,7 +1480,6 @@ function activarLogicaHorarios() {
       modalAgendar.setAttribute('data-dia', dia);
       modalAgendar.setAttribute('data-hora', hora);
       document.getElementById('modal-franja-info').textContent = DIAS_SEMANA[dia] + ' — ' + hora;
-      document.getElementById('msj-cruce').style.display = 'none';
       if (modalAgendar) modalAgendar.style.display = 'flex';
     });
   });
@@ -1485,8 +1493,6 @@ function activarLogicaHorarios() {
       var hora = modalAgendar.getAttribute('data-hora');
       var profesor = document.getElementById('mo-profesor').value;
       var clases = cargarClases();
-      var cruce = clases.some(function (c) { return c.dia === dia && c.hora === hora && c.profesor === profesor; });
-      if (cruce) { document.getElementById('msj-cruce').style.display = 'block'; return; }
 
       var alumnoSel = document.getElementById('mo-alumno').value;
       var nuevaClase = {
@@ -1742,32 +1748,21 @@ function renderProfesores(sesion) {
     '<div class="grilla-2col">' +
     '<div class="campo"><label>Nombre</label><input id="np-nombre" type="text" /></div>' +
     '<div class="campo"><label>Email</label><input id="np-email" type="email" /></div>' +
-    '<div class="campo"><label>Instrumentos que enseña</label><select id="np-instrumentos" multiple size="5">' +
+    '<div class="campo"><label>Instrumento que enseña</label><select id="np-instrumentos">' +
     PROGRAMAS.map(function (pr) { return '<option value="' + pr + '">' + pr + '</option>'; }).join('') +
     '</select></div>' +
+    '<div class="campo"><label>Teléfono</label><input id="np-telefono" type="text" /></div>' +
+    '<div class="campo"><label>Experiencia</label><input id="np-experiencia" type="text" placeholder="Ej: 8 años enseñando piano clásico" /></div>' +
+    '<div class="campo"><label>Fecha de nacimiento (opcional)</label><input id="np-nacimiento" type="date" /></div>' +
     '</div>' +
     '<button class="btn-primario" id="btn-agregar-profesor" style="max-width:280px;">Agregar profesor</button>' +
-    '<p id="msj-profesor-nuevo" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Profesor agregado — ya puede iniciar sesión (cualquier contraseña sirve en esta demo) y asignarle estudiantes/horarios.</p>' +
+    '<p id="msj-profesor-nuevo" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Profesor agregado — ya puede iniciar sesión (cualquier contraseña sirve en esta demo).</p>' +
     '</div>' +
 
     '<div class="panel"><h2>Perfiles</h2>' +
     (profesores.length === 0 ? '<p style="font-size:13px; color:var(--muted);">—</p>' :
-     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Instrumentos</th><th>Teléfono</th></tr></thead><tbody>' + filasPerfil + '</tbody></table></div>') +
-    '</div>' +
-
-    (profesores.length === 0 ? '' :
-    '<div class="panel"><h2>Completar perfil</h2>' +
-    '<div class="grilla-2col">' +
-    '<div class="campo"><label>Profesor</label><select id="pf-usuario">' +
-    profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
-    '</select></div>' +
-    '<div class="campo"><label>Teléfono</label><input id="pf-telefono" type="text" /></div>' +
-    '<div class="campo"><label>Experiencia</label><input id="pf-experiencia" type="text" placeholder="Ej: 8 años enseñando piano clásico" /></div>' +
-    '<div class="campo"><label>Fecha de nacimiento (opcional)</label><input id="pf-nacimiento" type="date" /></div>' +
-    '</div>' +
-    '<button class="btn-primario" id="btn-guardar-perfil" style="max-width:280px;">Guardar perfil</button>' +
-    '<p id="msj-perfil-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Perfil actualizado.</p>' +
-    '</div>');
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Instrumento</th><th>Teléfono</th></tr></thead><tbody>' + filasPerfil + '</tbody></table></div>') +
+    '</div>';
 }
 
 function activarLogicaProfesores() {
@@ -1782,33 +1777,19 @@ function activarLogicaProfesores() {
       usuarios.push({ nombre: nombre, email: email, rol: 'PROFESOR' });
       guardarUsuarios(usuarios);
 
-      var seleccion = Array.prototype.slice.call(document.getElementById('np-instrumentos').selectedOptions).map(function (o) { return o.value; });
-      if (seleccion.length) {
-        var perfiles = cargarPerfilesProfesor();
-        perfiles[email] = { instrumentos: seleccion.join(', '), telefono: '', experiencia: '' };
-        guardarPerfilesProfesor(perfiles);
-      }
+      var perfiles = cargarPerfilesProfesor();
+      perfiles[email] = {
+        instrumentos: document.getElementById('np-instrumentos').value,
+        telefono: document.getElementById('np-telefono').value.trim(),
+        experiencia: document.getElementById('np-experiencia').value.trim(),
+        nacimiento: document.getElementById('np-nacimiento').value
+      };
+      guardarPerfilesProfesor(perfiles);
 
       document.getElementById('msj-profesor-nuevo').style.display = 'block';
       setTimeout(function () { renderContenido('profesores'); }, 700);
     });
   }
-
-  var btn = document.getElementById('btn-guardar-perfil');
-  if (!btn) return;
-  btn.addEventListener('click', function () {
-    var email = document.getElementById('pf-usuario').value;
-    var perfiles = cargarPerfilesProfesor();
-    var instrumentosPrevios = (perfiles[email] && perfiles[email].instrumentos) || '';
-    perfiles[email] = {
-      instrumentos: instrumentosPrevios, // se define al agregar el profesor, no se edita acá
-      telefono: document.getElementById('pf-telefono').value.trim(),
-      experiencia: document.getElementById('pf-experiencia').value.trim(),
-      nacimiento: document.getElementById('pf-nacimiento').value
-    };
-    guardarPerfilesProfesor(perfiles);
-    document.getElementById('msj-perfil-ok').style.display = 'block';
-  });
 }
 
 function renderCursos() {
@@ -2255,40 +2236,182 @@ function panelNomina(esAdmin) {
     '</div>';
 }
 
-function panelResumenContable() {
-  var totalIngresos = cargarIngresos().reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
-  var totalGastos = cargarGastos().reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
-  var totalCompras = cargarCompras().reduce(function (s, r) { return s + Number(r.valorTotal || 0); }, 0);
-  var totalNomina = cargarNomina().reduce(function (s, r) { return s + Number(r.neto || 0); }, 0);
-  var balance = totalIngresos - totalGastos - totalCompras - totalNomina;
+// Fila de barra horizontal para desglose por categoría (mismo patrón visual
+// que el donut/barras del archivo de referencia, simplificado a CSS).
+function barraCategoriaContable(etiqueta, valor, max, color) {
+  var pct = max > 0 ? Math.round((valor / max) * 100) : 0;
+  return '' +
+    '<div style="margin-bottom:12px;">' +
+      '<div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;"><span>' + etiqueta + '</span><span style="font-weight:600;">' + formatearCOPContable(valor) + '</span></div>' +
+      '<div style="background:var(--beige); border-radius:6px; height:8px; overflow:hidden;"><div style="width:' + pct + '%; height:100%; background:' + color + ';"></div></div>' +
+    '</div>';
+}
 
-  function tarjetaKPI(titulo, valor, color) {
-    return '<div class="panel" style="border-top:4px solid ' + color + ';">' +
-      '<p style="font-size:12px; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:0.04em;">' + titulo + '</p>' +
-      '<p style="margin:0; font-size:22px; font-weight:700; color:' + color + ';">' + formatearCOPContable(valor) + '</p>' +
-      '</div>';
-  }
+function tarjetaKPIContable(titulo, valor, color) {
+  return '<div class="panel" style="border-top:4px solid ' + color + ';">' +
+    '<p style="font-size:12px; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:0.04em;">' + titulo + '</p>' +
+    '<p style="margin:0; font-size:22px; font-weight:700; color:' + color + ';">' + formatearCOPContable(valor) + '</p>' +
+    '</div>';
+}
+
+// Combina categorías de gastos (texto libre en categoria) y compras en un solo
+// mapa "categoría → total", igual que el archivo de referencia (que suma
+// gastos + compras + nómina agregada para armar las barras de egresos).
+function categoriasEgresoContable(gastos, compras, totalNomina) {
+  var mapa = {};
+  gastos.forEach(function (r) { mapa[r.categoria] = (mapa[r.categoria] || 0) + Number(r.valor || 0); });
+  compras.forEach(function (r) { mapa[r.categoria] = (mapa[r.categoria] || 0) + Number(r.valorTotal || 0); });
+  if (totalNomina > 0) mapa['Nómina'] = (mapa['Nómina'] || 0) + totalNomina;
+  return mapa;
+}
+
+function categoriasIngresoContable(ingresos) {
+  var mapa = {};
+  ingresos.forEach(function (r) { mapa[r.categoria] = (mapa[r.categoria] || 0) + Number(r.valor || 0); });
+  return mapa;
+}
+
+function ordenarCategorias(mapa) {
+  return Object.keys(mapa).map(function (k) { return [k, mapa[k]]; }).sort(function (a, b) { return b[1] - a[1]; });
+}
+
+function tablaMovimientosContable(movimientos) {
+  if (movimientos.length === 0) return '<p style="font-size:13px; color:var(--muted);">No hay movimientos registrados.</p>';
+  var filas = movimientos.map(function (m) {
+    return filaTablaContable([m.fecha || '—', m.modulo, m.concepto,
+      '<span class="chip-rol">' + (m.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong style="color:' + (m.tipo === 'in' ? 'var(--verde)' : 'var(--rojo)') + ';">' + (m.tipo === 'in' ? '+ ' : '− ') + formatearCOPContable(m.valor) + '</strong>']);
+  }).join('');
+  return '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Módulo</th><th>Concepto</th><th>Estado</th><th>Valor</th></tr></thead><tbody>' + filas + '</tbody></table></div>';
+}
+
+// ---- Resumen general — visión global desde el inicio hasta hoy, con
+// desglose por categoría y últimos movimientos (tomado como referencia
+// de renderDashboard() del proyecto Neuro Tone, adaptado sin gráficos SVG).
+function panelResumenGeneral() {
+  var ingresos = cargarIngresos(), gastos = cargarGastos(), compras = cargarCompras(), nomina = cargarNomina();
+  var totalIngresos = ingresos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var totalGastos = gastos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var totalCompras = compras.reduce(function (s, r) { return s + Number(r.valorTotal || 0); }, 0);
+  var totalNomina = nomina.reduce(function (s, r) { return s + Number(r.neto || 0); }, 0);
+  var egresosTotal = totalGastos + totalCompras + totalNomina;
+  var balance = totalIngresos - egresosTotal;
+
+  var pendientes = [].concat(
+    gastos.filter(function (r) { return r.estado === 'pendiente'; }).map(function (r) { return Number(r.valor || 0); }),
+    compras.filter(function (r) { return r.estado === 'pendiente'; }).map(function (r) { return Number(r.valorTotal || 0); }),
+    nomina.filter(function (r) { return r.estado === 'pendiente'; }).map(function (r) { return Number(r.neto || 0); })
+  );
+  var totalPendiente = pendientes.reduce(function (a, b) { return a + b; }, 0);
+
+  var catIngreso = ordenarCategorias(categoriasIngresoContable(ingresos)).slice(0, 6);
+  var catEgreso = ordenarCategorias(categoriasEgresoContable(gastos, compras, totalNomina)).slice(0, 6);
+  var maxIn = Math.max(1, catIngreso.reduce(function (m, e) { return Math.max(m, e[1]); }, 0));
+  var maxOut = Math.max(1, catEgreso.reduce(function (m, e) { return Math.max(m, e[1]); }, 0));
+
+  var movimientos = [].concat(
+    ingresos.map(function (r) { return { fecha: r.fecha, modulo: 'Ingreso', concepto: r.concepto, estado: r.estado, valor: Number(r.valor || 0), tipo: 'in' }; }),
+    gastos.map(function (r) { return { fecha: r.fecha, modulo: 'Gasto', concepto: r.concepto, estado: r.estado, valor: Number(r.valor || 0), tipo: 'out' }; }),
+    compras.map(function (r) { return { fecha: r.fecha, modulo: 'Compra', concepto: r.articulo, estado: r.estado, valor: Number(r.valorTotal || 0), tipo: 'out' }; }),
+    nomina.map(function (r) { return { fecha: r.mes, modulo: 'Nómina', concepto: r.empleado, estado: r.estado, valor: Number(r.neto || 0), tipo: 'out' }; })
+  ).sort(function (a, b) { return (b.fecha || '').localeCompare(a.fecha || ''); }).slice(0, 8);
 
   return '' +
     '<div class="grilla-2col" style="align-items:stretch;">' +
-      tarjetaKPI('Total ingresos', totalIngresos, 'var(--verde)') +
-      tarjetaKPI('Total gastos', totalGastos, 'var(--rojo)') +
-      tarjetaKPI('Total compras', totalCompras, 'var(--naranja)') +
-      tarjetaKPI('Total nómina', totalNomina, 'var(--azul-oscuro)') +
+      tarjetaKPIContable('Total ingresos', totalIngresos, 'var(--verde)') +
+      tarjetaKPIContable('Total gastos', totalGastos, 'var(--rojo)') +
+      tarjetaKPIContable('Total compras', totalCompras, 'var(--naranja)') +
+      tarjetaKPIContable('Total nómina', totalNomina, 'var(--azul-oscuro)') +
+      tarjetaKPIContable('Pendiente por pagar', totalPendiente, 'var(--naranja)') +
+      tarjetaKPIContable('Balance general', balance, balance >= 0 ? 'var(--verde)' : 'var(--rojo)') +
     '</div>' +
-    '<div class="panel" style="border-top:4px solid ' + (balance >= 0 ? 'var(--verde)' : 'var(--rojo)') + ';">' +
-      '<p style="font-size:12px; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:0.04em;">Balance (ingresos − gastos − compras − nómina)</p>' +
-      '<p style="margin:0; font-size:26px; font-weight:700; color:' + (balance >= 0 ? 'var(--verde)' : 'var(--rojo)') + ';">' + formatearCOPContable(balance) + '</p>' +
+    '<div class="grilla-2col" style="align-items:start;">' +
+      '<div class="panel"><h2>Ingresos por categoría</h2>' +
+      (catIngreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin datos aún.</p>' :
+       catIngreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxIn, 'var(--verde)'); }).join('')) +
+      '</div>' +
+      '<div class="panel"><h2>Egresos por categoría</h2>' +
+      (catEgreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin datos aún.</p>' :
+       catEgreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxOut, 'var(--rojo)'); }).join('')) +
+      '</div>' +
     '</div>' +
+    '<div class="panel"><h2>Últimos movimientos</h2>' + tablaMovimientosContable(movimientos) + '</div>' +
     '<p style="font-size:11px; color:var(--muted);">Resumen financiero visible solo para Administración — la Secretaría puede registrar movimientos pero no ve estos totales.</p>';
+}
+
+// ---- Balance mensual — se elige un mes y se recalcula todo para ese
+// período (tomado como referencia de renderBalanceMensual() de Neuro Tone).
+var mesBalanceContable = '';
+
+function cambiarMesBalanceContable(valor) {
+  mesBalanceContable = valor;
+  renderContenido('contabilidad');
+}
+
+function panelBalanceMensual() {
+  var selector =
+    '<div class="panel"><h2>Balance mensual</h2>' +
+    '<div class="campo" style="max-width:220px;"><label>Selecciona un mes</label>' +
+    '<input type="month" id="bal-mes" value="' + mesBalanceContable + '" onchange="cambiarMesBalanceContable(this.value)" /></div>' +
+    '</div>';
+
+  if (!mesBalanceContable) {
+    return selector + '<p style="font-size:13px; color:var(--muted);">Elegí un mes para ver el balance financiero completo de ese período.</p>';
+  }
+
+  var ym = mesBalanceContable;
+  var ingresos = cargarIngresos().filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ym; });
+  var gastos = cargarGastos().filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ym; });
+  var compras = cargarCompras().filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ym; });
+  var nomina = cargarNomina().filter(function (r) { return r.mes === ym; });
+
+  var totalIngresos = ingresos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var totalGastos = gastos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var totalCompras = compras.reduce(function (s, r) { return s + Number(r.valorTotal || 0); }, 0);
+  var totalNomina = nomina.reduce(function (s, r) { return s + Number(r.neto || 0); }, 0);
+  var balanceMes = totalIngresos - totalGastos - totalCompras - totalNomina;
+
+  var catIngreso = ordenarCategorias(categoriasIngresoContable(ingresos));
+  var catEgreso = ordenarCategorias(categoriasEgresoContable(gastos, compras, totalNomina));
+  var maxIn = Math.max(1, catIngreso.reduce(function (m, e) { return Math.max(m, e[1]); }, 0));
+  var maxOut = Math.max(1, catEgreso.reduce(function (m, e) { return Math.max(m, e[1]); }, 0));
+
+  var movimientos = [].concat(
+    ingresos.map(function (r) { return { fecha: r.fecha, modulo: 'Ingreso', concepto: r.concepto, estado: r.estado, valor: Number(r.valor || 0), tipo: 'in' }; }),
+    gastos.map(function (r) { return { fecha: r.fecha, modulo: 'Gasto', concepto: r.concepto, estado: r.estado, valor: Number(r.valor || 0), tipo: 'out' }; }),
+    compras.map(function (r) { return { fecha: r.fecha, modulo: 'Compra', concepto: r.articulo, estado: r.estado, valor: Number(r.valorTotal || 0), tipo: 'out' }; }),
+    nomina.map(function (r) { return { fecha: r.mes + '-01', modulo: 'Nómina', concepto: r.empleado, estado: r.estado, valor: Number(r.neto || 0), tipo: 'out' }; })
+  ).sort(function (a, b) { return (a.fecha || '').localeCompare(b.fecha || ''); });
+
+  return '' +
+    selector +
+    '<p style="font-size:12px; color:var(--muted); margin:-10px 0 16px;">Mostrando el balance financiero de ' + ym + '.</p>' +
+    '<div class="grilla-2col" style="align-items:stretch;">' +
+      tarjetaKPIContable('Ingresos del mes', totalIngresos, 'var(--verde)') +
+      tarjetaKPIContable('Gastos del mes', totalGastos, 'var(--rojo)') +
+      tarjetaKPIContable('Compras del mes', totalCompras, 'var(--naranja)') +
+      tarjetaKPIContable('Nómina del mes', totalNomina, 'var(--azul-oscuro)') +
+      tarjetaKPIContable('Balance del mes', balanceMes, balanceMes >= 0 ? 'var(--verde)' : 'var(--rojo)') +
+    '</div>' +
+    '<div class="grilla-2col" style="align-items:start;">' +
+      '<div class="panel"><h2>Ingresos por categoría</h2>' +
+      (catIngreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin ingresos este mes.</p>' :
+       catIngreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxIn, 'var(--verde)'); }).join('')) +
+      '</div>' +
+      '<div class="panel"><h2>Egresos por categoría</h2>' +
+      (catEgreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin egresos este mes.</p>' :
+       catEgreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxOut, 'var(--rojo)'); }).join('')) +
+      '</div>' +
+    '</div>' +
+    '<div class="panel"><h2>Movimientos de ' + ym + '</h2>' + tablaMovimientosContable(movimientos) + '</div>';
 }
 
 function renderContabilidad(sesion) {
   var esAdmin = sesion.rol === 'ADMINISTRADOR';
   var pestañas = ['ingresos', 'gastos', 'compras', 'nomina'];
-  if (esAdmin) pestañas.push('resumen');
-  var etiquetaPestaña = { ingresos: 'Ingresos', gastos: 'Gastos', compras: 'Compras', nomina: 'Nómina', resumen: 'Resumen' };
-  if (!esAdmin && tabContabilidadActiva === 'resumen') tabContabilidadActiva = 'ingresos';
+  if (esAdmin) pestañas.push('resumen', 'balance');
+  var etiquetaPestaña = { ingresos: 'Ingresos', gastos: 'Gastos', compras: 'Compras', nomina: 'Nómina', resumen: 'Resumen general', balance: 'Balance mensual' };
+  if (!esAdmin && (tabContabilidadActiva === 'resumen' || tabContabilidadActiva === 'balance')) tabContabilidadActiva = 'ingresos';
 
   var botonesPestañas = pestañas.map(function (p) {
     var activa = p === tabContabilidadActiva;
@@ -2303,7 +2426,8 @@ function renderContabilidad(sesion) {
   else if (tabContabilidadActiva === 'gastos') contenido = panelGastos(esAdmin);
   else if (tabContabilidadActiva === 'compras') contenido = panelCompras(esAdmin);
   else if (tabContabilidadActiva === 'nomina') contenido = panelNomina(esAdmin);
-  else if (tabContabilidadActiva === 'resumen' && esAdmin) contenido = panelResumenContable();
+  else if (tabContabilidadActiva === 'resumen' && esAdmin) contenido = panelResumenGeneral();
+  else if (tabContabilidadActiva === 'balance' && esAdmin) contenido = panelBalanceMensual();
 
   return '' +
     '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Contabilidad</h1>' +
@@ -2414,6 +2538,104 @@ function activarLogicaContabilidad() {
   }
 }
 // ==================== FIN CONTABILIDAD ====================
+
+// ==================== INVENTARIO ====================
+var filtroInventario = '';
+
+function renderInventario() {
+  var inventario = cargarInventario();
+
+  var form =
+    '<div class="panel"><h2>Agregar elemento al inventario</h2>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Nombre del artículo</label><input id="inv-nombre" type="text" placeholder="Ej: Guitarra acústica Yamaha" /></div>' +
+    '<div class="campo"><label>Categoría</label><select id="inv-categoria">' +
+    CATEGORIAS_INVENTARIO.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Marca / modelo (opcional)</label><input id="inv-marca" type="text" /></div>' +
+    '<div class="campo"><label>Número de serie (opcional)</label><input id="inv-serie" type="text" /></div>' +
+    '<div class="campo"><label>Cantidad</label><input id="inv-cantidad" type="number" min="1" value="1" /></div>' +
+    '<div class="campo"><label>Estado</label><select id="inv-estado">' +
+    ESTADOS_INVENTARIO.map(function (e) { return '<option value="' + e + '">' + e + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Ubicación</label><input id="inv-ubicacion" type="text" placeholder="Ej: Salón 2" /></div>' +
+    '<div class="campo"><label>Fecha de adquisición</label><input id="inv-fecha" type="date" /></div>' +
+    '<div class="campo"><label>Valor estimado</label><input id="inv-valor" type="number" min="0" /></div>' +
+    '<div class="campo"><label>Proveedor (opcional)</label><input id="inv-proveedor" type="text" /></div>' +
+    '<div class="campo"><label>Responsable / asignado a (opcional)</label><input id="inv-responsable" type="text" /></div>' +
+    '<div class="campo"><label>Observaciones (opcional)</label><input id="inv-observaciones" type="text" /></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-crear-inventario" style="max-width:280px;">Agregar al inventario</button>' +
+    '<p id="msj-inventario-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Elemento agregado al inventario.</p>' +
+    '</div>';
+
+  var textoFiltrado = inventario.filter(function (it) {
+    if (!filtroInventario) return true;
+    var termino = filtroInventario.toLowerCase();
+    return [it.nombre, it.categoria, it.marca, it.serie, it.estado, it.ubicacion, it.proveedor, it.responsable, it.observaciones]
+      .some(function (campo) { return (campo || '').toLowerCase().indexOf(termino) !== -1; });
+  });
+
+  var filas = textoFiltrado.map(function (it) {
+    return filaTablaContable([
+      it.nombre, it.categoria, it.marca || '—', it.serie || '—', it.cantidad,
+      '<span class="chip-rol">' + it.estado + '</span>', it.ubicacion || '—',
+      it.fecha || '—', formatearCOPContable(it.valor), it.proveedor || '—', it.responsable || '—', it.observaciones || '—'
+    ]);
+  }).join('');
+
+  var tablaPanel =
+    '<div class="panel"><h2>Inventario (' + inventario.length + (filtroInventario ? ' · ' + textoFiltrado.length + ' filtrados' : '') + ')</h2>' +
+    '<input id="filtro-inventario" type="text" placeholder="Filtrar por cualquier columna: nombre, categoría, estado, ubicación, proveedor..." value="' + (filtroInventario || '') + '" />' +
+    (inventario.length === 0 ? '<p style="font-size:13px; color:var(--muted); margin-top:12px;">Todavía no hay elementos registrados en el inventario.</p>' :
+     textoFiltrado.length === 0 ? '<p style="font-size:13px; color:var(--muted); margin-top:12px;">Ningún elemento coincide con ese filtro.</p>' :
+     '<div class="tabla-scroll" style="margin-top:12px;"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Categoría</th><th>Marca/modelo</th><th>N.° serie</th><th>Cant.</th><th>Estado</th><th>Ubicación</th><th>Adquisición</th><th>Valor</th><th>Proveedor</th><th>Responsable</th><th>Observaciones</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+    '</div>';
+
+  return '' +
+    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 16px;">Inventario</h1>' +
+    form +
+    tablaPanel;
+}
+
+function activarLogicaInventario() {
+  var btn = document.getElementById('btn-crear-inventario');
+  if (btn) {
+    btn.addEventListener('click', function () {
+      var nombre = document.getElementById('inv-nombre').value.trim();
+      var cantidad = Number(document.getElementById('inv-cantidad').value) || 0;
+      if (!nombre || !cantidad) { alert('Nombre y cantidad son obligatorios.'); return; }
+      var lista = cargarInventario();
+      lista.push({
+        nombre: nombre,
+        categoria: document.getElementById('inv-categoria').value,
+        marca: document.getElementById('inv-marca').value.trim(),
+        serie: document.getElementById('inv-serie').value.trim(),
+        cantidad: cantidad,
+        estado: document.getElementById('inv-estado').value,
+        ubicacion: document.getElementById('inv-ubicacion').value.trim(),
+        fecha: document.getElementById('inv-fecha').value,
+        valor: Number(document.getElementById('inv-valor').value) || 0,
+        proveedor: document.getElementById('inv-proveedor').value.trim(),
+        responsable: document.getElementById('inv-responsable').value.trim(),
+        observaciones: document.getElementById('inv-observaciones').value.trim()
+      });
+      guardarInventario(lista);
+      document.getElementById('msj-inventario-creado').style.display = 'block';
+      setTimeout(function () { renderContenido('inventario'); }, 500);
+    });
+  }
+
+  var filtro = document.getElementById('filtro-inventario');
+  if (filtro) {
+    filtro.addEventListener('input', function () {
+      filtroInventario = this.value.trim();
+      renderContenido('inventario');
+    });
+    // Devolver el foco y el cursor al final después de cada re-render disparado por el filtro en vivo.
+    filtro.focus();
+    filtro.setSelectionRange(filtro.value.length, filtro.value.length);
+  }
+}
+// ==================== FIN INVENTARIO ====================
 
 function renderAdmin() {
   var usuarios = cargarUsuarios();
@@ -2553,6 +2775,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'contabilidad') {
     document.getElementById('contenido').innerHTML = renderContabilidad(sesion);
     activarLogicaContabilidad();
+  } else if (mod.key === 'inventario') {
+    document.getElementById('contenido').innerHTML = renderInventario();
+    activarLogicaInventario();
   } else {
     var nota = '';
     if (mod.key === 'estudiantes' && sesion.rol === 'PROFESOR') nota = '<p style="margin-top:8px;">Acotado a los alumnos de tu salón (el filtrado real depende de datos que todavía no existen).</p>';
