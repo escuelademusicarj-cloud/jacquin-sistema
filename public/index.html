@@ -281,19 +281,20 @@
   .split-izq {
     width: 38%; flex-shrink: 0; padding: clamp(28px, 3vw, 44px) clamp(24px, 3vw, 36px);
     background: linear-gradient(165deg, var(--azul-oscuro) 0%, var(--azul-noche) 100%);
-    color: #fff; display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden;
+    color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 18px; position: relative; overflow: hidden;
   }
-  .split-izq .marca-mini { display: flex; align-items: center; gap: 9px; font-family: var(--font-wordmark); font-size: 15px; font-weight: 600; opacity: 0.92; }
+  .split-izq .marca-mini { display: flex; align-items: center; justify-content: center; gap: 9px; font-family: var(--font-wordmark); font-size: 15px; font-weight: 600; opacity: 0.92; }
   .split-izq .marca-mini .punto { width: 8px; height: 8px; border-radius: 50%; background: var(--naranja); }
   .split-izq .foto-lateral-form {
-    width: 100%; height: clamp(140px, 22vw, 220px); object-fit: cover; border-radius: 16px;
-    margin: 16px 0 6px; box-shadow: 0 10px 26px rgba(0,0,0,0.28); display: block;
+    width: 100%; max-width: 300px; height: clamp(140px, 22vw, 210px); object-fit: cover; border-radius: 16px;
+    margin: 0; box-shadow: 0 10px 26px rgba(0,0,0,0.28); display: block;
   }
   .split-izq h3 {
     font-family: var(--font-wordmark); font-weight: 500; font-style: italic; color: #fff;
-    font-size: clamp(21px, 2.2vw, 27px); line-height: 1.22; margin: 22px 0 10px;
+    font-size: clamp(21px, 2.2vw, 27px); line-height: 1.22; margin: 0 0 10px; max-width: 300px;
   }
-  .split-izq p.bajada { font-size: 12.5px; color: rgba(255,255,255,0.72); line-height: 1.65; max-width: 260px; margin: 0; }
+  .split-izq p.bajada { font-size: 12.5px; color: rgba(255,255,255,0.72); line-height: 1.65; max-width: 260px; margin: 0 auto; }
   .split-izq .ilustracion { margin-top: 22px; display: flex; justify-content: center; }
   .split-der { width: 62%; padding: clamp(26px, 3vw, 44px); }
   .split-der h2 {
@@ -1082,9 +1083,12 @@ function renderEstudiantes() {
 function renderModalEditorEstudiante(profesoresDisponibles) {
   return '' +
     '<div id="modal-editar-estudiante" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.55); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
-    '<div style="background:#fff; border-radius:14px; padding:26px; width:100%; max-width:640px; max-height:90vh; overflow-y:auto;">' +
-    '<h2 style="margin-top:0;" id="ed-titulo">Editar estudiante</h2>' +
-    '<p style="font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:16px 0 8px;">Datos del estudiante</p>' +
+    '<div style="background:#fff; border-radius:14px; width:100%; max-width:640px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">' +
+    '<div style="padding:22px 26px 4px;">' +
+    '<h2 style="margin:0;" id="ed-titulo">Editar estudiante</h2>' +
+    '</div>' +
+    '<div style="padding:0 26px; overflow-y:auto; flex:1 1 auto;">' +
+    '<p style="font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:14px 0 8px;">Datos del estudiante</p>' +
     '<div class="grilla-moderna">' +
     '<div class="campo-moderno"><label>Nombres</label><input id="ed-nombres" type="text" /></div>' +
     '<div class="campo-moderno"><label>Apellidos</label><input id="ed-apellidos" type="text" /></div>' +
@@ -1108,7 +1112,7 @@ function renderModalEditorEstudiante(profesoresDisponibles) {
     '<div class="campo-moderno"><label>Celular del acudiente</label><input id="ed-celular-acudiente" type="text" /></div>' +
     '<div class="campo-moderno"><label>Observaciones</label><input id="ed-obs" type="text" /></div>' +
     '</div>' +
-    '<p style="font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:18px 0 8px;">Datos de la matrícula</p>' +
+    '<p style="font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:16px 0 8px;">Datos de la matrícula</p>' +
     '<div class="grilla-moderna">' +
     '<div class="campo-moderno"><label>Tipo de plan</label><select id="ed-tipo-plan"></select></div>' +
     '<div class="campo-moderno"><label>Horas por semana</label><input id="ed-horas" type="text" readonly /></div>' +
@@ -1117,8 +1121,12 @@ function renderModalEditorEstudiante(profesoresDisponibles) {
     '<div class="campo-moderno"><label>Fecha de inicio</label><input id="ed-fecha-inicio" type="date" /></div>' +
     '<div class="campo-moderno"><label>Estado (calculado)</label><input id="ed-estado-txt" type="text" readonly /></div>' +
     '</div>' +
+    '</div>' +
+    '<div style="padding:16px 26px 22px; border-top:1px solid #eee; flex-shrink:0;">' +
     '<button class="btn-moderno" id="btn-guardar-editor-estudiante">Guardar cambios</button>' +
+    '<button id="btn-eliminar-editor-estudiante" style="width:100%; margin-top:8px; background:#fff; border:1px solid var(--rojo); color:var(--rojo); border-radius:14px; height:44px; font-size:13px; font-weight:600; cursor:pointer; font-family:var(--font-ui);">Eliminar estudiante</button>' +
     '<button id="btn-cancelar-editor-estudiante" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '</div>' +
     '</div></div>';
 }
 
@@ -1322,6 +1330,24 @@ function activarLogicaEstudiantes(volverA) {
     var btnCancelarEditor = document.getElementById('btn-cancelar-editor-estudiante');
     if (btnCancelarEditor) btnCancelarEditor.addEventListener('click', function () { modalEditor.style.display = 'none'; });
 
+    // "Eliminar" nunca borra el registro (regla del sistema: el historial de
+    // un estudiante es inmutable) — pasa su estado a "Retirado", que ya
+    // existe como estado válido y queda visible en el historial.
+    var btnEliminarEditor = document.getElementById('btn-eliminar-editor-estudiante');
+    if (btnEliminarEditor) {
+      btnEliminarEditor.addEventListener('click', function () {
+        var idx = Number(modalEditor.getAttribute('data-alumno-idx'));
+        var alumnos = cargarAlumnos();
+        var alumno = alumnos[idx];
+        if (!alumno) return;
+        if (!confirm('¿Retirar a ' + alumno.nombres + ' ' + alumno.apellidos + ' de la academia? No se borra su historial — queda marcado como "Retirado".')) return;
+        alumno.estado = 'retirado';
+        guardarAlumnos(alumnos);
+        modalEditor.style.display = 'none';
+        renderContenido('estudiantes');
+      });
+    }
+
     var btnGuardarEditor = document.getElementById('btn-guardar-editor-estudiante');
     if (btnGuardarEditor) {
       btnGuardarEditor.addEventListener('click', function () {
@@ -1408,21 +1434,27 @@ function renderMatricula(sesion) {
     '<div class="tarjeta-split">' +
       '<div class="split-izq">' +
         '<div class="marca-mini"><span class="punto"></span>Jacquin — Matrícula</div>' +
+        '<img class="foto-lateral-form" src="jacquinm.jpg" alt="Jacquin Academia Musical" />' +
         '<div>' +
           '<h3>Formalizá la matrícula del alumno.</h3>' +
           '<p class="bajada">Elegí el plan real de la academia — horas y valor se completan solos — y quedará activo apenas se registre el pago.</p>' +
-          '<div class="ilustracion">' + ILUSTRACION_MATRICULA + '</div>' +
         '</div>' +
       '</div>' +
       '<div class="split-der">' +
         '<h2>Inscribir estudiante</h2>' +
         (alumnos.length === 0 ? '<p class="ayuda">Primero registrá un estudiante en el módulo Estudiantes.</p>' :
-        '<p class="ayuda">El programa se toma del estudiante elegido.</p>' +
+        '<p class="ayuda">El programa se toma del estudiante elegido — se puede corregir acá y queda guardado también en su ficha.</p>' +
         '<div class="grilla-moderna">' +
         '<div class="campo-moderno"><label>Estudiante</label><select id="in-alumno">' +
         alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + ' — ' + a.programa + '</option>'; }).join('') +
         '</select></div>' +
-        '<div class="campo-moderno"><label>Programa</label><input id="in-programa" type="text" readonly /></div>' +
+        '<div class="campo-moderno"><label>Programa 1</label><select id="in-programa">' +
+        PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+        '</select></div>' +
+        '<div class="campo-moderno"><label>Programa 2 (opcional)</label><select id="in-programa2">' +
+        '<option value="">Ninguno</option>' +
+        PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+        '</select></div>' +
         '<div class="campo-moderno"><label>Tipo de plan</label><select id="in-tipo-plan"></select></div>' +
         '<div class="campo-moderno"><label>Horas por semana</label><input id="in-horas" type="text" readonly /></div>' +
         '<div class="campo-moderno"><label>Valor (mensualidad)</label><input id="in-valor" type="text" readonly /></div>' +
@@ -1491,19 +1523,27 @@ function activarLogicaMatricula() {
     recalcularTotal();
   }
 
-  // El programa NO se vuelve a preguntar — se toma del estudiante ya
-  // registrado en el módulo Estudiantes, para no duplicar el dato.
+  // El programa se precarga desde el estudiante ya registrado, pero ahora
+  // se puede corregir acá mismo (Programa 1 y Programa 2) — al inscribir,
+  // el cambio se guarda también en la ficha del estudiante.
   function alDefinirEstudiante() {
     var alumno = alumnos[Number(selectAlumno.value)];
     if (!alumno) return;
     document.getElementById('in-programa').value = alumno.programa;
+    document.getElementById('in-programa2').value = alumno.programa2 || '';
+    repoblarTiposPlanPorPrograma();
+  }
+
+  function repoblarTiposPlanPorPrograma() {
+    var programaElegido = document.getElementById('in-programa').value;
     var selectTipo = document.getElementById('in-tipo-plan');
-    var tipos = tiposPlanParaPrograma(alumno.programa);
+    var tipos = tiposPlanParaPrograma(programaElegido);
     selectTipo.innerHTML = tipos.map(function (t) { return '<option value="' + t.nombre + '">' + t.nombre + ' (' + t.horasSemana + 'h/sem)</option>'; }).join('');
     aplicarTipoPlanSeleccionado();
   }
 
   selectAlumno.addEventListener('change', alDefinirEstudiante);
+  document.getElementById('in-programa').addEventListener('change', repoblarTiposPlanPorPrograma);
   document.getElementById('in-tipo-plan').addEventListener('change', aplicarTipoPlanSeleccionado);
   document.getElementById('in-descuento').addEventListener('input', recalcularTotal);
   alDefinirEstudiante(); // arranca ya cargado con el primer estudiante de la lista
@@ -1559,6 +1599,10 @@ function activarLogicaMatricula() {
       // Si ya pagó, además queda el pago cargado en Pagos, y el alumno pasa a "activo" directo.
       var alumnosLista = cargarAlumnos();
       var medioPagoInscripcion = pagado ? document.getElementById('in-medio-pago').value : '';
+      // El Programa 1 y 2 se pueden corregir desde acá — el cambio se
+      // guarda también en la ficha del estudiante (Estudiantes).
+      alumnosLista[alumnoIdx].programa = document.getElementById('in-programa').value;
+      alumnosLista[alumnoIdx].programa2 = document.getElementById('in-programa2').value;
       if (pagado) {
         var pagos = cargarPagosRegistrados();
         pagos.push({ alumnoIdx: alumnoIdx, concepto: 'Matrícula', valor: valorConDescuento, fecha: fechaPago, medioPago: medioPagoInscripcion });
