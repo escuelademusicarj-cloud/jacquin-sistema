@@ -19,10 +19,93 @@
     --muted: #6b7686;
     --verde: #2e7d32;
     --rojo: #b3261e;
+    --verde-tint: rgba(46,125,50,.10);
+    --rojo-tint: rgba(179,38,30,.10);
+    --naranja-tint: rgba(231,140,59,.14);
+    --azul-tint: rgba(34,63,97,.08);
+    --panel-2: #FAF8F3;
+    --linea: #E4E1D8;
     --font-ui: 'Manrope', 'Helvetica Neue', Arial, sans-serif;
     --font-wordmark: 'Cormorant Garamond', Georgia, serif;
     --font-hand: 'Caveat', cursive;
   }
+
+  /* ==================== CONTABILIDAD — rediseño moderno ==================== */
+  .contab-hero{
+    position:relative; width:100%; overflow:hidden; border-radius:18px; margin:6px 0 22px;
+    background:
+      linear-gradient(100deg, var(--azul-noche) 0%, var(--azul-noche) 36%, rgba(21,42,68,.72) 54%, rgba(21,42,68,.25) 74%, transparent 92%),
+      url('contabilidad-analista.jpg');
+    background-size: cover, cover;
+    background-position: center, 76% center;
+    color:#fff;
+  }
+  .contab-hero-inner{ position:relative; z-index:1; padding:38px 34px; max-width:640px; }
+  .contab-hero-eyebrow{
+    font-family:var(--font-ui); font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--naranja);
+    display:flex; align-items:center; gap:8px; margin:0 0 12px;
+  }
+  .contab-hero-eyebrow::before{ content:""; width:24px; height:1.5px; background:var(--naranja); display:inline-block; }
+  .contab-hero-inner h1{ margin:0; font-family:var(--font-wordmark); font-weight:600; font-size:clamp(26px,3.6vw,40px); line-height:1.05; }
+  .contab-hero-inner p{ margin:12px 0 0; font-size:13.5px; color:#d7dee8; line-height:1.6; max-width:420px; }
+  @media (max-width:760px){ .contab-hero-inner{ padding:26px 20px; } }
+
+  .contab-tabs{ display:flex; gap:4px; flex-wrap:wrap; margin-bottom:18px; border-bottom:1.5px solid var(--linea); padding-bottom:0; }
+  .contab-tab{
+    border:none; background:transparent; color:var(--muted); padding:9px 14px 12px; font-family:var(--font-ui);
+    font-weight:700; font-size:12.5px; display:flex; align-items:center; gap:7px; cursor:pointer;
+    border-bottom:2.5px solid transparent; position:relative; top:1.5px;
+  }
+  .contab-tab .dot{ width:6px; height:6px; border-radius:50%; background:var(--linea); }
+  .contab-tab.active{ color:var(--azul-oscuro); border-color:var(--azul-oscuro); }
+  .contab-tab.active .dot{ background:var(--naranja); }
+  .contab-tab:hover{ color:var(--azul-oscuro); }
+
+  .kpi-grid-contab{ display:grid; grid-template-columns:repeat(6,1fr); grid-auto-rows:minmax(96px,auto); gap:12px; margin-bottom:20px; }
+  .kpi-grid-contab > :nth-child(1){ grid-column:1 / 3; grid-row:1 / 3; }
+  .kpi-grid-contab > :nth-child(2){ grid-column:3 / 5; grid-row:1 / 2; }
+  .kpi-grid-contab > :nth-child(3){ grid-column:5 / 7; grid-row:1 / 2; }
+  .kpi-grid-contab > :nth-child(4){ grid-column:3 / 5; grid-row:2 / 3; }
+  .kpi-grid-contab > :nth-child(5){ grid-column:5 / 7; grid-row:2 / 3; }
+  @media (max-width:900px){
+    .kpi-grid-contab{ grid-template-columns:repeat(2,1fr); grid-auto-rows:auto; }
+    .kpi-grid-contab > *{ grid-column:auto !important; grid-row:auto !important; }
+  }
+  .kpi-card-contab{
+    position:relative; background:#fff; border:1px solid var(--linea); border-radius:14px; padding:16px 18px;
+    display:flex; flex-direction:column; justify-content:center;
+  }
+  .kpi-card-contab .lbl{ font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:700; }
+  .kpi-card-contab .val{ font-family:var(--font-ui); font-size:21px; font-weight:800; margin-top:6px; }
+  .kpi-card-contab .sub{ font-size:11px; color:var(--muted); margin-top:4px; }
+  .kpi-card-contab .icon-badge{
+    position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:9px;
+    display:flex; align-items:center; justify-content:center; font-size:14px; background:var(--azul-tint); color:var(--azul-oscuro);
+  }
+  .kpi-card-contab.pos .val{ color:var(--verde); } .kpi-card-contab.pos .icon-badge{ background:var(--verde-tint); color:var(--verde); }
+  .kpi-card-contab.neg .val{ color:var(--rojo); } .kpi-card-contab.neg .icon-badge{ background:var(--rojo-tint); color:var(--rojo); }
+  .kpi-card-contab.neu .val{ color:var(--azul-oscuro); }
+  .kpi-card-contab.warn .icon-badge{ background:var(--naranja-tint); color:var(--naranja); }
+  .kpi-card-contab.hero{
+    background:linear-gradient(140deg, var(--azul-oscuro), var(--azul-noche)); border-color:var(--azul-noche);
+    box-shadow:0 14px 28px -14px rgba(21,42,68,.5);
+  }
+  .kpi-card-contab.hero.neg{ background:linear-gradient(140deg, var(--rojo), #7a1a14); border-color:#7a1a14; }
+  .kpi-card-contab.hero .lbl, .kpi-card-contab.hero .val, .kpi-card-contab.hero .sub{ color:#fff; }
+  .kpi-card-contab.hero .lbl{ opacity:.8; } .kpi-card-contab.hero .sub{ opacity:.72; }
+  .kpi-card-contab.hero .icon-badge{ background:rgba(255,255,255,.18); color:#fff; }
+  .kpi-card-contab.hero .val{ font-size:clamp(26px,3vw,36px); margin-top:12px; }
+
+  .chart-card-contab{ background:#fff; border:1px solid var(--linea); border-radius:14px; padding:18px 20px; }
+  .chart-card-contab h3{ margin:0; font-size:13.5px; color:var(--azul-oscuro); font-family:var(--font-ui); }
+  .chart-card-contab .sub{ font-size:11px; color:var(--muted); margin:2px 0 14px; }
+  .donut-pro-contab{ position:relative; width:132px; height:132px; margin:0 auto; }
+  .donut-pro-contab .center{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .donut-pro-contab .center .pct{ font-family:var(--font-ui); font-size:21px; font-weight:800; color:var(--azul-oscuro); }
+  .donut-pro-contab .center .pct-lbl{ font-size:9px; color:var(--muted); font-weight:700; text-transform:uppercase; }
+  .legend-row-contab{ display:flex; gap:14px; flex-wrap:wrap; font-size:11px; color:var(--muted); margin-top:12px; justify-content:center; }
+  .legend-row-contab .li{ display:flex; align-items:center; gap:6px; }
+  .legend-row-contab .sw{ width:8px; height:8px; border-radius:2px; display:inline-block; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: var(--font-ui); background: var(--beige); color: var(--texto); }
   a { color: inherit; text-decoration: none; }
@@ -1052,7 +1135,13 @@ function renderEstudiantes() {
         '<div><h2 style="margin-bottom:2px;">Nuevo estudiante</h2><p class="ayuda" style="margin-bottom:0;">Todos los campos con * son obligatorios.</p></div>' +
         '<div>' +
         '<input type="file" id="input-excel-estudiantes" accept=".xlsx,.xls,.csv" style="display:none;" />' +
+        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
+        '<select id="sel-estado-excel-estudiantes" style="font-size:12px; padding:8px 10px; border-radius:10px; border:1px solid #d8dce3; color:var(--texto); font-family:var(--font-ui);">' +
+        '<option value="activo">Importar como Activo (ya matriculados)</option>' +
+        '<option value="preinscrito">Importar como Preinscrito (sin matricular)</option>' +
+        '</select>' +
         '<button type="button" id="btn-subir-excel-estudiantes" style="font-size:12px; padding:8px 14px; border-radius:10px; border:1px solid var(--naranja); background:#fff; color:var(--naranja); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">⬆ Subir por Excel</button>' +
+        '</div>' +
         '</div></div>' +
         '<p id="msj-excel-estudiantes" style="font-size:12px; color:var(--verde); display:none; margin:8px 0 0;"></p>' +
         '<div class="grilla-moderna" style="margin-top:16px;">' +
@@ -1222,9 +1311,14 @@ function activarLogicaEstudiantes(volverA) {
     setTimeout(function () { renderContenido(volverA); }, 500);
   });
 
-  // ---- Carga masiva por Excel — solo REGISTRA estudiantes (igual que el
-  // formulario manual, estado "preinscrito"); la matrícula se sigue
-  // haciendo alumno por alumno desde el módulo Matrícula. ----
+  // ---- Carga masiva por Excel — importa estudiantes reales con datos
+  // desprolijos (mayúsculas/minúsculas mezcladas, tildes faltantes, errores
+  // de tipeo, programas combinados en una sola celda como "Piano y
+  // Percusión"). Normaliza el nombre del programa contra la lista oficial
+  // de PROGRAMAS, separa Programa 1 / Programa 2 cuando vienen juntos, evita
+  // duplicados (mismo documento, o mismo nombre+apellido+nacimiento), y deja
+  // un reporte de qué filas necesitan revisión manual en vez de asignar
+  // "Piano" a ciegas cuando no reconoce el texto. ----
   var btnSubirExcel = document.getElementById('btn-subir-excel-estudiantes');
   var inputExcel = document.getElementById('input-excel-estudiantes');
   if (btnSubirExcel && inputExcel) {
@@ -1234,6 +1328,8 @@ function activarLogicaEstudiantes(volverA) {
       if (!archivo) return;
       if (typeof XLSX === 'undefined') { alert('No se pudo cargar el lector de Excel — revisá tu conexión a internet e intentá de nuevo.'); return; }
 
+      var estadoElegido = (document.getElementById('sel-estado-excel-estudiantes') || {}).value || 'preinscrito';
+
       var lector = new FileReader();
       lector.onload = function (e) {
         try {
@@ -1242,10 +1338,23 @@ function activarLogicaEstudiantes(volverA) {
           var hoja = libro.Sheets[libro.SheetNames[0]];
           var filas = XLSX.utils.sheet_to_json(hoja, { defval: '' });
 
+          // Quita tildes y normaliza espacios/mayúsculas, para poder comparar
+          // "Percusión", "PERCUSION" y "Percusion" como si fueran lo mismo.
+          function normalizarTexto(txt) {
+            return String(txt || '')
+              .toLowerCase()
+              .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+          }
+
+          // Busca una columna por nombre ignorando tildes/mayúsculas — así
+          // "TELÉFONO DE CONTACTO" coincide igual con "telefono de contacto".
           function buscarCampo(fila, nombres) {
             var claves = Object.keys(fila);
             for (var i = 0; i < nombres.length; i++) {
-              var clave = claves.find(function (k) { return k.trim().toLowerCase() === nombres[i]; });
+              var objetivo = normalizarTexto(nombres[i]);
+              var clave = claves.find(function (k) { return normalizarTexto(k) === objetivo; });
               if (clave) return String(fila[clave]).trim();
             }
             return '';
@@ -1260,38 +1369,146 @@ function activarLogicaEstudiantes(volverA) {
             return '';
           }
 
-          var alumnos = cargarAlumnos();
-          var importados = 0, omitidos = 0;
+          // Diccionario de coincidencias (texto normalizado sin tildes →
+          // nombre oficial en PROGRAMAS). Se compara por "contiene", en
+          // orden de más específico a menos específico, para no confundir
+          // p.ej. "guitarra electrica" con "guitarra" a secas.
+          var SINONIMOS_PROGRAMA = [
+            { patron: 'guitarra electr', oficial: 'Guitarra eléctrica' },
+            { patron: 'guitarra acust', oficial: 'Guitarra acústica' },
+            { patron: 'bajo', oficial: 'Bajo' },
+            { patron: 'percusion', oficial: 'Percusión' },
+            { patron: 'tecnica vocal', oficial: 'Técnica vocal' },
+            { patron: 'tec voca', oficial: 'Técnica vocal' },
+            { patron: 'vocal', oficial: 'Técnica vocal' },
+            { patron: 'violin', oficial: 'Violín' },
+            { patron: 'exploracion', oficial: 'Exploración musical infantil' },
+            { patron: 'iniciacion', oficial: 'Iniciación musical' },
+            { patron: 'pianp', oficial: 'Piano' }, // typo frecuente detectado en la planilla
+            { patron: 'piano', oficial: 'Piano' },
+            { patron: 'guitarra', oficial: 'Guitarra acústica' } // ambigua — sin "eléctrica" se asume acústica
+          ];
+
+          // Reconoce un fragmento de texto de programa y devuelve el nombre
+          // oficial, o null si no coincide con nada conocido (p.ej. "Ukelele",
+          // "Seniors" — cosas que hoy no son un programa de PROGRAMAS).
+          function reconocerPrograma(fragmento) {
+            var norm = normalizarTexto(fragmento);
+            if (!norm) return null;
+            for (var i = 0; i < SINONIMOS_PROGRAMA.length; i++) {
+              if (norm.indexOf(SINONIMOS_PROGRAMA[i].patron) !== -1) return SINONIMOS_PROGRAMA[i].oficial;
+            }
+            return null;
+          }
+
+          // Separa celdas como "Piano y Percusión" / "Guitarra + Técnica
+          // Vocal" en sus programas individuales, y arma programa/programa2
+          // ya normalizados. Devuelve también si hubo algo sin reconocer,
+          // para poder avisarle al usuario cuáles filas revisar a mano.
+          function interpretarPrograma(textoOriginal) {
+            var partes = String(textoOriginal || '').split(/\s+y\s+|\s*\+\s*|\s*\/\s*|,/i).map(function (p) { return p.trim(); }).filter(Boolean);
+            if (partes.length === 0) return { programa: '', programa2: '', sinReconocer: false, ambigua: false };
+
+            var reconocidos = [];
+            var huboSinReconocer = false;
+            var huboAmbigua = false;
+            partes.forEach(function (parte) {
+              var oficial = reconocerPrograma(parte);
+              if (!oficial) { huboSinReconocer = true; return; }
+              if (normalizarTexto(parte) === 'guitarra') huboAmbigua = true;
+              if (reconocidos.indexOf(oficial) === -1) reconocidos.push(oficial);
+            });
+
+            return {
+              programa: reconocidos[0] || '',
+              programa2: reconocidos[1] || '',
+              sinReconocer: huboSinReconocer,
+              ambigua: huboAmbigua
+            };
+          }
+
+          var alumnosExistentes = cargarAlumnos();
+          var alumnosNuevos = [];
+          var importados = 0, omitidos = 0, duplicados = 0;
+          var filasParaRevisar = []; // { nombre, textoOriginal, motivo }
+
           filas.forEach(function (fila) {
             var nombres = buscarCampo(fila, ['nombres', 'nombre']);
             var apellidos = buscarCampo(fila, ['apellidos', 'apellido']);
             if (!nombres || !apellidos) { omitidos++; return; }
-            var programa = buscarCampo(fila, ['programa', 'programa 1', 'programa1']);
-            if (PROGRAMAS.indexOf(programa) === -1) programa = PROGRAMAS[0];
-            alumnos.push({
+
+            var documento = buscarCampo(fila, ['documento', 'documento de identidad', 'cedula', 'cédula']);
+            var nacimiento = formatearFecha(buscarCampo(fila, ['fecha de nacimiento', 'nacimiento', 'fecha nacimiento']));
+
+            // Evita duplicados: mismo documento (si hay), o mismo
+            // nombre+apellido+nacimiento, ya sea contra lo que ya había en
+            // el sistema o contra otra fila de esta misma planilla.
+            var yaExiste = alumnosExistentes.concat(alumnosNuevos).some(function (a) {
+              if (documento && a.documento && a.documento === documento) return true;
+              return a.nombres === nombres && a.apellidos === apellidos && a.nacimiento === nacimiento;
+            });
+            if (yaExiste) { duplicados++; return; }
+
+            var textoProgramaOriginal = buscarCampo(fila, ['programa', 'programa 1', 'programa1']);
+            var interpretado = interpretarPrograma(textoProgramaOriginal);
+            var programaFinal = interpretado.programa || textoProgramaOriginal || PROGRAMAS[0];
+
+            var notasImportacion = [];
+            if (interpretado.sinReconocer) {
+              notasImportacion.push('Programa del Excel sin reconocer: "' + textoProgramaOriginal + '" — revisar y corregir.');
+              filasParaRevisar.push({ nombre: nombres + ' ' + apellidos, texto: textoProgramaOriginal, motivo: 'no reconocido' });
+            } else if (interpretado.ambigua) {
+              notasImportacion.push('Programa "Guitarra" importado como Guitarra acústica por defecto — confirmar si es eléctrica.');
+              filasParaRevisar.push({ nombre: nombres + ' ' + apellidos, texto: textoProgramaOriginal, motivo: 'guitarra ambigua' });
+            }
+
+            var fechaInicioExcel = formatearFecha(buscarCampo(fila, ['fecha inicio', 'fecha de inicio']));
+            var observacionesExcel = buscarCampo(fila, ['observaciones', 'observacion', 'observación']);
+
+            var nuevoAlumno = {
               nombres: nombres,
               apellidos: apellidos,
-              documento: buscarCampo(fila, ['documento', 'documento de identidad', 'cedula', 'cédula']),
-              nacimiento: formatearFecha(buscarCampo(fila, ['fecha de nacimiento', 'nacimiento', 'fecha nacimiento'])),
-              programa: programa,
-              programa2: '',
+              documento: documento,
+              nacimiento: nacimiento,
+              programa: programaFinal,
+              programa2: interpretado.programa2 || '',
               profesor: '',
               telefono: buscarCampo(fila, ['telefono', 'teléfono', 'telefono de contacto', 'celular']),
               correo: buscarCampo(fila, ['correo', 'correo electronico', 'correo electrónico', 'email']),
               direccion: buscarCampo(fila, ['direccion', 'dirección']),
               acudiente: buscarCampo(fila, ['acudiente', 'nombre del acudiente']),
               celularAcudiente: buscarCampo(fila, ['celular del acudiente', 'celular acudiente', 'telefono acudiente']),
-              observaciones: buscarCampo(fila, ['observaciones', 'observacion', 'observación']),
-              estado: 'preinscrito'
-            });
+              observaciones: (observacionesExcel ? observacionesExcel + ' — ' : '') + notasImportacion.join(' '),
+              estado: estadoElegido
+            };
+            if (estadoElegido === 'activo') {
+              nuevoAlumno.fechaMatricula = fechaInicioExcel || new Date().toISOString().slice(0, 10);
+            }
+
+            alumnosNuevos.push(nuevoAlumno);
             importados++;
           });
-          guardarAlumnos(alumnos);
+
+          guardarAlumnos(alumnosExistentes.concat(alumnosNuevos));
+
+          var resumenPartes = [importados + ' estudiante(s) importado(s) como "' + (estadoElegido === 'activo' ? 'Activo' : 'Preinscrito') + '"'];
+          if (duplicados) resumenPartes.push(duplicados + ' fila(s) omitida(s) por estar duplicadas');
+          if (omitidos) resumenPartes.push(omitidos + ' fila(s) omitida(s) por falta de nombre/apellido');
+
+          var htmlRevision = '';
+          if (filasParaRevisar.length) {
+            htmlRevision = '<p style="margin:10px 0 4px; font-weight:600;">' + filasParaRevisar.length + ' estudiante(s) con el programa sin confirmar — revisá su ficha en Estudiantes:</p>' +
+              '<ul style="margin:0; padding-left:18px;">' +
+              filasParaRevisar.slice(0, 25).map(function (r) { return '<li>' + r.nombre + ' — "' + r.texto + '" (' + r.motivo + ')</li>'; }).join('') +
+              (filasParaRevisar.length > 25 ? '<li>… y ' + (filasParaRevisar.length - 25) + ' más.</li>' : '') +
+              '</ul>';
+          }
 
           var msj = document.getElementById('msj-excel-estudiantes');
-          msj.textContent = importados + ' estudiante(s) registrados desde el Excel' + (omitidos ? ' — ' + omitidos + ' fila(s) omitida(s) por falta de nombre/apellido.' : '.');
+          msj.style.color = 'var(--texto)';
+          msj.innerHTML = '<span style="color:var(--verde); font-weight:600;">' + resumenPartes.join(' · ') + '.</span>' + htmlRevision;
           msj.style.display = 'block';
-          setTimeout(function () { renderContenido('estudiantes'); }, 900);
+          setTimeout(function () { renderContenido('estudiantes'); }, filasParaRevisar.length ? 4000 : 900);
         } catch (err) {
           alert('No se pudo leer el archivo. Revisá que sea un Excel/CSV válido, con columnas como Nombres, Apellidos, Programa, etc.');
         }
@@ -3719,6 +3936,40 @@ function barraCategoriaContable(etiqueta, valor, max, color) {
     '</div>';
 }
 
+// ---- Tarjeta KPI "bento" moderna (referencia visual: dashboard financiero
+// tipo Neuro Tone / fintech). tipo: 'hero' | 'pos' | 'neg' | 'warn' | 'neu'.
+function tarjetaKPIModerna(titulo, valor, tipo, icono, sub) {
+  return '<div class="kpi-card-contab ' + tipo + '">' +
+    '<div class="icon-badge">' + icono + '</div>' +
+    '<p class="lbl">' + titulo + '</p>' +
+    '<p class="val">' + formatearCOPContable(valor) + '</p>' +
+    (sub ? '<p class="sub">' + sub + '</p>' : '') +
+    '</div>';
+}
+
+// ---- Donut SVG (ingresos como % del movimiento total del período).
+function donutProContab(pctIngreso) {
+  var pct = Math.max(0, Math.min(100, Math.round(pctIngreso)));
+  var r = 52, c = 2 * Math.PI * r;
+  var dash = (pct / 100) * c;
+  return '' +
+    '<div class="donut-pro-contab"><svg viewBox="0 0 130 130">' +
+    '<circle cx="65" cy="65" r="' + r + '" fill="none" stroke="var(--linea)" stroke-width="13"/>' +
+    '<circle cx="65" cy="65" r="' + r + '" fill="none" stroke="var(--verde)" stroke-width="13" stroke-linecap="round" ' +
+    'stroke-dasharray="' + dash.toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 65 65)"/>' +
+    '</svg><div class="center"><span class="pct">' + pct + '%</span><span class="pct-lbl">Ingresos</span></div></div>';
+}
+
+// ---- Banner superior del módulo Contabilidad (una sola vez, sobre las pestañas).
+function heroContabilidad() {
+  return '' +
+    '<div class="contab-hero"><div class="contab-hero-inner">' +
+    '<p class="contab-hero-eyebrow">Libro contable · Jacquin</p>' +
+    '<h1>Contabilidad</h1>' +
+    '<p>Ingresos, gastos, compras y nómina de la academia en un solo lugar, con el balance financiero siempre a la vista.</p>' +
+    '</div></div>';
+}
+
 function tarjetaKPIContable(titulo, valor, color) {
   return '<div class="panel" style="border-top:4px solid ' + color + ';">' +
     '<p style="font-size:12px; color:var(--muted); margin:0 0 6px; text-transform:uppercase; letter-spacing:0.04em;">' + titulo + '</p>' +
@@ -3788,21 +4039,28 @@ function panelResumenGeneral() {
     nomina.map(function (r) { return { fecha: r.mes, modulo: 'Nómina', concepto: r.empleado, estado: r.estado, valor: Number(r.neto || 0), tipo: 'out' }; })
   ).sort(function (a, b) { return (b.fecha || '').localeCompare(a.fecha || ''); }).slice(0, 8);
 
+  var pctIngreso = (totalIngresos + egresosTotal) > 0 ? (totalIngresos / (totalIngresos + egresosTotal)) * 100 : 0;
+
   return '' +
-    '<div class="grilla-2col" style="align-items:stretch;">' +
-      tarjetaKPIContable('Total ingresos', totalIngresos, 'var(--verde)') +
-      tarjetaKPIContable('Total gastos', totalGastos, 'var(--rojo)') +
-      tarjetaKPIContable('Total compras', totalCompras, 'var(--naranja)') +
-      tarjetaKPIContable('Total nómina', totalNomina, 'var(--azul-oscuro)') +
-      tarjetaKPIContable('Pendiente por pagar', totalPendiente, 'var(--naranja)') +
-      tarjetaKPIContable('Balance general', balance, balance >= 0 ? 'var(--verde)' : 'var(--rojo)') +
+    '<div class="kpi-grid-contab">' +
+      tarjetaKPIModerna('Balance general', balance, balance >= 0 ? 'hero' : 'hero neg', '⚖️', 'Ingresos − egresos totales') +
+      tarjetaKPIModerna('Total ingresos', totalIngresos, 'pos', '💰', ingresos.length + ' registro(s)') +
+      tarjetaKPIModerna('Total gastos', totalGastos, 'neg', '📉', gastos.length + ' registro(s)') +
+      tarjetaKPIModerna('Compras + nómina', totalCompras + totalNomina, 'warn', '🛒', 'Compras: ' + formatearCOPContable(totalCompras)) +
+      tarjetaKPIModerna('Pendiente por pagar', totalPendiente, 'neu', '⏳', 'Gastos, compras y nómina') +
     '</div>' +
-    '<div class="grilla-2col" style="align-items:start;">' +
-      '<div class="panel"><h2>Ingresos por categoría</h2>' +
+    '<div class="dash-grid-3" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:18px;">' +
+      '<div class="chart-card-contab"><h3>Ingresos vs. egresos</h3><p class="sub">Participación histórica desde el inicio</p>' +
+      donutProContab(pctIngreso) +
+      '<div class="legend-row-contab">' +
+        '<span class="li"><span class="sw" style="background:var(--verde);"></span>Ingresos · ' + formatearCOPContable(totalIngresos) + '</span>' +
+        '<span class="li"><span class="sw" style="background:var(--linea);"></span>Egresos · ' + formatearCOPContable(egresosTotal) + '</span>' +
+      '</div></div>' +
+      '<div class="chart-card-contab"><h3>Ingresos por categoría</h3><p class="sub">Top categorías con más movimiento</p>' +
       (catIngreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin datos aún.</p>' :
        catIngreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxIn, 'var(--verde)'); }).join('')) +
       '</div>' +
-      '<div class="panel"><h2>Egresos por categoría</h2>' +
+      '<div class="chart-card-contab"><h3>Egresos por categoría</h3><p class="sub">Gastos, compras y nómina</p>' +
       (catEgreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin datos aún.</p>' :
        catEgreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxOut, 'var(--rojo)'); }).join('')) +
       '</div>' +
@@ -3855,22 +4113,31 @@ function panelBalanceMensual() {
     nomina.map(function (r) { return { fecha: r.mes + '-01', modulo: 'Nómina', concepto: r.empleado, estado: r.estado, valor: Number(r.neto || 0), tipo: 'out' }; })
   ).sort(function (a, b) { return (a.fecha || '').localeCompare(b.fecha || ''); });
 
+  var egresosMes = totalGastos + totalCompras + totalNomina;
+  var pctIngresoMes = (totalIngresos + egresosMes) > 0 ? (totalIngresos / (totalIngresos + egresosMes)) * 100 : 0;
+
   return '' +
     selector +
     '<p style="font-size:12px; color:var(--muted); margin:-10px 0 16px;">Mostrando el balance financiero de ' + ym + '.</p>' +
-    '<div class="grilla-2col" style="align-items:stretch;">' +
-      tarjetaKPIContable('Ingresos del mes', totalIngresos, 'var(--verde)') +
-      tarjetaKPIContable('Gastos del mes', totalGastos, 'var(--rojo)') +
-      tarjetaKPIContable('Compras del mes', totalCompras, 'var(--naranja)') +
-      tarjetaKPIContable('Nómina del mes', totalNomina, 'var(--azul-oscuro)') +
-      tarjetaKPIContable('Balance del mes', balanceMes, balanceMes >= 0 ? 'var(--verde)' : 'var(--rojo)') +
+    '<div class="kpi-grid-contab">' +
+      tarjetaKPIModerna('Balance del mes', balanceMes, balanceMes >= 0 ? 'hero' : 'hero neg', '⚖️', ym) +
+      tarjetaKPIModerna('Ingresos del mes', totalIngresos, 'pos', '💰', ingresos.length + ' registro(s)') +
+      tarjetaKPIModerna('Gastos del mes', totalGastos, 'neg', '📉', gastos.length + ' registro(s)') +
+      tarjetaKPIModerna('Compras del mes', totalCompras, 'warn', '🛒', compras.length + ' registro(s)') +
+      tarjetaKPIModerna('Nómina del mes', totalNomina, 'neu', '👥', nomina.length + ' registro(s)') +
     '</div>' +
-    '<div class="grilla-2col" style="align-items:start;">' +
-      '<div class="panel"><h2>Ingresos por categoría</h2>' +
+    '<div class="dash-grid-3" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:18px;">' +
+      '<div class="chart-card-contab"><h3>Ingresos vs. egresos</h3><p class="sub">Participación del mes</p>' +
+      donutProContab(pctIngresoMes) +
+      '<div class="legend-row-contab">' +
+        '<span class="li"><span class="sw" style="background:var(--verde);"></span>Ingresos · ' + formatearCOPContable(totalIngresos) + '</span>' +
+        '<span class="li"><span class="sw" style="background:var(--linea);"></span>Egresos · ' + formatearCOPContable(egresosMes) + '</span>' +
+      '</div></div>' +
+      '<div class="chart-card-contab"><h3>Ingresos por categoría</h3><p class="sub">' + ym + '</p>' +
       (catIngreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin ingresos este mes.</p>' :
        catIngreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxIn, 'var(--verde)'); }).join('')) +
       '</div>' +
-      '<div class="panel"><h2>Egresos por categoría</h2>' +
+      '<div class="chart-card-contab"><h3>Egresos por categoría</h3><p class="sub">' + ym + '</p>' +
       (catEgreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin egresos este mes.</p>' :
        catEgreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxOut, 'var(--rojo)'); }).join('')) +
       '</div>' +
@@ -3887,10 +4154,8 @@ function renderContabilidad(sesion) {
 
   var botonesPestañas = pestañas.map(function (p) {
     var activa = p === tabContabilidadActiva;
-    return '<button type="button" onclick="cambiarTabContabilidad(\'' + p + '\')" style="' +
-      'padding:8px 16px; border-radius:8px; border:1px solid ' + (activa ? 'var(--azul-oscuro)' : '#e2e5ea') + ';' +
-      'background:' + (activa ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activa ? '#fff' : 'var(--texto)') + ';' +
-      'font-size:12.5px; font-weight:600; cursor:pointer; font-family:var(--font-ui);">' + etiquetaPestaña[p] + '</button>';
+    return '<button type="button" class="contab-tab' + (activa ? ' active' : '') + '" onclick="cambiarTabContabilidad(\'' + p + '\')">' +
+      '<span class="dot"></span>' + etiquetaPestaña[p] + '</button>';
   }).join('');
 
   var contenido = '';
@@ -3902,9 +4167,9 @@ function renderContabilidad(sesion) {
   else if (tabContabilidadActiva === 'balance' && esAdmin) contenido = panelBalanceMensual();
 
   return '' +
-    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Contabilidad</h1>' +
+    heroContabilidad() +
     (esAdmin ? '' : '<p style="font-size:12px; color:var(--muted); margin:0 0 16px;">Podés registrar ingresos, gastos, compras y nómina. El resumen financiero completo lo ve solo Administración.</p>') +
-    '<div style="display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;">' + botonesPestañas + '</div>' +
+    '<div class="contab-tabs">' + botonesPestañas + '</div>' +
     contenido;
 }
 
