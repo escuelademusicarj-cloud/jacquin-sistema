@@ -890,12 +890,55 @@ function mesActualStr() { return new Date().toISOString().slice(0, 7); }
 var DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 var MAX_RECUPERACIONES_MES = 2;
 
-function cargarClases() {
-  var g = localStorage.getItem('jacquin_demo_clases');
-  return g ? JSON.parse(g) : [];
+// ---- Horarios: conectado al backend real ----
+// clase.profesor (email) y clase.sala (texto) se mantienen en la forma que
+// ya usaba el resto del archivo — se resuelven a partir de profesor_id/
+// sala_id reales al traer los datos. clase.alumnos (índices en cargarAlumnos())
+// se arma SOLO si el backend los incluye en la respuesta — hoy no hay ningún
+// endpoint para leer "qué alumnos tiene esta clase" después de creada, así
+// que por ahora esa lista puede aparecer vacía para clases ya existentes en
+// Supabase (limitación real del backend, no del código de acá).
+var CACHE_CLASES = [];
+var CACHE_SALAS = [];
+var CACHE_PROFESORES = [];
+async function refrescarCacheSalas() {
+  try {
+    var catalogos = await apiFetch('/api/horarios/catalogos', { method: 'GET' });
+    CACHE_SALAS = (catalogos && catalogos.salas) || [];
+  } catch (err) {
+    console.error('No se pudo cargar Salas desde el backend:', err.message);
+  }
 }
-function guardarClases(lista) { localStorage.setItem('jacquin_demo_clases', JSON.stringify(lista)); }
+async function refrescarCacheProfesores() {
+  try {
+    CACHE_PROFESORES = await apiFetch('/api/profesores', { method: 'GET' }) || [];
+  } catch (err) {
+    console.error('No se pudo cargar Profesores desde el backend:', err.message);
+  }
+}
+async function refrescarCacheClases() {
+  try {
+    var lista = await apiFetch('/api/horarios/clases', { method: 'GET' });
+    CACHE_CLASES = (lista || []).map(function (c) {
+      var profesor = CACHE_PROFESORES.find(function (p) { return p.id === c.profesor_id; });
+      var sala = CACHE_SALAS.find(function (s) { return s.id === c.sala_id; });
+      return {
+        id: c.id, profesor: profesor ? profesor.email : '', profesorNombre: profesor ? profesor.nombre : '',
+        sala: sala ? sala.nombre : '', programa: c.programa, tipo: c.tipo,
+        dia: c.dia_semana, hora: (c.hora_inicio || '').slice(0, 5),
+        // Ver nota arriba: sin endpoint para leer alumnos de una clase ya
+        // creada, esta lista queda vacía salvo que el backend la incluya.
+        alumnos: c.alumnos || [], alumnosFechas: c.alumnosFechas || {}
+      };
+    });
+  } catch (err) {
+    console.error('No se pudo cargar Clases desde el backend:', err.message);
+  }
+}
+function cargarClases() { return CACHE_CLASES; }
+function guardarClases(lista) { CACHE_CLASES = lista; }
 
+// Recuperaciones nunca tuvo pantalla propia en este HTML (queda como estaba).
 function cargarRecuperaciones() {
   var g = localStorage.getItem('jacquin_demo_recuperaciones');
   return g ? JSON.parse(g) : [];
@@ -946,11 +989,32 @@ function fechaColumnaSemana(semanaStr, diaIndice) {
   return d.toISOString().slice(0, 10);
 }
 
-function cargarAsistencias() {
-  var g = localStorage.getItem('jacquin_demo_asistencias');
-  return g ? JSON.parse(g) : [];
+// ---- Asistencia: conectado al backend real ----
+// El backend no tiene "traer todas las asistencias" ni un endpoint para
+// borrar un registro — solo "asistencia de este alumno" (se arma la caché
+// igual que Inscripciones/Cargos, pidiendo una por alumno) y un POST que
+// crea O actualiza (upsert) por clase+alumno+fecha. Elegir "—" en la
+// grilla borra el registro solo en esta sesión — en Supabase el último
+// estado puesto sigue quedando hasta que se lo pise con otro estado real.
+var CACHE_ASISTENCIAS = [];
+async function refrescarCacheAsistencias() {
+  try {
+    var todas = [];
+    for (var i = 0; i < CACHE_ALUMNOS.length; i++) {
+      var alumno = CACHE_ALUMNOS[i];
+      var propias = await apiFetch('/api/asistencia/alumno/' + alumno.id, { method: 'GET' });
+      (propias || []).forEach(function (a) {
+        var claseIdx = CACHE_CLASES.findIndex(function (c) { return c.id === a.clase_id; });
+        todas.push({ alumnoIdx: i, claseIdx: claseIdx, fecha: a.fecha, estado: a.estado });
+      });
+    }
+    CACHE_ASISTENCIAS = todas;
+  } catch (err) {
+    console.error('No se pudo cargar Asistencias desde el backend:', err.message);
+  }
 }
-function guardarAsistencias(lista) { localStorage.setItem('jacquin_demo_asistencias', JSON.stringify(lista)); }
+function cargarAsistencias() { return CACHE_ASISTENCIAS; }
+function guardarAsistencias(lista) { CACHE_ASISTENCIAS = lista; }
 
 function cargarPerfilesProfesor() {
   var g = localStorage.getItem('jacquin_demo_perfiles_profesor');
@@ -2515,11 +2579,17 @@ function renderHorariosSemana(sesion) {
     '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px; max-height:85vh; overflow-y:auto;">' +
     '<h2 style="margin-top:0;">Agendar en esta franja</h2>' +
     '<p id="modal-franja-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
+    '<div class="campo"><label>Profesor</label><select id="mo-profesor">' +
+    (CACHE_PROFESORES.length === 0 ? '<option value="">Sin profesores registrados</option>' :
+     CACHE_PROFESORES.map(function (p) { return '<option value="' + p.id + '">' + (p.nombre || p.email) + '</option>'; }).join('')) +
+    '</select></div>' +
     '<div class="campo"><label>Programa</label><select id="mo-programa">' +
     PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo"><label>Tipo</label><select id="mo-tipo"><option value="individual">Individual</option><option value="grupal">Grupal</option></select></div>' +
-    '<div class="campo"><label>Sala (opcional)</label><input id="mo-sala" type="text" /></div>' +
+    '<div class="campo"><label>Sala (opcional)</label><select id="mo-sala"><option value="">Sin sala asignada</option>' +
+    CACHE_SALAS.map(function (s) { return '<option value="' + s.id + '">' + s.nombre + '</option>'; }).join('') +
+    '</select></div>' +
     '<div class="campo"><label>Estudiante (opcional, se puede asignar después)</label><select id="mo-alumno"><option value="">Sin asignar todavía</option>' +
     alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
     '</select></div>' +
@@ -2634,22 +2704,34 @@ function activarLogicaHorarios() {
     btnConfirmar.addEventListener('click', function () {
       var dia = Number(modalAgendar.getAttribute('data-dia'));
       var hora = modalAgendar.getAttribute('data-hora');
-      var clases = cargarClases();
-
+      var profesorId = Number(document.getElementById('mo-profesor').value);
+      var salaId = document.getElementById('mo-sala').value;
       var alumnoSel = document.getElementById('mo-alumno').value;
-      var nuevaClase = {
-        programa: document.getElementById('mo-programa').value,
-        tipo: document.getElementById('mo-tipo').value,
-        dia: dia, hora: hora,
-        sala: document.getElementById('mo-sala').value.trim(),
-        alumnos: alumnoSel !== '' ? [Number(alumnoSel)] : [],
-        alumnosFechas: alumnoSel !== '' ? (function () { var o = {}; o[Number(alumnoSel)] = lunesDeFecha(new Date().toISOString().slice(0, 10)); return o; })() : {}
-      };
-      clases.push(nuevaClase);
-      guardarClases(clases);
+      var alumnoElegido = alumnoSel !== '' ? cargarAlumnos()[Number(alumnoSel)] : null;
+      if (!profesorId) { alert('Elegí un profesor — el backend lo exige para crear la clase.'); return; }
 
-      modalAgendar.style.display = 'none';
-      renderContenido('horarios');
+      btnConfirmar.disabled = true;
+      apiFetch('/api/horarios/clases', {
+        method: 'POST',
+        body: JSON.stringify({
+          clase: {
+            profesorId: profesorId, salaId: salaId ? Number(salaId) : null,
+            programa: document.getElementById('mo-programa').value,
+            tipo: document.getElementById('mo-tipo').value,
+            diaSemana: dia, horaInicio: hora, duracionMinutos: 45
+          },
+          alumnosIds: (alumnoElegido && alumnoElegido.id) ? [alumnoElegido.id] : []
+        })
+      })
+        .then(function () { return refrescarCacheClases(); })
+        .then(function () {
+          modalAgendar.style.display = 'none';
+          renderContenido('horarios');
+        })
+        .catch(function (err) {
+          alert('No se pudo agendar la clase: ' + err.message);
+          btnConfirmar.disabled = false;
+        });
     });
   }
 
@@ -2935,28 +3017,52 @@ function activarLogicaAsistencia() {
       var claseIdx = Number(this.getAttribute('data-clase-idx'));
       var fechaCelda = this.getAttribute('data-fecha');
       var estado = this.value;
+      var alumno = cargarAlumnos()[alumnoIdx];
+      var clase = cargarClases()[claseIdx];
+      var selectEl = this;
 
       var asistencias = cargarAsistencias();
       var existenteIdx = asistencias.findIndex(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fechaCelda; });
 
       if (!estado) {
-        // Volver a "—" borra el registro de ese día.
+        // Volver a "—" borra el registro solo acá (el backend no tiene
+        // endpoint para borrar asistencia — ver nota en cargarAsistencias).
         if (existenteIdx !== -1) asistencias.splice(existenteIdx, 1);
-      } else if (existenteIdx !== -1) {
-        asistencias[existenteIdx].estado = estado;
-      } else {
-        asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fechaCelda, estado: estado });
+        guardarAsistencias(asistencias);
+        renderContenido('asistencia');
+        return;
       }
-      guardarAsistencias(asistencias);
-
-      if (estado === 'falta') {
-        var faltasRecientes = asistencias.filter(function (a) { return a.alumnoIdx === alumnoIdx && a.estado === 'falta'; });
-        if (faltasRecientes.length >= UMBRAL_ALERTA_FALTAS) {
-          alert('⚠ Este estudiante acumula ' + faltasRecientes.length + ' faltas registradas — considerar contactar al acudiente.');
-        }
+      if (!alumno || !alumno.id || !clase || !clase.id) {
+        alert('No se pudo identificar al estudiante o la clase — recargá la página e intentá de nuevo.');
+        return;
       }
 
-      renderContenido('asistencia');
+      selectEl.disabled = true;
+      apiFetch('/api/asistencia', {
+        method: 'POST',
+        body: JSON.stringify({ claseId: clase.id, alumnoId: alumno.id, fecha: fechaCelda, estado: estado })
+      })
+        .then(function (resultado) {
+          if (existenteIdx !== -1) asistencias[existenteIdx].estado = estado;
+          else asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fechaCelda, estado: estado });
+          guardarAsistencias(asistencias);
+
+          // El backend ya avisa si corresponde alerta por faltas repetidas
+          // (umbral real del servicio) — si no vino ese dato, se aproxima
+          // igual que antes con lo que hay en caché.
+          var haiAlerta = resultado && resultado.alerta;
+          if (estado === 'falta' && !haiAlerta) {
+            var faltasRecientes = asistencias.filter(function (a) { return a.alumnoIdx === alumnoIdx && a.estado === 'falta'; });
+            haiAlerta = faltasRecientes.length >= UMBRAL_ALERTA_FALTAS;
+          }
+          if (haiAlerta) alert('⚠ Este estudiante acumula faltas registradas — considerar contactar al acudiente.');
+
+          renderContenido('asistencia');
+        })
+        .catch(function (err) {
+          alert('No se pudo registrar la asistencia: ' + err.message);
+          selectEl.disabled = false;
+        });
     });
   });
 
@@ -5060,6 +5166,10 @@ function navegar() {
     .then(function () { return refrescarCacheInscripciones(); })
     .then(function () { return refrescarCacheConceptos(); })
     .then(function () { return refrescarCacheCargos(); })
+    .then(function () { return refrescarCacheSalas(); })
+    .then(function () { return refrescarCacheProfesores(); })
+    .then(function () { return refrescarCacheClases(); })
+    .then(function () { return refrescarCacheAsistencias(); })
     .then(function () {
       // Si el usuario ya cambió de pantalla mientras se esperaba la
       // respuesta, no pisar lo que se está viendo ahora.
