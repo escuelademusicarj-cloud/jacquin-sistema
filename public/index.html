@@ -668,17 +668,73 @@ function cargarAlumnos() {
 // pisar estos cambios en memoria con lo que realmente hay en la base de datos.
 function guardarAlumnos(lista) { CACHE_ALUMNOS = lista; }
 
-function cargarPlanes() {
-  var g = localStorage.getItem('jacquin_demo_planes');
-  return g ? JSON.parse(g) : [];
+// ---- Matrícula: conectada al backend real ----
+// CACHE_PLANES son los planes reales que ya existen en Supabase (tabla
+// `planes`). El catálogo comercial (TIPOS_PLAN, más abajo) sigue siendo la
+// fuente de lo que se muestra en el formulario — acá solo se resuelve, para
+// cada combinación Programa+Tipo elegida, cuál es su fila real en la base
+// (o se crea si todavía no existe ninguna inscripción con esa combinación).
+var CACHE_PLANES = [];
+async function refrescarCachePlanes() {
+  try {
+    CACHE_PLANES = await apiFetch('/api/matricula/planes', { method: 'GET' }) || [];
+  } catch (err) {
+    console.error('No se pudo cargar Planes desde el backend:', err.message);
+  }
 }
-function guardarPlanes(lista) { localStorage.setItem('jacquin_demo_planes', JSON.stringify(lista)); }
+function cargarPlanes() { return CACHE_PLANES; }
+function guardarPlanes(lista) { CACHE_PLANES = lista; }
 
-function cargarInscripciones() {
-  var g = localStorage.getItem('jacquin_demo_inscripciones');
-  return g ? JSON.parse(g) : [];
+// Busca en CACHE_PLANES el plan real para (programa, tipo de TIPOS_PLAN). Si
+// no existe todavía, lo crea (solo funciona si quien está logueado es
+// ADMINISTRADOR — regla real del backend, ver servicios/matricula/servicio.js).
+async function buscarOCrearPlanId(programa, tipo) {
+  var existente = CACHE_PLANES.find(function (p) {
+    return p.programa === programa && Number(p.horas_semanales) === Number(tipo.horasSemana);
+  });
+  if (existente) return existente.id;
+  var creado = await apiFetch('/api/matricula/planes', {
+    method: 'POST',
+    body: JSON.stringify({ programa: programa, horasSemanales: tipo.horasSemana, valor: tipo.valor })
+  });
+  await refrescarCachePlanes();
+  return creado.id;
 }
-function guardarInscripciones(lista) { localStorage.setItem('jacquin_demo_inscripciones', JSON.stringify(lista)); }
+
+// CACHE_INSCRIPCIONES no tiene un solo endpoint "traer todas" en el backend
+// (solo existe "inscripciones de este alumno") — se arma pidiendo, por cada
+// estudiante en caché, sus propias inscripciones, y se traduce a la misma
+// forma que ya usaba el resto del archivo (alumnoIdx, tipoPlanNombre...).
+// El campo "pagado" no viene directo del backend acá — se aproxima con el
+// estado actual del alumno (activo = ya pagó la matrícula).
+var CACHE_INSCRIPCIONES = [];
+async function refrescarCacheInscripciones() {
+  try {
+    var todas = [];
+    for (var i = 0; i < CACHE_ALUMNOS.length; i++) {
+      var alumno = CACHE_ALUMNOS[i];
+      var propias = await apiFetch('/api/matricula/inscripciones/alumno/' + alumno.id, { method: 'GET' });
+      (propias || []).forEach(function (ins) {
+        var plan = CACHE_PLANES.find(function (p) { return p.id === ins.plan_id; });
+        var tipoCoincidente = plan ? TIPOS_PLAN.find(function (t) { return t.horasSemana === plan.horas_semanales; }) : null;
+        todas.push({
+          alumnoIdx: i,
+          tipoPlanNombre: tipoCoincidente ? tipoCoincidente.nombre : (plan ? plan.nombre : '—'),
+          horas: plan ? plan.horas_semanales : null,
+          valor: plan ? plan.valor : null,
+          descuentoPorcentaje: 0,
+          fechaInicio: ins.fecha_inicio,
+          pagado: alumno.estado === 'activo'
+        });
+      });
+    }
+    CACHE_INSCRIPCIONES = todas;
+  } catch (err) {
+    console.error('No se pudo cargar Inscripciones desde el backend:', err.message);
+  }
+}
+function cargarInscripciones() { return CACHE_INSCRIPCIONES; }
+function guardarInscripciones(lista) { CACHE_INSCRIPCIONES = lista; }
 
 var CONCEPTOS_PAGO = ['Matrícula', 'Mensualidad', 'Clase suelta', 'Programa especial', 'Eventos', 'Libros', 'Uniformes'];
 
@@ -1886,80 +1942,65 @@ function activarLogicaMatricula() {
       var fechaPago = document.getElementById('in-fecha-pago').value;
       var pagado = document.getElementById('in-pagado').value === 'si';
       var alumnoIdx = Number(selectAlumno.value);
+      var alumno = alumnos[alumnoIdx];
       var tipoPlanNombre = document.getElementById('in-tipo-plan').value;
       var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === tipoPlanNombre; });
       if (!fechaInicio) { alert('La fecha de inicio es obligatoria.'); return; }
       if (!fechaPago) { alert('Falta la fecha de pago (si ya pagó) o la fecha límite (si no pagó).'); return; }
       if (!tipo) { alert('Elegí un tipo de plan.'); return; }
+      if (!alumno || !alumno.id) { alert('No se pudo identificar al estudiante — recargá la página e intentá de nuevo.'); return; }
 
+      var programaElegido = document.getElementById('in-programa').value;
       var descuentoPorcentaje = Number(document.getElementById('in-descuento').value || 0);
       var descuentoMonto = Math.round(Number(tipo.valor) * (descuentoPorcentaje / 100));
       var valorConDescuento = Number(tipo.valor) - descuentoMonto;
-
-      var inscripciones = cargarInscripciones();
-      inscripciones.push({
-        alumnoIdx: alumnoIdx, tipoPlanNombre: tipoPlanNombre, horas: tipo.horasSemana,
-        valor: tipo.valor, descuentoPorcentaje: descuentoPorcentaje, fechaInicio: fechaInicio, pagado: pagado
-      });
-      guardarInscripciones(inscripciones);
-
-      // Genera el cargo de matrícula — mismo criterio que el backend real. El
-      // valor bruto y el descuento quedan por separado, el saldo ya los refleja.
-      var cargos = cargarCargos();
-      var nuevoCargo = {
-        alumnoIdx: alumnoIdx,
-        concepto: 'Matrícula',
-        valor: Number(tipo.valor),
-        descuento: descuentoMonto,
-        saldo: pagado ? 0 : valorConDescuento,
-        vencimiento: fechaPago,
-        estado: pagado ? 'pagado' : 'pendiente'
-      };
-      cargos.push(nuevoCargo);
-      guardarCargos(cargos);
-
-      // Si ya pagó, además queda el pago cargado en Pagos, y el alumno pasa a "activo" directo.
-      var alumnosLista = cargarAlumnos();
       var medioPagoInscripcion = pagado ? document.getElementById('in-medio-pago').value : '';
-      // El Programa 1 y 2 se pueden corregir desde acá — el cambio se
-      // guarda también en la ficha del estudiante (Estudiantes).
-      alumnosLista[alumnoIdx].programa = document.getElementById('in-programa').value;
-      alumnosLista[alumnoIdx].programa2 = document.getElementById('in-programa2').value;
-      if (pagado) {
-        var pagos = cargarPagosRegistrados();
-        pagos.push({ alumnoIdx: alumnoIdx, concepto: 'Matrícula', valor: valorConDescuento, fecha: fechaPago, medioPago: medioPagoInscripcion });
-        guardarPagosRegistrados(pagos);
-        alumnosLista[alumnoIdx].estado = 'activo';
-      } else {
-        alumnosLista[alumnoIdx].estado = 'pendiente_matricula';
-      }
-      // Fecha real de matrícula — desde acá en adelante el estudiante aparece
-      // en Horarios y Asistencia, nunca en semanas o fechas anteriores.
-      alumnosLista[alumnoIdx].fechaMatricula = fechaInicio;
-      guardarAlumnos(alumnosLista);
 
-      // Conecta con Contabilidad: todo pago registrado acá aparece
-      // automáticamente como Ingreso, sin tener que cargarlo dos veces.
-      if (pagado) {
-        var ingresosDesdeMatricula = cargarIngresos();
-        ingresosDesdeMatricula.push({
-          fecha: fechaPago,
-          concepto: 'Matrícula — ' + alumnosLista[alumnoIdx].nombres + ' ' + alumnosLista[alumnoIdx].apellidos,
-          programa: alumnosLista[alumnoIdx].programa,
-          categoria: 'Matrícula',
-          cliente: alumnosLista[alumnoIdx].nombres + ' ' + alumnosLista[alumnoIdx].apellidos,
-          metodo: medioPagoInscripcion,
-          estado: 'pagado',
-          valor: valorConDescuento
+      btnInscribir.disabled = true;
+      // buscarOCrearPlanId: si esta combinación Programa+Tipo de plan nunca se
+      // usó, intenta crearla en Supabase — eso solo funciona si quien está
+      // logueado es ADMINISTRADOR (regla real del backend). Si falla por
+      // permisos, el catch de abajo lo explica en vez de fallar en silencio.
+      buscarOCrearPlanId(programaElegido, tipo)
+        .then(function (planId) {
+          return apiFetch('/api/matricula/inscripciones', {
+            method: 'POST',
+            body: JSON.stringify({
+              alumnoId: alumno.id, planId: planId, fechaInicio: fechaInicio,
+              pagado: pagado, fecha: fechaPago, medioPago: pagado ? medioPagoInscripcion : undefined
+            })
+          });
+        })
+        .then(function () {
+          return Promise.all([refrescarCacheAlumnos(), refrescarCachePlanes()]).then(refrescarCacheInscripciones);
+        })
+        .then(function () {
+          // Conecta con Contabilidad (todavía local): todo pago registrado
+          // acá aparece como Ingreso, sin tener que cargarlo dos veces.
+          if (pagado) {
+            var ingresosDesdeMatricula = cargarIngresos();
+            ingresosDesdeMatricula.push({
+              fecha: fechaPago,
+              concepto: 'Matrícula — ' + alumno.nombres + ' ' + alumno.apellidos,
+              programa: programaElegido,
+              categoria: 'Matrícula',
+              cliente: alumno.nombres + ' ' + alumno.apellidos,
+              metodo: medioPagoInscripcion,
+              estado: 'pagado',
+              valor: valorConDescuento
+            });
+            guardarIngresos(ingresosDesdeMatricula);
+          }
+          document.getElementById('msj-inscripcion').textContent = pagado
+            ? 'Inscripción creada y pago registrado — el estudiante ya quedó "Activo", y el cargo aparece saldado en Pagos y cartera (visible ahí cuando ese módulo también esté conectado).'
+            : 'Inscripción creada — el estudiante queda "Pendiente de matrícula" y el cargo aparece pendiente hasta que se registre el pago.';
+          document.getElementById('msj-inscripcion').style.display = 'block';
+          setTimeout(function () { renderContenido('matricula'); }, 900);
+        })
+        .catch(function (err) {
+          alert('No se pudo crear la inscripción: ' + err.message);
+          btnInscribir.disabled = false;
         });
-        guardarIngresos(ingresosDesdeMatricula);
-      }
-
-      document.getElementById('msj-inscripcion').textContent = pagado
-        ? 'Inscripción creada y pago registrado — el estudiante ya quedó "Activo", y el cargo aparece saldado en el módulo Pagos.'
-        : 'Inscripción creada — el estudiante queda "Pendiente de matrícula" y el cargo aparece pendiente en el módulo Pagos hasta que se registre el pago.';
-      document.getElementById('msj-inscripcion').style.display = 'block';
-      setTimeout(function () { renderContenido('matricula'); }, 900);
     });
   }
 }
@@ -4940,16 +4981,21 @@ function navegar() {
   // Primer render con lo que ya haya en caché, para que la pantalla no
   // quede en blanco mientras se espera al backend.
   renderContenido(clave);
-  // Estudiantes ya vive en el backend real (Supabase) — se trae fresco en
-  // cada navegación para que no dependa de qué computador/navegador se use.
-  // Los demás módulos se van sumando acá a medida que se conectan.
-  refrescarCacheAlumnos().then(function () {
-    // Si el usuario ya cambió de pantalla mientras se esperaba la
-    // respuesta, no pisar lo que se está viendo ahora.
-    if ((location.hash.replace('#', '') || 'dashboard') === clave) {
-      renderContenido(clave);
-    }
-  });
+  // Estudiantes y Matrícula ya viven en el backend real (Supabase) — se
+  // traen frescos en cada navegación para que no dependa de qué
+  // computador/navegador se use. Los demás módulos se van sumando acá a
+  // medida que se conectan. Inscripciones depende de que Alumnos y Planes
+  // ya estén frescos (arma su caché combinando ambos), por eso va al final.
+  refrescarCacheAlumnos()
+    .then(function () { return refrescarCachePlanes(); })
+    .then(function () { return refrescarCacheInscripciones(); })
+    .then(function () {
+      // Si el usuario ya cambió de pantalla mientras se esperaba la
+      // respuesta, no pisar lo que se está viendo ahora.
+      if ((location.hash.replace('#', '') || 'dashboard') === clave) {
+        renderContenido(clave);
+      }
+    });
 }
 
 function mostrarApp() {
