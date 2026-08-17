@@ -485,6 +485,25 @@ var POLITICA_PASSWORD = [
 
 var PROGRAMAS = ['Piano','Guitarra acústica','Guitarra eléctrica','Bajo','Técnica vocal','Violín','Percusión','Iniciación musical','Exploración musical infantil'];
 
+// Un color propio por programa/instrumento — para identificarlos de un
+// vistazo en Horarios y Asistencia cuando se ve "General" (todos mezclados).
+var COLOR_PROGRAMA = {
+  'Piano': '#223F61',
+  'Guitarra acústica': '#B5651D',
+  'Guitarra eléctrica': '#E78C3B',
+  'Bajo': '#6A4C93',
+  'Técnica vocal': '#C2185B',
+  'Violín': '#2E7D32',
+  'Percusión': '#0097A7',
+  'Iniciación musical': '#93B6EE',
+  'Exploración musical infantil': '#8D6E63'
+};
+function colorPrograma(nombre) { return COLOR_PROGRAMA[nombre] || 'var(--azul-oscuro)'; }
+function chipPrograma(nombre) {
+  var color = colorPrograma(nombre);
+  return '<span style="display:inline-block; font-weight:700; font-size:inherit; padding:1px 8px; border-radius:8px; background:' + color + '1a; color:' + color + '; border:1px solid ' + color + '55;">' + nombre + '</span>';
+}
+
 // Tipos de plan reales, provistos por el usuario (2026-08-14) — a
 // diferencia del catálogo anterior (que era estimado), estos son
 // precios y horas confirmados de verdad, no inventados.
@@ -1950,7 +1969,8 @@ function renderCalendarioMensual(sesion) {
         (esFestivo ? '<div style="font-size:9px; color:var(--rojo);">' + esFestivo + '</div>' : '') +
         clasesDelDia.slice(0, 3).map(function (cl) {
           var prof = profesores.find(function (p) { return p.email === cl.profesor; });
-          return '<div style="font-size:9px; background:var(--beige); border-radius:3px; padding:2px 3px; margin-top:2px;">' + cl.programa + (esProfesor ? '' : ' · ' + (prof ? prof.nombre.split(' ')[0] : '')) + '</div>';
+          var colorCl = colorPrograma(cl.programa);
+          return '<div style="font-size:9px; background:' + colorCl + '1a; color:' + colorCl + '; font-weight:700; border-radius:3px; padding:2px 3px; margin-top:2px;">' + cl.programa + (esProfesor ? '' : ' · ' + (prof ? prof.nombre.split(' ')[0] : '')) + '</div>';
         }).join('') +
         (clasesDelDia.length > 3 ? '<div style="font-size:9px; color:var(--muted);">+' + (clasesDelDia.length - 3) + ' más</div>' : '') +
         '</td>';
@@ -2032,7 +2052,7 @@ function renderHorariosSemana(sesion) {
         });
         var nombresAlumnos = alumnosVisibles.map(function (idx) { return alumnos[idx].nombres + ' ' + alumnos[idx].apellidos.split(' ')[0]; });
         return '<div class="celda-clase" data-clase-idx="' + o.i + '" style="font-size:13px; text-align:left; background:#fff; border-radius:7px; padding:8px 10px; margin-bottom:6px; cursor:pointer;">' +
-          '<div style="font-weight:600;">' + o.c.programa + '</div>' +
+          '<div style="font-weight:600;">' + chipPrograma(o.c.programa) + '</div>' +
           '<div style="color:var(--muted);">' + (prof ? prof.nombre : o.c.profesor) + '</div>' +
           (nombresAlumnos.length ? '<div style="color:var(--azul-oscuro);">' + nombresAlumnos.join(', ') + '</div>' : '<div style="color:var(--muted); font-style:italic;">sin estudiante todavía</div>') +
           '</div>';
@@ -2063,7 +2083,8 @@ function renderHorariosSemana(sesion) {
   var botonesFiltro = '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;">' +
     ['General'].concat(PROGRAMAS).map(function (p) {
       var activo = p === filtroProgramaHorario;
-      return '<button class="btn-filtro-programa" data-programa="' + p + '" style="font-size:12px; padding:6px 12px; border-radius:16px; cursor:pointer; border:1.5px solid ' + (activo ? 'var(--azul-oscuro)' : '#ddd') + '; background:' + (activo ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activo ? '#fff' : 'var(--texto)') + ';">' + p + '</button>';
+      var color = p === 'General' ? 'var(--azul-oscuro)' : colorPrograma(p);
+      return '<button class="btn-filtro-programa" data-programa="' + p + '" style="font-size:12px; padding:6px 12px; border-radius:16px; cursor:pointer; border:1.5px solid ' + (activo ? color : '#ddd') + '; background:' + (activo ? color : '#fff') + '; color:' + (activo ? '#fff' : 'var(--texto)') + ';">' + p + '</button>';
     }).join('') +
     '</div>';
 
@@ -2340,7 +2361,7 @@ function renderAsistencia(sesion) {
         }).join('');
 
         return '<div class="celda-clase-asistencia" style="font-size:11px; text-align:left; background:#fff; border-radius:5px; padding:5px 6px; margin-bottom:4px;">' +
-          '<div style="font-weight:600; margin-bottom:3px;">' + o.c.programa + '</div>' +
+          '<div style="font-weight:600; margin-bottom:3px;">' + chipPrograma(o.c.programa) + '</div>' +
           (filasEstudiantes || '<div style="color:var(--muted); font-style:italic; font-size:10.5px;">sin estudiantes todavía</div>') +
           '</div>';
       }).join('');
@@ -2363,7 +2384,8 @@ function renderAsistencia(sesion) {
   var botonesFiltro = '<div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;">' +
     ['General'].concat(PROGRAMAS).map(function (p) {
       var activo = p === filtroProgramaAsistencia;
-      return '<button class="btn-filtro-programa-asistencia" data-programa="' + p + '" style="font-size:12px; padding:6px 12px; border-radius:16px; cursor:pointer; border:1.5px solid ' + (activo ? 'var(--azul-oscuro)' : '#ddd') + '; background:' + (activo ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activo ? '#fff' : 'var(--texto)') + ';">' + p + '</button>';
+      var color = p === 'General' ? 'var(--azul-oscuro)' : colorPrograma(p);
+      return '<button class="btn-filtro-programa-asistencia" data-programa="' + p + '" style="font-size:12px; padding:6px 12px; border-radius:16px; cursor:pointer; border:1.5px solid ' + (activo ? color : '#ddd') + '; background:' + (activo ? color : '#fff') + '; color:' + (activo ? '#fff' : 'var(--texto)') + ';">' + p + '</button>';
     }).join('') +
     '</div>';
 
