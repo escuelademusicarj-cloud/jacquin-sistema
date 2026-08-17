@@ -680,6 +680,7 @@ var semanaAsistenciaSeleccionada = semanaActualStr();
 var filtroProgramaAsistencia = 'General';
 var alumnoHistorialAsistenciaIdx = null; // estudiante elegido en el recuadro de historial individual
 var busquedaHistorialAsistencia = ''; // texto del buscador de estudiante en el historial de asistencia
+var busquedaAvanceMensual = ''; // texto del buscador de estudiante en Avances académicos
 
 // ---- Helpers de semana ISO (input type="week") ----
 function semanaActualStr() {
@@ -2890,6 +2891,7 @@ function renderEvaluacionMensualPanel(sesion) {
   return '' +
     '<div class="panel"><h2>Estudiantes — ' + mesLegible + '</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">A cada estudiante hay que hacerle esta evaluación al menos una vez por mes. Cuando empieza un mes nuevo, vuelve a aparecer como "Pendiente este mes" aunque ya se le haya hecho en meses anteriores.</p>' +
+    buscadorHtml +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Edad</th><th>Curso</th><th>Estado del mes</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
     '</div>' +
     '<div class="panel"><h2>Historial de avances académicos</h2>' +
@@ -2900,6 +2902,16 @@ function renderEvaluacionMensualPanel(sesion) {
 }
 
 function activarLogicaEvaluacionMensual() {
+  var campoBuscarAvance = document.getElementById('av-buscar-alumno');
+  if (campoBuscarAvance) {
+    campoBuscarAvance.addEventListener('input', function () {
+      busquedaAvanceMensual = this.value;
+      renderContenido('evaluacion');
+      var campo = document.getElementById('av-buscar-alumno');
+      if (campo) { campo.focus(); campo.setSelectionRange(campo.value.length, campo.value.length); }
+    });
+  }
+
   var modal = document.getElementById('modal-eval-mensual');
   if (!modal) return;
 
@@ -3208,12 +3220,27 @@ function fechaLegibleEvento(fechaStr) {
   return new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+// Convierte la hora guardada (formato 24h "HH:MM", tal cual la deja el
+// <input type="time">) a un formato de 12 horas con a. m./p. m., para que
+// en el mensaje de WhatsApp quede clarísima y no se preste a confusión con
+// la hora programada originalmente.
+function horaLegibleEvento(horaStr) {
+  if (!horaStr) return null;
+  var partes = horaStr.split(':');
+  var h = Number(partes[0]);
+  var m = partes[1] || '00';
+  var sufijo = h >= 12 ? 'p. m.' : 'a. m.';
+  var h12 = h % 12;
+  if (h12 === 0) h12 = 12;
+  return h12 + ':' + m + ' ' + sufijo;
+}
+
 // Redacta el mensaje de convocatoria — distinto según el tipo de evento — y
 // siempre pide confirmación de asistencia, para que quede formal y no como
 // un simple aviso suelto.
 function mensajeConvocatoriaEvento(evento, nombreDestino) {
   var fechaTxt = fechaLegibleEvento(evento.fecha);
-  var horaTxt = evento.hora || 'hora por confirmar';
+  var horaTxt = horaLegibleEvento(evento.hora) || 'hora por confirmar';
   var lugarTxt = evento.lugar || 'la academia';
   var intro;
   if (evento.tipo === 'Ensayo') {
@@ -3282,11 +3309,32 @@ function renderEventos(sesion) {
     ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay eventos realizados o cancelados.</p>'
     : eventosPasados.map(function (o) { return renderTarjetaEvento(o.e, o.i, alumnos, profesores); }).join('');
 
+  var htmlModalEditar =
+    '<div id="modal-editar-evento" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:420px; max-height:88vh; overflow-y:auto;">' +
+    '<h2 style="margin-top:0;">Editar evento</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-8px;">Corregí la fecha, hora o cualquier otro dato — las invitaciones ya enviadas no se reenvían solas, tenés que volver a mandarlas si cambia algo importante.</p>' +
+    '<div class="campo"><label>Tipo de evento</label><select id="ee-tipo">' +
+    TIPOS_EVENTO.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Título</label><input id="ee-titulo" type="text" /></div>' +
+    '<div class="campo"><label>Fecha</label><input id="ee-fecha" type="date" /></div>' +
+    '<div class="campo"><label>Hora</label><input id="ee-hora" type="time" /></div>' +
+    '<div class="campo"><label>Lugar / salón</label><input id="ee-lugar" type="text" /></div>' +
+    '<div class="campo"><label>Profesor responsable (opcional)</label><select id="ee-profesor-responsable"><option value="">Sin asignar</option>' +
+    profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Nota adicional para el mensaje (opcional)</label><input id="ee-notas" type="text" /></div>' +
+    '<button class="btn-primario" id="btn-guardar-editar-evento">Guardar cambios</button>' +
+    '<button id="btn-cancelar-editar-evento" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '</div></div>';
+
   return formCrear +
     '<div class="panel"><h2>Próximos eventos</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Convocá a cada estudiante o profesor por WhatsApp con un clic — el mensaje ya sale redactado y el sistema deja registrado a quién se le envió y quién confirmó.</p>' +
     listaVigentes + '</div>' +
-    '<div class="panel"><h2>Historial de eventos</h2>' + listaPasados + '</div>';
+    '<div class="panel"><h2>Historial de eventos</h2>' + listaPasados + '</div>' +
+    htmlModalEditar;
 }
 
 function renderTarjetaEvento(evento, idx, alumnos, profesores) {
@@ -3326,16 +3374,23 @@ function renderTarjetaEvento(evento, idx, alumnos, profesores) {
       ESTADOS_EVENTO.map(function (s) { return '<option value="' + s + '"' + (s === evento.estado ? ' selected' : '') + '>' + ETIQUETA_ESTADO_EVENTO[s] + '</option>'; }).join('') + '</select>'
     : '<span class="chip-rol" style="background:' + COLOR_ESTADO_EVENTO[evento.estado] + '; color:#fff;">' + ETIQUETA_ESTADO_EVENTO[evento.estado] + '</span>';
 
+  var botonesGestion =
+    '<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">' +
+    selectorEstado +
+    '<button class="btn-editar-evento" data-idx="' + idx + '" style="font-size:12px; padding:5px 10px; border-radius:6px; border:1.5px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui);">Editar</button>' +
+    '<button class="btn-eliminar-evento" data-idx="' + idx + '" style="font-size:12px; padding:5px 10px; border-radius:6px; border:1.5px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer; font-family:var(--font-ui);">Eliminar</button>' +
+    '</div>';
+
   return '' +
     '<div class="panel" style="margin-bottom:14px; border-left:4px solid ' + COLOR_ESTADO_EVENTO[evento.estado] + ';">' +
     '<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">' +
     '<div>' +
     '<span class="chip-rol" style="background:var(--beige); color:var(--texto); margin-bottom:6px; display:inline-block;">' + ETIQUETA_TIPO_EVENTO[evento.tipo] + '</span>' +
     '<h3 style="margin:4px 0 2px;">' + evento.titulo + '</h3>' +
-    '<p style="margin:0; font-size:12.5px; color:var(--muted); text-transform:capitalize;">' + fechaLegibleEvento(evento.fecha) + (evento.hora ? ' · ' + evento.hora : '') + (evento.lugar ? ' · ' + evento.lugar : '') + '</p>' +
+    '<p style="margin:0; font-size:12.5px; color:var(--muted); text-transform:capitalize;">' + fechaLegibleEvento(evento.fecha) + (evento.hora ? ' · ' + horaLegibleEvento(evento.hora) : '') + (evento.lugar ? ' · ' + evento.lugar : '') + '</p>' +
     (profesorResp ? '<p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Responsable: ' + profesorResp + '</p>' : '') +
     '</div>' +
-    selectorEstado +
+    botonesGestion +
     '</div>' +
     '<p style="font-size:12px; color:var(--muted); margin:10px 0 8px;">' + totalEnviados + ' de ' + totalInvitados + ' invitaciones enviadas · ' + totalConfirmados + ' confirmadas</p>' +
     (filasInvitados.length === 0 ? '<p style="font-size:12.5px; color:var(--muted);">No se convocó a nadie todavía.</p>' :
@@ -3423,6 +3478,67 @@ function activarLogicaEventos() {
       if (!evento.invitaciones[clave]) evento.invitaciones[clave] = {};
       evento.invitaciones[clave].confirmado = chk.checked;
       guardarEventos(eventos);
+    });
+  });
+
+  var modalEditar = document.getElementById('modal-editar-evento');
+
+  document.querySelectorAll('.btn-editar-evento').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idx = Number(btn.getAttribute('data-idx'));
+      var evento = cargarEventos()[idx];
+      if (!evento || !modalEditar) return;
+
+      modalEditar.setAttribute('data-idx', idx);
+      document.getElementById('ee-tipo').value = evento.tipo || 'Ensayo';
+      document.getElementById('ee-titulo').value = evento.titulo || '';
+      document.getElementById('ee-fecha').value = evento.fecha || '';
+      document.getElementById('ee-hora').value = evento.hora || '';
+      document.getElementById('ee-lugar').value = evento.lugar || '';
+      document.getElementById('ee-profesor-responsable').value = evento.profesorResponsable || '';
+      document.getElementById('ee-notas').value = evento.notas || '';
+      modalEditar.style.display = 'flex';
+    });
+  });
+
+  var btnCancelarEditar = document.getElementById('btn-cancelar-editar-evento');
+  if (btnCancelarEditar) btnCancelarEditar.addEventListener('click', function () { modalEditar.style.display = 'none'; });
+
+  var btnGuardarEditar = document.getElementById('btn-guardar-editar-evento');
+  if (btnGuardarEditar) {
+    btnGuardarEditar.addEventListener('click', function () {
+      var idx = Number(modalEditar.getAttribute('data-idx'));
+      var titulo = document.getElementById('ee-titulo').value.trim();
+      var fecha = document.getElementById('ee-fecha').value;
+      if (!titulo || !fecha) { alert('El título y la fecha son obligatorios.'); return; }
+
+      var eventos = cargarEventos();
+      var evento = eventos[idx];
+      evento.tipo = document.getElementById('ee-tipo').value;
+      evento.titulo = titulo;
+      evento.fecha = fecha;
+      evento.hora = document.getElementById('ee-hora').value;
+      evento.lugar = document.getElementById('ee-lugar').value.trim();
+      evento.profesorResponsable = document.getElementById('ee-profesor-responsable').value;
+      evento.notas = document.getElementById('ee-notas').value.trim();
+      guardarEventos(eventos);
+
+      modalEditar.style.display = 'none';
+      renderContenido('eventos');
+    });
+  }
+
+  document.querySelectorAll('.btn-eliminar-evento').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idx = Number(btn.getAttribute('data-idx'));
+      var eventos = cargarEventos();
+      var evento = eventos[idx];
+      if (!evento) return;
+      if (!confirm('¿Eliminar el evento "' + evento.titulo + '"? Esta acción no se puede deshacer.')) return;
+
+      eventos.splice(idx, 1);
+      guardarEventos(eventos);
+      renderContenido('eventos');
     });
   });
 }
