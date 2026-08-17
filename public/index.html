@@ -736,7 +736,7 @@ async function refrescarCacheInscripciones() {
 function cargarInscripciones() { return CACHE_INSCRIPCIONES; }
 function guardarInscripciones(lista) { CACHE_INSCRIPCIONES = lista; }
 
-var CONCEPTOS_PAGO = ['Matrícula', 'Mensualidad', 'Clase suelta', 'Programa especial', 'Eventos', 'Libros', 'Uniformes'];
+var CONCEPTOS_PAGO = ['Matrícula', 'Mensualidad', 'Clase suelta', 'Programa especial', 'Evento', 'Libros', 'Uniformes'];
 
 // ---- Contabilidad — categorías adaptadas al lenguaje de la academia,
 // tomando como referencia el módulo de contabilidad de otro proyecto
@@ -784,11 +784,59 @@ function cargarInventario() {
 }
 function guardarInventario(lista) { localStorage.setItem('jacquin_demo_inventario', JSON.stringify(lista)); }
 
-function cargarPagosRegistrados() {
-  var g = localStorage.getItem('jacquin_demo_pagos_registrados');
-  return g ? JSON.parse(g) : [];
+// ---- Pagos y cartera: conectado al backend real ----
+// El catálogo local CONCEPTOS_PAGO (más abajo) sigue mostrándose igual en el
+// formulario, pero para crear un cargo real hace falta el id del concepto en
+// Supabase — CACHE_CONCEPTOS lo trae de /api/pagos/conceptos. Ojo: a
+// diferencia de los planes, acá el backend NO tiene endpoint para crear
+// conceptos nuevos — si la tabla `conceptos_pago` está vacía en Supabase,
+// hay que insertar los 7 conceptos ahí manualmente (una vez, por SQL) antes
+// de poder generar cargos.
+var CACHE_CONCEPTOS = [];
+async function refrescarCacheConceptos() {
+  try {
+    CACHE_CONCEPTOS = await apiFetch('/api/pagos/conceptos', { method: 'GET' }) || [];
+  } catch (err) {
+    console.error('No se pudo cargar Conceptos de pago desde el backend:', err.message);
+  }
 }
-function guardarPagosRegistrados(lista) { localStorage.setItem('jacquin_demo_pagos_registrados', JSON.stringify(lista)); }
+
+// Igual que con inscripciones: no existe un "traer todos los cargos" en el
+// backend, solo "cargos de este alumno" — se arma pidiendo uno por
+// estudiante. Cada cargo guarda su id real (hace falta para registrar un
+// pago contra él).
+function cargarCargos() { return CACHE_CARGOS; }
+function guardarCargos(lista) { CACHE_CARGOS = lista; }
+var CACHE_CARGOS = [];
+async function refrescarCacheCargos() {
+  try {
+    var todos = [];
+    for (var i = 0; i < CACHE_ALUMNOS.length; i++) {
+      var alumno = CACHE_ALUMNOS[i];
+      var propios = await apiFetch('/api/pagos/cargos/alumno/' + alumno.id, { method: 'GET' });
+      (propios || []).forEach(function (c) {
+        var concepto = CACHE_CONCEPTOS.find(function (cc) { return cc.id === c.concepto_id; });
+        todos.push({
+          id: c.id, alumnoIdx: i, concepto: concepto ? concepto.nombre : ('Concepto #' + c.concepto_id),
+          valor: Number(c.valor), descuento: Number(c.descuento || 0), saldo: Number(c.saldo_pendiente),
+          vencimiento: c.fecha_vencimiento, estado: c.estado
+        });
+      });
+    }
+    CACHE_CARGOS = todos;
+  } catch (err) {
+    console.error('No se pudo cargar Cargos desde el backend:', err.message);
+  }
+}
+
+// Los comprobantes de pago (historial de "Pagos y comprobantes") SÍ quedan
+// con el problema original: el backend no tiene ningún endpoint para listar
+// pagos ya hechos (solo uno para crear uno nuevo) — así que esta lista en
+// particular sigue viviendo solo en memoria de esta sesión/pestaña, se
+// pierde al recargar o cambiar de equipo, hasta que se agregue ese endpoint.
+var CACHE_PAGOS_REGISTRADOS = [];
+function cargarPagosRegistrados() { return CACHE_PAGOS_REGISTRADOS; }
+function guardarPagosRegistrados(lista) { CACHE_PAGOS_REGISTRADOS = lista; }
 
 // Evaluación académica — método propio de Jacquin (ver Skill: pedagogia/metodo-propio-jacquin.md).
 // Escala cualitativa, no numérica de exámenes — el número acá es solo interno, para poder graficar la línea de tiempo.
@@ -837,11 +885,7 @@ function guardarEvaluacionesMensuales(lista) { localStorage.setItem('jacquin_dem
 
 function mesActualStr() { return new Date().toISOString().slice(0, 7); }
 
-function cargarCargos() {
-  var g = localStorage.getItem('jacquin_demo_cargos');
-  return g ? JSON.parse(g) : [];
-}
-function guardarCargos(lista) { localStorage.setItem('jacquin_demo_cargos', JSON.stringify(lista)); }
+// cargarCargos/guardarCargos ya quedaron definidas más arriba, conectadas al backend real (ver CACHE_CARGOS).
 
 var DIAS_SEMANA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
 var MAX_RECUPERACIONES_MES = 2;
@@ -2137,20 +2181,28 @@ function activarLogicaPagos() {
       var valor = Number(document.getElementById('cg-valor').value);
       var descuento = Number(document.getElementById('cg-descuento').value || 0);
       var vencimiento = document.getElementById('cg-vencimiento').value;
+      var conceptoNombre = document.getElementById('cg-concepto').value;
+      var alumnoIdx = Number(document.getElementById('cg-alumno').value);
+      var alumno = cargarAlumnos()[alumnoIdx];
       if (!valor || !vencimiento) { alert('Valor y fecha de vencimiento son obligatorios.'); return; }
       if (descuento > valor) { alert('El descuento no puede ser mayor al valor.'); return; }
-      var cargos = cargarCargos();
-      cargos.push({
-        alumnoIdx: Number(document.getElementById('cg-alumno').value),
-        concepto: document.getElementById('cg-concepto').value,
-        valor: valor,
-        descuento: descuento,
-        saldo: valor - descuento,
-        vencimiento: vencimiento,
-        estado: 'pendiente'
-      });
-      guardarCargos(cargos);
-      renderContenido('pagos');
+      if (!alumno || !alumno.id) { alert('No se pudo identificar al estudiante — recargá la página e intentá de nuevo.'); return; }
+      var concepto = CACHE_CONCEPTOS.find(function (c) { return c.nombre === conceptoNombre; });
+      if (!concepto) {
+        alert('El concepto "' + conceptoNombre + '" todavía no existe en la base de datos (Supabase). Hace falta insertarlo en la tabla conceptos_pago antes de poder generar este cargo.');
+        return;
+      }
+      btnCargo.disabled = true;
+      apiFetch('/api/pagos/cargos', {
+        method: 'POST',
+        body: JSON.stringify({ alumnoId: alumno.id, conceptoId: concepto.id, valor: valor, descuento: descuento, fechaVencimiento: vencimiento })
+      })
+        .then(function () { return refrescarCacheCargos(); })
+        .then(function () { renderContenido('pagos'); })
+        .catch(function (err) {
+          alert('No se pudo generar el cargo: ' + err.message);
+          btnCargo.disabled = false;
+        });
     });
   }
 
@@ -2162,35 +2214,52 @@ function activarLogicaPagos() {
       var medioPago = document.getElementById('pg-medio').value;
       var cargos = cargarCargos();
       var cargo = cargos[idx];
+      if (!cargo) { alert('No se pudo identificar el cargo — recargá la página e intentá de nuevo.'); return; }
       if (!valor || valor <= 0) { alert('El valor del pago debe ser mayor a cero.'); return; }
       if (valor > cargo.saldo) { alert('El pago no puede ser mayor al saldo pendiente ($' + cargo.saldo + ').'); return; }
-      cargo.saldo -= valor;
-      cargo.estado = cargo.saldo === 0 ? 'pagado' : 'parcial';
-      guardarCargos(cargos);
 
-      var pagos = cargarPagosRegistrados();
       var fechaPagoCargo = new Date().toISOString().slice(0, 10);
-      pagos.push({ alumnoIdx: cargo.alumnoIdx, concepto: cargo.concepto, valor: valor, fecha: fechaPagoCargo, medioPago: medioPago });
-      guardarPagosRegistrados(pagos);
+      btnPago.disabled = true;
+      apiFetch('/api/pagos/pagos', {
+        method: 'POST',
+        body: JSON.stringify({ cargoId: cargo.id, valor: valor, fechaPago: fechaPagoCargo, medioPago: medioPago })
+      })
+        .then(function () {
+          // El pago puede haber saldado el cargo y activado al alumno (lo
+          // resuelve el backend) — hay que refrescar todo lo que depende de eso.
+          return Promise.all([refrescarCacheAlumnos(), refrescarCacheCargos()]);
+        })
+        .then(function () {
+          // El registro para el comprobante en pantalla vive solo en esta
+          // sesión (el backend no tiene endpoint para listar pagos ya
+          // hechos) — ver nota en cargarPagosRegistrados más arriba.
+          var pagos = cargarPagosRegistrados();
+          pagos.push({ alumnoIdx: cargo.alumnoIdx, concepto: cargo.concepto, valor: valor, fecha: fechaPagoCargo, medioPago: medioPago });
+          guardarPagosRegistrados(pagos);
 
-      // Misma conexión que en Matrícula: todo pago que se registra acá
-      // aparece automáticamente como Ingreso en Contabilidad.
-      var alumnoDelCargo = cargarAlumnos()[cargo.alumnoIdx];
-      var ingresosDesdePago = cargarIngresos();
-      ingresosDesdePago.push({
-        fecha: fechaPagoCargo,
-        concepto: cargo.concepto + (alumnoDelCargo ? ' — ' + alumnoDelCargo.nombres + ' ' + alumnoDelCargo.apellidos : ''),
-        programa: alumnoDelCargo ? alumnoDelCargo.programa : '',
-        categoria: CATEGORIAS_INGRESO.indexOf(cargo.concepto) !== -1 ? cargo.concepto : 'Otro',
-        cliente: alumnoDelCargo ? alumnoDelCargo.nombres + ' ' + alumnoDelCargo.apellidos : '',
-        metodo: medioPago,
-        estado: 'pagado',
-        valor: valor
-      });
-      guardarIngresos(ingresosDesdePago);
+          // Misma conexión que en Matrícula: todo pago que se registra acá
+          // aparece automáticamente como Ingreso en Contabilidad (todavía local).
+          var alumnoDelCargo = cargarAlumnos()[cargo.alumnoIdx];
+          var ingresosDesdePago = cargarIngresos();
+          ingresosDesdePago.push({
+            fecha: fechaPagoCargo,
+            concepto: cargo.concepto + (alumnoDelCargo ? ' — ' + alumnoDelCargo.nombres + ' ' + alumnoDelCargo.apellidos : ''),
+            programa: alumnoDelCargo ? alumnoDelCargo.programa : '',
+            categoria: CATEGORIAS_INGRESO.indexOf(cargo.concepto) !== -1 ? cargo.concepto : 'Otro',
+            cliente: alumnoDelCargo ? alumnoDelCargo.nombres + ' ' + alumnoDelCargo.apellidos : '',
+            metodo: medioPago,
+            estado: 'pagado',
+            valor: valor
+          });
+          guardarIngresos(ingresosDesdePago);
 
-      document.getElementById('msj-pago').style.display = 'block';
-      setTimeout(function () { renderContenido('pagos'); }, 700);
+          document.getElementById('msj-pago').style.display = 'block';
+          setTimeout(function () { renderContenido('pagos'); }, 700);
+        })
+        .catch(function (err) {
+          alert('No se pudo registrar el pago: ' + err.message);
+          btnPago.disabled = false;
+        });
     });
   }
 
@@ -4989,6 +5058,8 @@ function navegar() {
   refrescarCacheAlumnos()
     .then(function () { return refrescarCachePlanes(); })
     .then(function () { return refrescarCacheInscripciones(); })
+    .then(function () { return refrescarCacheConceptos(); })
+    .then(function () { return refrescarCacheCargos(); })
     .then(function () {
       // Si el usuario ya cambió de pantalla mientras se esperaba la
       // respuesta, no pisar lo que se está viendo ahora.
