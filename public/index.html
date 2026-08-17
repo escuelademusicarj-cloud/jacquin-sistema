@@ -454,6 +454,7 @@ var MODULOS = [
   { key: 'cursos', label: 'Cursos y programas', grupo: 'academia' },
   { key: 'asistencia', label: 'Asistencia', grupo: 'academia' },
   { key: 'evaluacion', label: 'Avances académicos', grupo: 'seguimiento' },
+  { key: 'eventos', label: 'Eventos', grupo: 'seguimiento' },
   { key: 'comunicacion', label: 'Comunicación', grupo: 'seguimiento' },
   { key: 'inventario', label: 'Inventario', grupo: 'seguimiento' },
   { key: 'reportes', label: 'Reportes', grupo: 'seguimiento' },
@@ -468,7 +469,7 @@ var VISIBILIDAD_ROL = {
   // Secretaría ve Contabilidad, pero con visibilidad restringida (renderContabilidad
   // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
   // el resumen financiero — eso queda reservado al Administrador).
-  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario','contabilidad'],
+  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos'],
   PROFESOR: ['dashboard','estudiantes','profesores','asistencia','evaluacion']
 };
 
@@ -677,6 +678,8 @@ var UMBRAL_ALERTA_FALTAS = 3;
 // su propia fecha real dentro de la semana elegida — y filtro por programa/"General".
 var semanaAsistenciaSeleccionada = semanaActualStr();
 var filtroProgramaAsistencia = 'General';
+var alumnoHistorialAsistenciaIdx = null; // estudiante elegido en el recuadro de historial individual
+var busquedaHistorialAsistencia = ''; // texto del buscador de estudiante en el historial de asistencia
 
 // ---- Helpers de semana ISO (input type="week") ----
 function semanaActualStr() {
@@ -788,6 +791,7 @@ var ICONOS_MODULO = {
   cursos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.2c0-.8.7-1.4 1.6-1.2 2 .4 4.3 1.2 6.4 2.6 2.1-1.4 4.4-2.2 6.4-2.6.9-.2 1.6.4 1.6 1.2v13c0 .7-.6 1.2-1.3 1.3-2 .3-4.4 1-6.7 2.5-2.3-1.5-4.7-2.2-6.7-2.5-.7-.1-1.3-.6-1.3-1.3v-13Z"/><path d="M12 6.6v13.4"/></svg>',
   asistencia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.3"/><path d="m8.3 12.3 2.5 2.5 5-5.2"/></svg>',
   evaluacion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V4.5M4 19.5h16"/><path d="M7.5 16.5v-4M11.8 16.5V8M16.1 16.5v-6.8M20.4 16.5V6"/></svg>',
+  eventos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15" rx="2.2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/><path d="m8.5 14 2 2 4-4"/></svg>',
   comunicacion: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v10.2H9.4L4 19.5V5.5Z"/><path d="M8 9.3h8M8 12.3h5"/></svg>',
   inventario: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.7 7.3 12 3l8.3 4.3v9.4L12 21l-8.3-4.3V7.3Z"/><path d="M3.7 7.3 12 11.6l8.3-4.3M12 11.6V21"/></svg>',
   reportes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 14.5v2.7M12 11v6.2M16 8.3v9.4"/></svg>',
@@ -825,6 +829,7 @@ var DESCRIPCION_MODULO = {
   cursos: 'Catálogo de programas y estudiantes por curso.',
   asistencia: 'Registro semanal por clase y alumno.',
   evaluacion: 'Seguimiento cualitativo del progreso musical.',
+  eventos: 'Programa ensayos y presentaciones, y convoca por WhatsApp.',
   comunicacion: 'Mensajes y avisos a estudiantes y tutores.',
   inventario: 'Instrumentos y recursos de la academia.',
   reportes: 'Indicadores generales de la academia.',
@@ -1968,9 +1973,8 @@ function renderCalendarioMensual(sesion) {
         '<div style="font-size:11px; font-weight:700; color:' + (esFestivo ? 'var(--rojo)' : 'var(--texto)') + ';">' + dia + '</div>' +
         (esFestivo ? '<div style="font-size:9px; color:var(--rojo);">' + esFestivo + '</div>' : '') +
         clasesDelDia.slice(0, 3).map(function (cl) {
-          var prof = profesores.find(function (p) { return p.email === cl.profesor; });
           var colorCl = colorPrograma(cl.programa);
-          return '<div style="font-size:9px; background:' + colorCl + '1a; color:' + colorCl + '; font-weight:700; border-radius:3px; padding:2px 3px; margin-top:2px;">' + cl.programa + (esProfesor ? '' : ' · ' + (prof ? prof.nombre.split(' ')[0] : '')) + '</div>';
+          return '<div style="font-size:9px; background:' + colorCl + '1a; color:' + colorCl + '; font-weight:700; border-radius:3px; padding:2px 3px; margin-top:2px;">' + cl.programa + '</div>';
         }).join('') +
         (clasesDelDia.length > 3 ? '<div style="font-size:9px; color:var(--muted);">+' + (clasesDelDia.length - 3) + ' más</div>' : '') +
         '</td>';
@@ -2039,7 +2043,6 @@ function renderHorariosSemana(sesion) {
       var colorBorde = ocupada ? 'var(--rojo)' : 'var(--verde)';
 
       var contenidoOcupantes = ocupantes.map(function (o) {
-        var prof = profesores.find(function (p) { return p.email === o.c.profesor; });
         // Un estudiante solo aparece desde la semana de su matrícula (o desde
         // que se lo agregó a esta clase) en adelante — nunca en semanas anteriores.
         var alumnosVisibles = (o.c.alumnos || []).filter(function (idx) {
@@ -2053,7 +2056,6 @@ function renderHorariosSemana(sesion) {
         var nombresAlumnos = alumnosVisibles.map(function (idx) { return alumnos[idx].nombres + ' ' + alumnos[idx].apellidos.split(' ')[0]; });
         return '<div class="celda-clase" data-clase-idx="' + o.i + '" style="font-size:13px; text-align:left; background:#fff; border-radius:7px; padding:8px 10px; margin-bottom:6px; cursor:pointer;">' +
           '<div style="font-weight:600;">' + chipPrograma(o.c.programa) + '</div>' +
-          '<div style="color:var(--muted);">' + (prof ? prof.nombre : o.c.profesor) + '</div>' +
           (nombresAlumnos.length ? '<div style="color:var(--azul-oscuro);">' + nombresAlumnos.join(', ') + '</div>' : '<div style="color:var(--muted); font-style:italic;">sin estudiante todavía</div>') +
           '</div>';
       }).join('');
@@ -2064,7 +2066,10 @@ function renderHorariosSemana(sesion) {
       return '<td style="border-left:4px solid ' + colorBorde + '; background:#fff; padding:12px; vertical-align:top; min-width:200px; min-height:120px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
     }).join('');
 
-    return '<tr><td style="font-size:13px; color:var(--muted); font-weight:600; padding:12px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
+    var filaFranja = '<tr><td style="font-size:13px; color:var(--muted); font-weight:600; padding:12px; white-space:nowrap; vertical-align:top;">' + franja.etiquetaLunVie + '</td>' + celdas + '</tr>';
+    var esUltima = FRANJAS.indexOf(franja) === FRANJAS.length - 1;
+    var filaDivisoria = esUltima ? '' : '<tr><td colspan="' + (COLUMNAS_DIAS.length + 1) + '" style="padding:0; border:none;"><div style="height:1px; background:#e6e6e6; margin:2px 8px;"></div></td></tr>';
+    return filaFranja + filaDivisoria;
   }).join('');
 
   var encabezado = '<tr><td></td>' + COLUMNAS_DIAS.map(function (d) {
@@ -2102,9 +2107,6 @@ function renderHorariosSemana(sesion) {
     '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px; max-height:85vh; overflow-y:auto;">' +
     '<h2 style="margin-top:0;">Agendar en esta franja</h2>' +
     '<p id="modal-franja-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
-    '<div class="campo"><label>Profesor</label><select id="mo-profesor">' +
-    profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
-    '</select></div>' +
     '<div class="campo"><label>Programa</label><select id="mo-programa">' +
     PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
     '</select></div>' +
@@ -2224,12 +2226,10 @@ function activarLogicaHorarios() {
     btnConfirmar.addEventListener('click', function () {
       var dia = Number(modalAgendar.getAttribute('data-dia'));
       var hora = modalAgendar.getAttribute('data-hora');
-      var profesor = document.getElementById('mo-profesor').value;
       var clases = cargarClases();
 
       var alumnoSel = document.getElementById('mo-alumno').value;
       var nuevaClase = {
-        profesor: profesor,
         programa: document.getElementById('mo-programa').value,
         tipo: document.getElementById('mo-tipo').value,
         dia: dia, hora: hora,
@@ -2239,14 +2239,6 @@ function activarLogicaHorarios() {
       };
       clases.push(nuevaClase);
       guardarClases(clases);
-
-      // Si se asignó un estudiante, su "profesor asignado" queda sincronizado
-      // automáticamente — esto es lo que hace que Profesores se actualice solo.
-      if (alumnoSel !== '') {
-        var alumnos = cargarAlumnos();
-        alumnos[Number(alumnoSel)].profesor = profesor;
-        guardarAlumnos(alumnos);
-      }
 
       modalAgendar.style.display = 'none';
       renderContenido('horarios');
@@ -2375,7 +2367,10 @@ function renderAsistencia(sesion) {
       return '<td style="border-left:3px solid ' + (esHoy ? 'var(--naranja)' : '#ddd') + '; background:#fff; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + '</td>';
     }).join('');
 
-    return '<tr><td style="font-size:11px; color:var(--muted); font-weight:600; padding:6px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
+    var filaFranja = '<tr><td style="font-size:11px; color:var(--muted); font-weight:600; padding:6px; white-space:nowrap; vertical-align:top;">' + franja.etiquetaLunVie + '</td>' + celdas + '</tr>';
+    var esUltima = FRANJAS.indexOf(franja) === FRANJAS.length - 1;
+    var filaDivisoria = esUltima ? '' : '<tr><td colspan="' + (COLUMNAS_DIAS.length + 1) + '" style="padding:0; border:none;"><div style="height:1px; background:#e6e6e6; margin:2px 4px;"></div></td></tr>';
+    return filaFranja + filaDivisoria;
   }).join('');
 
   var encabezado = '<tr><td></td>' + COLUMNAS_DIAS.map(function (d) {
@@ -2419,15 +2414,94 @@ function renderAsistencia(sesion) {
       '<td><span style="display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; color:#fff; background:' + color + ';">' + ETIQUETA_ASISTENCIA[a.estado] + '</span></td></tr>';
   }).join('');
 
+  // Buscador de historial individual — filtra el listado de estudiantes por
+  // nombre y muestra su histórico de asistencias en orden, con opción de
+  // imprimir/descargar en PDF.
+  var alumnosParaSelector = esProfesor
+    ? alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return clasesVisiblesHistorial.some(function (c) { return (c.alumnos || []).indexOf(o.i) !== -1; }); })
+    : alumnos.map(function (a, i) { return { a: a, i: i }; });
+
+  var terminoBusqueda = (busquedaHistorialAsistencia || '').trim().toLowerCase();
+  var alumnosFiltrados = terminoBusqueda
+    ? alumnosParaSelector.filter(function (o) { return (o.a.nombres + ' ' + o.a.apellidos).toLowerCase().indexOf(terminoBusqueda) !== -1; })
+    : alumnosParaSelector;
+
+  var opcionesAlumnoHistorial = '<option value="">Seleccioná un estudiante…</option>' +
+    alumnosFiltrados.map(function (o) { return '<option value="' + o.i + '"' + (o.i === alumnoHistorialAsistenciaIdx ? ' selected' : '') + '>' + o.a.nombres + ' ' + o.a.apellidos + '</option>'; }).join('');
+
+  var contenidoHistorialIndividual = '<p style="font-size:13px; color:var(--muted);">Buscá y elegí un estudiante para ver su historial de asistencias en orden.</p>';
+  var alumnoHistorial = alumnoHistorialAsistenciaIdx !== null ? alumnos[alumnoHistorialAsistenciaIdx] : null;
+
+  if (alumnoHistorial) {
+    var registrosAlumno = asistenciasHistorial.filter(function (a) { return a.alumnoIdx === alumnoHistorialAsistenciaIdx; }).slice().sort(function (a, b) { return a.fecha.localeCompare(b.fecha); });
+    if (registrosAlumno.length === 0) {
+      contenidoHistorialIndividual = '<p style="font-size:13px; color:var(--muted);">Este estudiante todavía no tiene asistencias registradas.</p>';
+    } else {
+      var conteos = {};
+      ESTADOS_ASISTENCIA_RAPIDA.forEach(function (e) { conteos[e] = 0; });
+      var filasAlumno = registrosAlumno.map(function (a) {
+        var clase = clases[a.claseIdx];
+        var color = COLOR_ESTADO_ASISTENCIA[a.estado] || 'var(--muted)';
+        conteos[a.estado] = (conteos[a.estado] || 0) + 1;
+        var diaTxt = DIAS_SEMANA[new Date(a.fecha + 'T00:00:00').getDay()];
+        return '<tr><td>' + a.fecha + '</td><td>' + diaTxt + '</td><td>' + (clase ? clase.programa : '—') + '</td>' +
+          '<td><span style="display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; color:#fff; background:' + color + ';">' + ETIQUETA_ASISTENCIA[a.estado] + '</span></td></tr>';
+      }).join('');
+      var resumenTxt = ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return ETIQUETA_ASISTENCIA[e] + ': ' + (conteos[e] || 0); }).join(' · ');
+      contenidoHistorialIndividual = '' +
+        '<p style="font-size:12px; color:var(--muted); margin-bottom:10px;">' + registrosAlumno.length + ' registro' + (registrosAlumno.length === 1 ? '' : 's') + ' — ' + resumenTxt + '</p>' +
+        '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Día</th><th>Programa</th><th>Estado</th></tr></thead><tbody>' + filasAlumno + '</tbody></table></div>';
+    }
+  }
+
+  var panelHistorialIndividual =
+    '<div class="panel"><h2>Historial por estudiante</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Buscá por nombre, elegí el estudiante y descargá o imprimí su histórico de asistencias.</p>' +
+    '<div class="campo" style="max-width:320px;"><label>Buscar estudiante</label><input id="asis-buscar-alumno" type="text" placeholder="Nombre del estudiante…" value="' + (busquedaHistorialAsistencia || '').replace(/"/g, '&quot;') + '" /></div>' +
+    '<div class="campo" style="max-width:320px;"><label>Estudiante</label><select id="asis-alumno-historial">' + opcionesAlumnoHistorial + '</select></div>' +
+    '<div id="asis-historial-individual-contenido">' + contenidoHistorialIndividual + '</div>' +
+    (alumnoHistorial ? '<button class="btn-primario" id="btn-asis-historial-pdf" style="max-width:260px; margin-top:12px;">Imprimir / descargar PDF</button>' : '') +
+    '</div>';
+
   return '' +
     '<div class="panel"><h2>Asistencia' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la semana a registrar — cada columna usa su fecha real (lunes a sábado). El día de hoy queda resaltado en naranja. Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
     grillaHtml +
     '</div>' +
 
+    panelHistorialIndividual +
+
     '<div class="panel"><h2>Historial de asistencia</h2>' +
     (filasHistorial ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Programa</th><th>Fecha</th><th>Estado</th></tr></thead><tbody>' + filasHistorial + '</tbody></table></div>'
       : '<p style="font-size:13px; color:var(--muted);">Sin registros todavía.</p>') +
+    '</div>' +
+
+    '<div id="comprobante-imprimir" style="display:none;"></div>';
+}
+
+function generarHtmlHistorialAsistencia(alumno, registros) {
+  var filas = registros.map(function (a) {
+    var color = COLOR_ESTADO_ASISTENCIA[a.estado] || '#666';
+    return '<tr><td style="padding:4px 0;">' + a.fecha + '</td><td style="padding:4px 0;">' + DIAS_SEMANA[new Date(a.fecha + 'T00:00:00').getDay()] + '</td>' +
+      '<td style="padding:4px 0; text-align:right; color:' + color + '; font-weight:600;">' + ETIQUETA_ASISTENCIA[a.estado] + '</td></tr>';
+  }).join('');
+
+  var conteos = {};
+  ESTADOS_ASISTENCIA_RAPIDA.forEach(function (e) { conteos[e] = 0; });
+  registros.forEach(function (a) { conteos[a.estado] = (conteos[a.estado] || 0) + 1; });
+  var resumenTxt = ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return ETIQUETA_ASISTENCIA[e] + ': ' + (conteos[e] || 0); }).join(' · ');
+
+  return '' +
+    '<div style="font-family:Arial,sans-serif; max-width:420px; margin:0 auto; padding:24px; border:1px solid #ccc;">' +
+    '<div style="text-align:center; border-bottom:2px solid #223F61; padding-bottom:12px; margin-bottom:16px;">' +
+    '<div style="font-size:20px; font-weight:bold; color:#223F61;">Jacquin</div>' +
+    '<div style="font-size:11px; letter-spacing:2px; color:#666;">ACADEMIA MUSICAL</div>' +
+    '</div>' +
+    '<h3 style="text-align:center; margin:0 0 6px;">Historial de asistencia</h3>' +
+    '<p style="text-align:center; font-size:13px; color:#666; margin:0 0 10px;">' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '') + ' — ' + (alumno ? alumno.programa : '') + '</p>' +
+    '<p style="text-align:center; font-size:11.5px; color:#666; margin:0 0 16px;">' + resumenTxt + '</p>' +
+    '<table style="width:100%; font-size:12px; border-collapse:collapse;"><thead><tr><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666;">Fecha</td><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666;">Día</td><td style="border-bottom:1px solid #ccc; padding-bottom:4px; color:#666; text-align:right;">Estado</td></tr></thead><tbody>' + filas + '</tbody></table>' +
+    '<p style="text-align:center; font-size:11px; color:#999; margin-top:20px;">Academia Musical Jacquin — historial de asistencia</p>' +
     '</div>';
 }
 
@@ -2477,6 +2551,37 @@ function activarLogicaAsistencia() {
       renderContenido('asistencia');
     });
   });
+
+  var campoBuscarAlumno = document.getElementById('asis-buscar-alumno');
+  if (campoBuscarAlumno) {
+    campoBuscarAlumno.addEventListener('input', function () {
+      busquedaHistorialAsistencia = this.value;
+      renderContenido('asistencia');
+      // Devuelve el foco al buscador después de re-renderizar, para poder seguir escribiendo.
+      var campo = document.getElementById('asis-buscar-alumno');
+      if (campo) { campo.focus(); campo.setSelectionRange(campo.value.length, campo.value.length); }
+    });
+  }
+
+  var selectAlumnoHistorial = document.getElementById('asis-alumno-historial');
+  if (selectAlumnoHistorial) {
+    selectAlumnoHistorial.addEventListener('change', function () {
+      alumnoHistorialAsistenciaIdx = this.value === '' ? null : Number(this.value);
+      renderContenido('asistencia');
+    });
+  }
+
+  var btnHistorialPdf = document.getElementById('btn-asis-historial-pdf');
+  if (btnHistorialPdf) {
+    btnHistorialPdf.addEventListener('click', function () {
+      var alumno = cargarAlumnos()[alumnoHistorialAsistenciaIdx];
+      var asistenciasAlumno = cargarAsistencias().filter(function (a) { return a.alumnoIdx === alumnoHistorialAsistenciaIdx; }).slice().sort(function (a, b) { return a.fecha.localeCompare(b.fecha); });
+      if (asistenciasAlumno.length === 0) { alert('Este estudiante todavía no tiene asistencias registradas.'); return; }
+
+      document.getElementById('comprobante-imprimir').innerHTML = generarHtmlHistorialAsistencia(alumno, asistenciasAlumno);
+      window.print();
+    });
+  }
 }
 
 function renderProfesores(sesion) {
@@ -2714,10 +2819,30 @@ function renderEvaluacionMensualPanel(sesion) {
   var evaluacionesMensuales = cargarEvaluacionesMensuales();
   var evaluacionesDelMes = evaluacionesMensuales.filter(function (e) { return e.mes === mesActual; });
 
-  var filas = visibles.map(function (o) {
+  // Buscador por nombre — filtra el listado antes de ordenarlo.
+  var terminoBusquedaAvance = (busquedaAvanceMensual || '').trim().toLowerCase();
+  var visiblesFiltrados = terminoBusquedaAvance
+    ? visibles.filter(function (o) { return (o.a.nombres + ' ' + o.a.apellidos).toLowerCase().indexOf(terminoBusquedaAvance) !== -1; })
+    : visibles;
+
+  // Orden: primero quienes ya tienen la evaluación de este mes registrada,
+  // debajo los pendientes — dentro de cada grupo, alfabético por nombre.
+  var visiblesConEstado = visiblesFiltrados.map(function (o) {
+    var evaluado = evaluacionesDelMes.find(function (e) { return e.alumnoIdx === o.i; });
+    return { o: o, evaluado: evaluado };
+  }).sort(function (x, y) {
+    if (!!x.evaluado !== !!y.evaluado) return x.evaluado ? -1 : 1;
+    return (x.o.a.nombres + x.o.a.apellidos).localeCompare(y.o.a.nombres + y.o.a.apellidos);
+  });
+
+  var buscadorHtml = '<div class="campo" style="max-width:320px; margin-bottom:14px;"><label>Buscar estudiante</label><input id="av-buscar-alumno" type="text" placeholder="Nombre del estudiante…" value="' + (busquedaAvanceMensual || '').replace(/"/g, '&quot;') + '" /></div>';
+
+  var filas = visiblesConEstado.length === 0
+    ? '<tr><td colspan="5" style="font-size:13px; color:var(--muted);">Ningún estudiante coincide con la búsqueda.</td></tr>'
+    : visiblesConEstado.map(function (x) {
+    var o = x.o, evaluado = x.evaluado;
     var edadTxt = o.a.nacimiento ? calcularEdadDesdeFecha(o.a.nacimiento) + ' años' : '—';
     var curso = o.a.programa + (o.a.programa2 ? ' + ' + o.a.programa2 : '');
-    var evaluado = evaluacionesDelMes.find(function (e) { return e.alumnoIdx === o.i; });
     var chip = evaluado
       ? '<span class="chip-rol" style="background:var(--verde); color:#fff;">Evaluado este mes</span>'
       : '<span class="chip-rol" style="background:var(--naranja); color:#fff;">Pendiente este mes</span>';
@@ -3054,6 +3179,252 @@ function activarLogicaEvaluacion() {
   }
 
   activarLogicaEvaluacionMensual();
+}
+
+// ==================== EVENTOS ====================
+// Módulo para programar ensayos, presentaciones y otros eventos (recitales,
+// reuniones), y convocar a estudiantes y profesores por WhatsApp con un
+// mensaje ya redactado — conectado al listado real de Estudiantes y
+// Profesores, para no tener que escribir a mano cada vez. Para que no quede
+// tan informal, cada evento lleva su propia lista de convocados con
+// registro de a quién ya se le envió la invitación (con fecha) y quién
+// confirmó asistencia, en vez de mensajes sueltos sin control.
+var TIPOS_EVENTO = ['Ensayo', 'Presentación', 'Otro'];
+var ETIQUETA_TIPO_EVENTO = { 'Ensayo': '🎼 Ensayo', 'Presentación': '🎤 Presentación', 'Otro': '📌 Otro' };
+var ESTADOS_EVENTO = ['programado', 'realizado', 'cancelado'];
+var ETIQUETA_ESTADO_EVENTO = { programado: 'Programado', realizado: 'Realizado', cancelado: 'Cancelado' };
+var COLOR_ESTADO_EVENTO = { programado: 'var(--azul-oscuro)', realizado: 'var(--verde)', cancelado: 'var(--rojo)' };
+
+function cargarEventos() {
+  var g = localStorage.getItem('jacquin_demo_eventos');
+  return g ? JSON.parse(g) : [];
+}
+function guardarEventos(lista) { localStorage.setItem('jacquin_demo_eventos', JSON.stringify(lista)); }
+
+function claveInvitadoEvento(tipoInvitado, id) { return (tipoInvitado === 'estudiante' ? 'e-' : 'p-') + id; }
+
+function fechaLegibleEvento(fechaStr) {
+  if (!fechaStr) return '—';
+  return new Date(fechaStr + 'T00:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// Redacta el mensaje de convocatoria — distinto según el tipo de evento — y
+// siempre pide confirmación de asistencia, para que quede formal y no como
+// un simple aviso suelto.
+function mensajeConvocatoriaEvento(evento, nombreDestino) {
+  var fechaTxt = fechaLegibleEvento(evento.fecha);
+  var horaTxt = evento.hora || 'hora por confirmar';
+  var lugarTxt = evento.lugar || 'la academia';
+  var intro;
+  if (evento.tipo === 'Ensayo') {
+    intro = 'Hola ' + nombreDestino + ', te esperamos en el ensayo "' + evento.titulo + '"';
+  } else if (evento.tipo === 'Presentación') {
+    intro = 'Hola ' + nombreDestino + ', te convocamos a la presentación "' + evento.titulo + '"';
+  } else {
+    intro = 'Hola ' + nombreDestino + ', te convocamos al evento "' + evento.titulo + '"';
+  }
+  var cuerpo = intro + ', el ' + fechaTxt + ' a las ' + horaTxt + ', en ' + lugarTxt + '.';
+  if (evento.notas) cuerpo += ' ' + evento.notas;
+  cuerpo += ' Por favor confirma tu asistencia respondiendo este mensaje. — Academia Musical Jacquin';
+  return cuerpo;
+}
+
+function renderEventos(sesion) {
+  var alumnos = cargarAlumnos();
+  var profesores = cargarUsuarios().filter(function (u) { return u.rol === 'PROFESOR'; });
+  var eventos = cargarEventos();
+
+  var formCrear =
+    '<div class="panel"><h2>Programar evento</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Ensayos, presentaciones u otros eventos (recitales, reuniones) — convocá a quien haga falta desde el listado real de estudiantes y profesores.</p>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Tipo de evento</label><select id="ev-tipo">' +
+    TIPOS_EVENTO.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Título</label><input id="ev-titulo" type="text" placeholder="Ej: Ensayo general de piano" /></div>' +
+    '<div class="campo"><label>Fecha</label><input id="ev-fecha" type="date" /></div>' +
+    '<div class="campo"><label>Hora</label><input id="ev-hora" type="time" /></div>' +
+    '<div class="campo"><label>Lugar / salón</label><input id="ev-lugar" type="text" placeholder="Ej: Salón principal" /></div>' +
+    '<div class="campo"><label>Profesor responsable (opcional)</label><select id="ev-profesor-responsable"><option value="">Sin asignar</option>' +
+    profesores.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    '</select></div>' +
+    '</div>' +
+    '<div class="campo"><label>Nota adicional para el mensaje (opcional)</label><input id="ev-notas" type="text" placeholder="Ej: Traer el instrumento propio" /></div>' +
+
+    '<p style="font-size:12px; color:var(--muted); margin:14px 0 6px; font-weight:600;">Estudiantes a convocar</p>' +
+    (alumnos.length === 0 ? '<p style="font-size:12.5px; color:var(--muted);">No hay estudiantes registrados.</p>' :
+    '<div style="max-height:180px; overflow-y:auto; border:1px solid #e2e5ea; border-radius:8px; padding:10px;">' +
+    alumnos.map(function (a, i) {
+      return '<label style="display:flex; align-items:center; gap:8px; font-size:12.5px; padding:4px 0;"><input type="checkbox" class="chk-ev-estudiante" value="' + i + '" /> ' + a.nombres + ' ' + a.apellidos + ' <span style="color:var(--muted);">— ' + a.programa + '</span></label>';
+    }).join('') + '</div>') +
+
+    '<p style="font-size:12px; color:var(--muted); margin:14px 0 6px; font-weight:600;">Profesores a convocar</p>' +
+    (profesores.length === 0 ? '<p style="font-size:12.5px; color:var(--muted);">No hay profesores registrados.</p>' :
+    '<div style="border:1px solid #e2e5ea; border-radius:8px; padding:10px;">' +
+    profesores.map(function (p) {
+      return '<label style="display:flex; align-items:center; gap:8px; font-size:12.5px; padding:4px 0;"><input type="checkbox" class="chk-ev-profesor" value="' + p.email + '" /> ' + p.nombre + '</label>';
+    }).join('') + '</div>') +
+
+    '<button class="btn-primario" id="btn-crear-evento" style="max-width:280px; margin-top:14px;">Programar evento</button>' +
+    '<p id="msj-evento-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Evento programado. Ya podés enviar las invitaciones por WhatsApp desde la lista de abajo.</p>' +
+    '</div>';
+
+  var eventosVigentes = eventos.map(function (e, i) { return { e: e, i: i }; }).filter(function (o) { return o.e.estado === 'programado'; })
+    .sort(function (a, b) { return (a.e.fecha || '').localeCompare(b.e.fecha || ''); });
+  var eventosPasados = eventos.map(function (e, i) { return { e: e, i: i }; }).filter(function (o) { return o.e.estado !== 'programado'; })
+    .sort(function (a, b) { return (b.e.fecha || '').localeCompare(a.e.fecha || ''); });
+
+  var listaVigentes = eventosVigentes.length === 0
+    ? '<p style="font-size:13px; color:var(--muted);">No hay eventos programados todavía.</p>'
+    : eventosVigentes.map(function (o) { return renderTarjetaEvento(o.e, o.i, alumnos, profesores); }).join('');
+
+  var listaPasados = eventosPasados.length === 0
+    ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay eventos realizados o cancelados.</p>'
+    : eventosPasados.map(function (o) { return renderTarjetaEvento(o.e, o.i, alumnos, profesores); }).join('');
+
+  return formCrear +
+    '<div class="panel"><h2>Próximos eventos</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Convocá a cada estudiante o profesor por WhatsApp con un clic — el mensaje ya sale redactado y el sistema deja registrado a quién se le envió y quién confirmó.</p>' +
+    listaVigentes + '</div>' +
+    '<div class="panel"><h2>Historial de eventos</h2>' + listaPasados + '</div>';
+}
+
+function renderTarjetaEvento(evento, idx, alumnos, profesores) {
+  var invitaciones = evento.invitaciones || {};
+  var perfiles = cargarPerfilesProfesor();
+  var filasInvitados = [];
+
+  (evento.estudiantesIdx || []).forEach(function (aIdx) {
+    var a = alumnos[aIdx];
+    if (!a) return;
+    var clave = claveInvitadoEvento('estudiante', aIdx);
+    var inv = invitaciones[clave] || {};
+    var telefono = (a.telefono || a.celularAcudiente || '').replace(/\D/g, '');
+    filasInvitados.push(filaInvitadoEvento(idx, clave, a.nombres + ' ' + a.apellidos, 'Estudiante', telefono, inv));
+  });
+
+  (evento.profesoresEmails || []).forEach(function (email) {
+    var p = profesores.find(function (x) { return x.email === email; });
+    if (!p) return;
+    var clave = claveInvitadoEvento('profesor', email);
+    var inv = invitaciones[clave] || {};
+    var telefono = ((perfiles[email] && perfiles[email].telefono) || '').replace(/\D/g, '');
+    filasInvitados.push(filaInvitadoEvento(idx, clave, p.nombre, 'Profesor', telefono, inv));
+  });
+
+  var totalInvitados = filasInvitados.length;
+  var totalEnviados = 0, totalConfirmados = 0;
+  Object.keys(invitaciones).forEach(function (k) {
+    if (invitaciones[k].enviada) totalEnviados++;
+    if (invitaciones[k].confirmado) totalConfirmados++;
+  });
+
+  var profesorResp = evento.profesorResponsable ? (profesores.find(function (p) { return p.email === evento.profesorResponsable; }) || {}).nombre : null;
+
+  var selectorEstado = evento.estado === 'programado'
+    ? '<select class="sel-estado-evento" data-idx="' + idx + '" style="font-size:12px; padding:5px 8px; border-radius:6px; border:1.5px solid var(--azul-oscuro); color:var(--azul-oscuro);">' +
+      ESTADOS_EVENTO.map(function (s) { return '<option value="' + s + '"' + (s === evento.estado ? ' selected' : '') + '>' + ETIQUETA_ESTADO_EVENTO[s] + '</option>'; }).join('') + '</select>'
+    : '<span class="chip-rol" style="background:' + COLOR_ESTADO_EVENTO[evento.estado] + '; color:#fff;">' + ETIQUETA_ESTADO_EVENTO[evento.estado] + '</span>';
+
+  return '' +
+    '<div class="panel" style="margin-bottom:14px; border-left:4px solid ' + COLOR_ESTADO_EVENTO[evento.estado] + ';">' +
+    '<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">' +
+    '<div>' +
+    '<span class="chip-rol" style="background:var(--beige); color:var(--texto); margin-bottom:6px; display:inline-block;">' + ETIQUETA_TIPO_EVENTO[evento.tipo] + '</span>' +
+    '<h3 style="margin:4px 0 2px;">' + evento.titulo + '</h3>' +
+    '<p style="margin:0; font-size:12.5px; color:var(--muted); text-transform:capitalize;">' + fechaLegibleEvento(evento.fecha) + (evento.hora ? ' · ' + evento.hora : '') + (evento.lugar ? ' · ' + evento.lugar : '') + '</p>' +
+    (profesorResp ? '<p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Responsable: ' + profesorResp + '</p>' : '') +
+    '</div>' +
+    selectorEstado +
+    '</div>' +
+    '<p style="font-size:12px; color:var(--muted); margin:10px 0 8px;">' + totalEnviados + ' de ' + totalInvitados + ' invitaciones enviadas · ' + totalConfirmados + ' confirmadas</p>' +
+    (filasInvitados.length === 0 ? '<p style="font-size:12.5px; color:var(--muted);">No se convocó a nadie todavía.</p>' :
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Tipo</th><th>Invitación</th><th>Confirmó</th><th></th></tr></thead><tbody>' + filasInvitados.join('') + '</tbody></table></div>') +
+    '</div>';
+}
+
+function filaInvitadoEvento(idxEvento, clave, nombre, tipoPersona, telefono, inv) {
+  var chipEnvio = inv.enviada
+    ? '<span class="chip-rol" style="background:var(--verde); color:#fff;">Invitado' + (inv.fechaEnvio ? ' el ' + inv.fechaEnvio : '') + '</span>'
+    : '<span class="chip-rol" style="background:var(--naranja); color:#fff;">Sin enviar</span>';
+  var checkboxConfirmado = '<input type="checkbox" class="chk-confirmado-evento" data-idx-evento="' + idxEvento + '" data-clave="' + clave + '"' + (inv.confirmado ? ' checked' : '') + (inv.enviada ? '' : ' disabled') + ' />';
+  var botonWhatsapp = telefono
+    ? '<button class="btn-whatsapp-evento" data-idx-evento="' + idxEvento + '" data-clave="' + clave + '" data-telefono="' + telefono + '" data-nombre="' + nombre.replace(/"/g, '&quot;') + '" style="font-size:11px; background:#25D366; color:#fff; border:none; border-radius:6px; padding:5px 9px; cursor:pointer;">WhatsApp</button>'
+    : '<span style="font-size:11px; color:var(--muted); font-style:italic;">sin teléfono</span>';
+  return '<tr><td>' + nombre + '</td><td>' + tipoPersona + '</td><td>' + chipEnvio + '</td><td>' + checkboxConfirmado + '</td><td>' + botonWhatsapp + '</td></tr>';
+}
+
+function activarLogicaEventos() {
+  var btnCrear = document.getElementById('btn-crear-evento');
+  if (btnCrear) {
+    btnCrear.addEventListener('click', function () {
+      var tipo = document.getElementById('ev-tipo').value;
+      var titulo = document.getElementById('ev-titulo').value.trim();
+      var fecha = document.getElementById('ev-fecha').value;
+      var hora = document.getElementById('ev-hora').value;
+      var lugar = document.getElementById('ev-lugar').value.trim();
+      var profesorResponsable = document.getElementById('ev-profesor-responsable').value;
+      var notas = document.getElementById('ev-notas').value.trim();
+      if (!titulo || !fecha) { alert('El título y la fecha son obligatorios.'); return; }
+
+      var estudiantesIdx = Array.prototype.slice.call(document.querySelectorAll('.chk-ev-estudiante:checked')).map(function (c) { return Number(c.value); });
+      var profesoresEmails = Array.prototype.slice.call(document.querySelectorAll('.chk-ev-profesor:checked')).map(function (c) { return c.value; });
+      if (estudiantesIdx.length === 0 && profesoresEmails.length === 0) { alert('Convocá al menos a un estudiante o profesor.'); return; }
+
+      var eventos = cargarEventos();
+      eventos.push({
+        tipo: tipo, titulo: titulo, fecha: fecha, hora: hora, lugar: lugar,
+        profesorResponsable: profesorResponsable, notas: notas,
+        estudiantesIdx: estudiantesIdx, profesoresEmails: profesoresEmails,
+        estado: 'programado', invitaciones: {}
+      });
+      guardarEventos(eventos);
+
+      document.getElementById('msj-evento-creado').style.display = 'block';
+      setTimeout(function () { renderContenido('eventos'); }, 700);
+    });
+  }
+
+  document.querySelectorAll('.sel-estado-evento').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      var idx = Number(sel.getAttribute('data-idx'));
+      var eventos = cargarEventos();
+      eventos[idx].estado = sel.value;
+      guardarEventos(eventos);
+      renderContenido('eventos');
+    });
+  });
+
+  document.querySelectorAll('.btn-whatsapp-evento').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idxEvento = Number(btn.getAttribute('data-idx-evento'));
+      var clave = btn.getAttribute('data-clave');
+      var telefono = btn.getAttribute('data-telefono');
+      var nombreDestino = btn.getAttribute('data-nombre');
+      var eventos = cargarEventos();
+      var evento = eventos[idxEvento];
+      var mensaje = mensajeConvocatoriaEvento(evento, nombreDestino);
+      window.open('https://wa.me/' + telefono + '?text=' + encodeURIComponent(mensaje), '_blank');
+
+      if (!evento.invitaciones) evento.invitaciones = {};
+      evento.invitaciones[clave] = Object.assign({}, evento.invitaciones[clave], { enviada: true, fechaEnvio: new Date().toISOString().slice(0, 10) });
+      guardarEventos(eventos);
+      renderContenido('eventos');
+    });
+  });
+
+  document.querySelectorAll('.chk-confirmado-evento').forEach(function (chk) {
+    chk.addEventListener('change', function () {
+      var idxEvento = Number(chk.getAttribute('data-idx-evento'));
+      var clave = chk.getAttribute('data-clave');
+      var eventos = cargarEventos();
+      var evento = eventos[idxEvento];
+      if (!evento.invitaciones) evento.invitaciones = {};
+      if (!evento.invitaciones[clave]) evento.invitaciones[clave] = {};
+      evento.invitaciones[clave].confirmado = chk.checked;
+      guardarEventos(eventos);
+    });
+  });
 }
 
 // ==================== CONTABILIDAD ====================
@@ -4080,6 +4451,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'evaluacion') {
     document.getElementById('contenido').innerHTML = renderEvaluacion(sesion);
     activarLogicaEvaluacion();
+  } else if (mod.key === 'eventos') {
+    document.getElementById('contenido').innerHTML = renderEventos(sesion);
+    activarLogicaEventos();
   } else if (mod.key === 'contabilidad') {
     document.getElementById('contenido').innerHTML = renderContabilidad(sesion);
     activarLogicaContabilidad();
