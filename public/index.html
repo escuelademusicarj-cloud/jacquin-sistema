@@ -609,11 +609,64 @@ function tiposPlanParaPrograma(programa) {
 var ESTADOS_ALUMNO = ['preinscrito','pendiente_matricula','activo','inactivo','retirado'];
 var ETIQUETA_ESTADO = { preinscrito:'Preinscrito', pendiente_matricula:'Pendiente de matrícula', activo:'Activo', inactivo:'Inactivo', retirado:'Retirado' };
 
-function cargarAlumnos() {
-  var g = localStorage.getItem('jacquin_demo_alumnos');
-  return g ? JSON.parse(g) : [];
+// ---- Estudiantes: conectado al backend real (Supabase), ya no a localStorage ----
+// CACHE_ALUMNOS guarda en memoria lo último que trajo la API. cargarAlumnos()
+// sigue siendo síncrona (así ningún lugar del archivo que ya la usa tiene que
+// cambiar) — lee de esa caché. refrescarCacheAlumnos() es quien la llena de
+// verdad, hablando con /api/academico/estudiantes.
+var CACHE_ALUMNOS = [];
+
+// Traduce la forma que devuelve el backend real (fecha_nacimiento,
+// programa_principal, acudientes[]...) a la forma que ya espera el resto
+// del archivo (nacimiento, programa, acudiente...) — así no hay que tocar
+// los demás lugares que leen cargarAlumnos().
+function mapearAlumnoDesdeApi(a) {
+  var primerAcudiente = (a.acudientes && a.acudientes[0]) || null;
+  return {
+    id: a.id,
+    nombres: a.nombres,
+    apellidos: a.apellidos,
+    documento: a.documento || '',
+    nacimiento: a.fecha_nacimiento || '',
+    programa: a.programa_principal || '',
+    // programa2 / dirección todavía no existen en el backend real — quedan
+    // vacíos hasta que se agreguen esas columnas/campos del lado del servidor.
+    programa2: '',
+    profesor: a.profesor_id || '',
+    telefono: a.telefono_contacto || '',
+    correo: a.email_contacto || '',
+    direccion: '',
+    acudiente: primerAcudiente ? primerAcudiente.nombre : '',
+    celularAcudiente: primerAcudiente ? primerAcudiente.telefono : '',
+    observaciones: a.observaciones || '',
+    estado: a.estado,
+    fechaMatricula: a.fecha_matricula || ''
+  };
 }
-function guardarAlumnos(lista) { localStorage.setItem('jacquin_demo_alumnos', JSON.stringify(lista)); }
+
+async function refrescarCacheAlumnos() {
+  try {
+    var lista = await apiFetch('/api/academico/estudiantes', { method: 'GET' });
+    CACHE_ALUMNOS = (lista || []).map(mapearAlumnoDesdeApi);
+  } catch (err) {
+    console.error('No se pudo cargar Estudiantes desde el backend:', err.message);
+    // Se deja la caché como estaba (no se borra lo último que sí cargó bien).
+  }
+}
+
+function cargarAlumnos() {
+  return CACHE_ALUMNOS;
+}
+// guardarAlumnos queda para los módulos que todavía no se migraron al backend
+// real (Matrícula, Horarios, etc. — se conectan en su propia fase) y que hoy
+// siguen tocando campos del alumno que el backend todavía no soporta
+// (programa2, dirección, fechaMatrícula). Por ahora solo actualiza la copia
+// en memoria: esos cambios puntuales NO viajan a Supabase todavía y se
+// pierden al recargar o cambiar de equipo, igual que antes de este arreglo.
+// Ojo: si dos módulos migrados y no migrados escriben sobre la misma lista en
+// la misma sesión, refrescarCacheAlumnos() (llamada en cada navegación) va a
+// pisar estos cambios en memoria con lo que realmente hay en la base de datos.
+function guardarAlumnos(lista) { CACHE_ALUMNOS = lista; }
 
 function cargarPlanes() {
   var g = localStorage.getItem('jacquin_demo_planes');
@@ -1285,30 +1338,47 @@ function activarLogicaEstudiantes(volverA) {
     if (!nombres || !apellidos) return;
     if (!nacimiento) { alert('La fecha de nacimiento es obligatoria (determina si necesita acudiente).'); return; }
     if (esMenor(nacimiento) && !acudiente) { alert('El alumno es menor de edad: el acudiente es obligatorio.'); return; }
-    var campoPrograma2 = document.getElementById('al-programa2');
     var campoCorreo = document.getElementById('al-correo');
-    var campoDireccion = document.getElementById('al-direccion');
     var campoCelularAcudiente = document.getElementById('al-celular-acudiente');
-    var alumnos = cargarAlumnos();
-    alumnos.push({
-      nombres: nombres,
-      apellidos: apellidos,
-      documento: document.getElementById('al-documento').value.trim(),
-      nacimiento: nacimiento,
-      programa: document.getElementById('al-programa').value,
-      programa2: campoPrograma2 ? campoPrograma2.value : '',
-      profesor: document.getElementById('al-profesor').value,
-      telefono: document.getElementById('al-telefono').value.trim(),
-      correo: campoCorreo ? campoCorreo.value.trim() : '',
-      direccion: campoDireccion ? campoDireccion.value.trim() : '',
-      acudiente: acudiente,
-      celularAcudiente: campoCelularAcudiente ? campoCelularAcudiente.value.trim() : '',
-      observaciones: document.getElementById('al-obs').value.trim(),
-      estado: 'preinscrito'
-    });
-    guardarAlumnos(alumnos);
-    document.getElementById('msj-alumno-creado').style.display = 'block';
-    setTimeout(function () { renderContenido(volverA); }, 500);
+    var btnCrear = document.getElementById('btn-crear-alumno');
+
+    // programa2 y dirección se siguen pidiendo en el formulario, pero el
+    // backend real (backend/src/dominio/academico/entidades.js) todavía no
+    // los recibe — quedan pendientes de una próxima fase, no se pierden por
+    // error, es que ese campo todavía no existe del lado del servidor.
+    var payload = {
+      alumno: {
+        nombres: nombres,
+        apellidos: apellidos,
+        documento: document.getElementById('al-documento').value.trim() || null,
+        fechaNacimiento: nacimiento,
+        telefonoContacto: document.getElementById('al-telefono').value.trim() || null,
+        emailContacto: campoCorreo ? (campoCorreo.value.trim() || null) : null,
+        programaPrincipal: document.getElementById('al-programa').value,
+        // El select de profesor hoy usa el email del listado local (todavía
+        // no migrado) — no es el id real que pide el backend, así que por
+        // ahora se manda sin asignar en vez de mandar un id incorrecto.
+        profesorId: null,
+        observaciones: document.getElementById('al-obs').value.trim() || null
+      },
+      acudientes: acudiente ? [{
+        nombre: acudiente,
+        telefono: campoCelularAcudiente ? campoCelularAcudiente.value.trim() : null,
+        relacion: 'Acudiente'
+      }] : []
+    };
+
+    btnCrear.disabled = true;
+    apiFetch('/api/academico/estudiantes', { method: 'POST', body: JSON.stringify(payload) })
+      .then(function () { return refrescarCacheAlumnos(); })
+      .then(function () {
+        document.getElementById('msj-alumno-creado').style.display = 'block';
+        setTimeout(function () { renderContenido(volverA); }, 500);
+      })
+      .catch(function (err) {
+        alert('No se pudo registrar el estudiante: ' + err.message);
+        btnCrear.disabled = false;
+      });
   });
 
   // ---- Carga masiva por Excel — importa estudiantes reales con datos
@@ -1583,10 +1653,20 @@ function activarLogicaEstudiantes(volverA) {
         var alumno = alumnos[idx];
         if (!alumno) return;
         if (!confirm('¿Retirar a ' + alumno.nombres + ' ' + alumno.apellidos + ' de la academia? No se borra su historial — queda marcado como "Retirado".')) return;
-        alumno.estado = 'retirado';
-        guardarAlumnos(alumnos);
-        modalEditor.style.display = 'none';
-        renderContenido('estudiantes');
+        btnEliminarEditor.disabled = true;
+        apiFetch('/api/academico/estudiantes/' + alumno.id + '/estado', {
+          method: 'PATCH',
+          body: JSON.stringify({ estado: 'retirado', motivo: 'Retirado desde la ficha del estudiante' })
+        })
+          .then(function () { return refrescarCacheAlumnos(); })
+          .then(function () {
+            modalEditor.style.display = 'none';
+            renderContenido('estudiantes');
+          })
+          .catch(function (err) {
+            alert('No se pudo retirar al estudiante: ' + err.message);
+            btnEliminarEditor.disabled = false;
+          });
       });
     }
 
@@ -4857,7 +4937,19 @@ function renderContenido(clave) {
 function navegar() {
   var clave = location.hash.replace('#', '') || 'dashboard';
   renderNavModulos(clave);
+  // Primer render con lo que ya haya en caché, para que la pantalla no
+  // quede en blanco mientras se espera al backend.
   renderContenido(clave);
+  // Estudiantes ya vive en el backend real (Supabase) — se trae fresco en
+  // cada navegación para que no dependa de qué computador/navegador se use.
+  // Los demás módulos se van sumando acá a medida que se conectan.
+  refrescarCacheAlumnos().then(function () {
+    // Si el usuario ya cambió de pantalla mientras se esperaba la
+    // respuesta, no pisar lo que se está viendo ahora.
+    if ((location.hash.replace('#', '') || 'dashboard') === clave) {
+      renderContenido(clave);
+    }
+  });
 }
 
 function mostrarApp() {
