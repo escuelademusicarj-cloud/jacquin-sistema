@@ -2061,7 +2061,7 @@ function renderHorariosSemana(sesion) {
       var celdaBtn = (!esProfesor) ? '<button class="btn-celda-agendar" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:13px; background:transparent; border:1.5px dashed var(--azul-claro); border-radius:7px; width:100%; padding:8px; color:var(--azul-oscuro); cursor:pointer; margin-top:4px; font-weight:600;">+ Agendar</button>' : '';
       var etiquetaHoraCelda = '<div style="font-size:12px; font-weight:700; color:' + (ocupada ? 'var(--rojo)' : 'var(--verde)') + '; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
 
-      return '<td style="border-left:4px solid ' + colorBorde + '; background:' + (ocupada ? '#fdf3f0' : '#f2f8f2') + '; padding:12px; vertical-align:top; min-width:200px; min-height:120px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
+      return '<td style="border-left:4px solid ' + colorBorde + '; background:#fff; padding:12px; vertical-align:top; min-width:200px; min-height:120px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
     }).join('');
 
     return '<tr><td style="font-size:13px; color:var(--muted); font-weight:600; padding:12px; white-space:nowrap; vertical-align:top;">Franja ' + (FRANJAS.indexOf(franja) + 1) + '</td>' + celdas + '</tr>';
@@ -2235,7 +2235,7 @@ function activarLogicaHorarios() {
         dia: dia, hora: hora,
         sala: document.getElementById('mo-sala').value.trim(),
         alumnos: alumnoSel !== '' ? [Number(alumnoSel)] : [],
-        alumnosFechas: alumnoSel !== '' ? (function () { var o = {}; o[Number(alumnoSel)] = new Date().toISOString().slice(0, 10); return o; })() : {}
+        alumnosFechas: alumnoSel !== '' ? (function () { var o = {}; o[Number(alumnoSel)] = lunesDeFecha(new Date().toISOString().slice(0, 10)); return o; })() : {}
       };
       clases.push(nuevaClase);
       guardarClases(clases);
@@ -2281,6 +2281,10 @@ function activarLogicaHorarios() {
       // El horario es solo un espacio de tiempo — no se liga a un profesor
       // fijo (los profesores pueden ir variando) — por eso acá solo se pide
       // nombre, programa y observaciones, sin tocar clase.profesor.
+      // La fecha se guarda como el lunes de esta semana (no el día exacto):
+      // así, si hoy es domingo, el estudiante igual queda visible desde la
+      // semana actual en la grilla (que solo tiene columnas lunes a sábado).
+      var fechaAltaNueva = lunesDeFecha(new Date().toISOString().slice(0, 10));
       var partes = nombreCompleto.split(' ');
       var alumnos = cargarAlumnos();
       var nuevoIdx = alumnos.length;
@@ -2289,7 +2293,7 @@ function activarLogicaHorarios() {
         apellidos: partes.slice(1).join(' '),
         documento: '', nacimiento: '', programa: programaElegido, programa2: '',
         profesor: '', telefono: '', correo: '', direccion: '', acudiente: '', celularAcudiente: '',
-        observaciones: observaciones, estado: 'activo', fechaMatricula: new Date().toISOString().slice(0, 10)
+        observaciones: observaciones, estado: 'activo', fechaMatricula: fechaAltaNueva
       });
       guardarAlumnos(alumnos);
 
@@ -2298,7 +2302,7 @@ function activarLogicaHorarios() {
       c.alumnos = c.alumnos || [];
       c.alumnosFechas = c.alumnosFechas || {};
       c.alumnos.push(nuevoIdx);
-      c.alumnosFechas[nuevoIdx] = new Date().toISOString().slice(0, 10);
+      c.alumnosFechas[nuevoIdx] = fechaAltaNueva;
       guardarClases(clases);
 
       modalAsignar.style.display = 'none';
