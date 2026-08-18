@@ -932,13 +932,17 @@ async function refrescarCacheClases() {
     CACHE_CLASES = (lista || []).map(function (c) {
       var profesor = CACHE_PROFESORES.find(function (p) { return p.id === c.profesor_id; });
       var sala = CACHE_SALAS.find(function (s) { return s.id === c.sala_id; });
+      // El backend ya trae los alumnos reales de la clase (antes esta
+      // relación no se podía releer) — se traducen a índices de
+      // cargarAlumnos(), que es lo que espera el resto del archivo.
+      var alumnosIdx = (c.alumnos || []).map(function (a) {
+        return CACHE_ALUMNOS.findIndex(function (al) { return al.id === a.id; });
+      }).filter(function (idx) { return idx !== -1; });
       return {
         id: c.id, profesor: profesor ? profesor.email : '', profesorNombre: profesor ? profesor.nombre : '',
         sala: sala ? sala.nombre : '', programa: c.programa, tipo: c.tipo,
         dia: c.dia_semana, hora: (c.hora_inicio || '').slice(0, 5),
-        // Ver nota arriba: sin endpoint para leer alumnos de una clase ya
-        // creada, esta lista queda vacía salvo que el backend la incluya.
-        alumnos: c.alumnos || [], alumnosFechas: c.alumnosFechas || {}
+        alumnos: alumnosIdx, alumnosFechas: {}
       };
     });
   } catch (err) {
@@ -1672,30 +1676,45 @@ function activarLogicaEstudiantes(volverA) {
           }
 
           var alumnosExistentes = cargarAlumnos();
-          var alumnosNuevos = [];
-          var importados = 0, omitidos = 0, duplicados = 0;
+          var yaEnviados = []; // evita duplicados dentro de la misma planilla mientras se procesa
+          var importados = 0, omitidos = 0, duplicados = 0, fallidos = [];
           var filasParaRevisar = []; // { nombre, textoOriginal, motivo }
+          var btnSubirExcelRef = btnSubirExcel;
+          btnSubirExcelRef.disabled = true;
 
-          filas.forEach(function (fila) {
+          // El backend real crea SIEMPRE con estado "preinscrito" (regla del
+          // servidor, no de acá) — el selector de "Importar como Activo"
+          // sigue existiendo mas no puede saltarse ese paso: para que un
+          // estudiante quede realmente "Activo" hace falta completar su
+          // Matrícula, fila por fila no alcanza con la importación.
+          function procesarFilaExcel(indice) {
+            if (indice >= filas.length) { terminarImportacionExcel(); return; }
+            var fila = filas[indice];
             var nombres = buscarCampo(fila, ['nombres', 'nombre']);
             var apellidos = buscarCampo(fila, ['apellidos', 'apellido']);
-            if (!nombres || !apellidos) { omitidos++; return; }
+            if (!nombres || !apellidos) { omitidos++; procesarFilaExcel(indice + 1); return; }
 
             var documento = buscarCampo(fila, ['documento', 'documento de identidad', 'cedula', 'cédula']);
             var nacimiento = formatearFecha(buscarCampo(fila, ['fecha de nacimiento', 'nacimiento', 'fecha nacimiento']));
 
-            // Evita duplicados: mismo documento (si hay), o mismo
-            // nombre+apellido+nacimiento, ya sea contra lo que ya había en
-            // el sistema o contra otra fila de esta misma planilla.
-            var yaExiste = alumnosExistentes.concat(alumnosNuevos).some(function (a) {
+            var yaExiste = alumnosExistentes.concat(yaEnviados).some(function (a) {
               if (documento && a.documento && a.documento === documento) return true;
               return a.nombres === nombres && a.apellidos === apellidos && a.nacimiento === nacimiento;
             });
-            if (yaExiste) { duplicados++; return; }
+            if (yaExiste) { duplicados++; procesarFilaExcel(indice + 1); return; }
+
+            // El backend real exige fecha de nacimiento siempre (la usa para
+            // decidir si hace falta acudiente) — una fila sin esa fecha no se
+            // puede crear de verdad, se reporta en vez de fallar en silencio.
+            if (!nacimiento) {
+              fallidos.push(nombres + ' ' + apellidos + ': falta fecha de nacimiento (obligatoria).');
+              procesarFilaExcel(indice + 1);
+              return;
+            }
 
             var textoProgramaOriginal = buscarCampo(fila, ['programa', 'programa 1', 'programa1']);
             var interpretado = interpretarPrograma(textoProgramaOriginal);
-            var programaFinal = interpretado.programa || textoProgramaOriginal || PROGRAMAS[0];
+            var programaFinal = interpretado.programa || (PROGRAMAS.indexOf(textoProgramaOriginal) !== -1 ? textoProgramaOriginal : PROGRAMAS[0]);
 
             var notasImportacion = [];
             if (interpretado.sinReconocer) {
@@ -1706,53 +1725,68 @@ function activarLogicaEstudiantes(volverA) {
               filasParaRevisar.push({ nombre: nombres + ' ' + apellidos, texto: textoProgramaOriginal, motivo: 'guitarra ambigua' });
             }
 
-            var fechaInicioExcel = formatearFecha(buscarCampo(fila, ['fecha inicio', 'fecha de inicio']));
             var observacionesExcel = buscarCampo(fila, ['observaciones', 'observacion', 'observación']);
+            var acudienteTxt = buscarCampo(fila, ['acudiente', 'nombre del acudiente']);
+            var celularAcudienteTxt = buscarCampo(fila, ['celular del acudiente', 'celular acudiente', 'telefono acudiente']);
 
-            var nuevoAlumno = {
-              nombres: nombres,
-              apellidos: apellidos,
-              documento: documento,
-              nacimiento: nacimiento,
-              programa: programaFinal,
-              programa2: interpretado.programa2 || '',
-              profesor: '',
-              telefono: buscarCampo(fila, ['telefono', 'teléfono', 'telefono de contacto', 'celular']),
-              correo: buscarCampo(fila, ['correo', 'correo electronico', 'correo electrónico', 'email']),
-              direccion: buscarCampo(fila, ['direccion', 'dirección']),
-              acudiente: buscarCampo(fila, ['acudiente', 'nombre del acudiente']),
-              celularAcudiente: buscarCampo(fila, ['celular del acudiente', 'celular acudiente', 'telefono acudiente']),
-              observaciones: (observacionesExcel ? observacionesExcel + ' — ' : '') + notasImportacion.join(' '),
-              estado: estadoElegido
+            var payload = {
+              alumno: {
+                nombres: nombres, apellidos: apellidos, documento: documento || null,
+                fechaNacimiento: nacimiento,
+                telefonoContacto: buscarCampo(fila, ['telefono', 'teléfono', 'telefono de contacto', 'celular']) || null,
+                emailContacto: buscarCampo(fila, ['correo', 'correo electronico', 'correo electrónico', 'email']) || null,
+                programaPrincipal: programaFinal,
+                profesorId: null,
+                observaciones: (observacionesExcel ? observacionesExcel + ' — ' : '') + notasImportacion.join(' ') || null
+              },
+              acudientes: acudienteTxt ? [{ nombre: acudienteTxt, telefono: celularAcudienteTxt || null, relacion: 'Acudiente' }] : []
             };
-            if (estadoElegido === 'activo') {
-              nuevoAlumno.fechaMatricula = fechaInicioExcel || new Date().toISOString().slice(0, 10);
-            }
 
-            alumnosNuevos.push(nuevoAlumno);
-            importados++;
-          });
-
-          guardarAlumnos(alumnosExistentes.concat(alumnosNuevos));
-
-          var resumenPartes = [importados + ' estudiante(s) importado(s) como "' + (estadoElegido === 'activo' ? 'Activo' : 'Preinscrito') + '"'];
-          if (duplicados) resumenPartes.push(duplicados + ' fila(s) omitida(s) por estar duplicadas');
-          if (omitidos) resumenPartes.push(omitidos + ' fila(s) omitida(s) por falta de nombre/apellido');
-
-          var htmlRevision = '';
-          if (filasParaRevisar.length) {
-            htmlRevision = '<p style="margin:10px 0 4px; font-weight:600;">' + filasParaRevisar.length + ' estudiante(s) con el programa sin confirmar — revisá su ficha en Estudiantes:</p>' +
-              '<ul style="margin:0; padding-left:18px;">' +
-              filasParaRevisar.slice(0, 25).map(function (r) { return '<li>' + r.nombre + ' — "' + r.texto + '" (' + r.motivo + ')</li>'; }).join('') +
-              (filasParaRevisar.length > 25 ? '<li>… y ' + (filasParaRevisar.length - 25) + ' más.</li>' : '') +
-              '</ul>';
+            apiFetch('/api/academico/estudiantes', { method: 'POST', body: JSON.stringify(payload) })
+              .then(function () {
+                importados++;
+                yaEnviados.push({ nombres: nombres, apellidos: apellidos, documento: documento, nacimiento: nacimiento });
+                procesarFilaExcel(indice + 1);
+              })
+              .catch(function (err) {
+                fallidos.push(nombres + ' ' + apellidos + ': ' + err.message);
+                procesarFilaExcel(indice + 1);
+              });
           }
 
-          var msj = document.getElementById('msj-excel-estudiantes');
-          msj.style.color = 'var(--texto)';
-          msj.innerHTML = '<span style="color:var(--verde); font-weight:600;">' + resumenPartes.join(' · ') + '.</span>' + htmlRevision;
-          msj.style.display = 'block';
-          setTimeout(function () { renderContenido('estudiantes'); }, filasParaRevisar.length ? 4000 : 900);
+          function terminarImportacionExcel() {
+            refrescarCacheAlumnos().then(function () {
+              var resumenPartes = [importados + ' estudiante(s) importado(s) de verdad (quedan como "Preinscrito" — para pasar a "Activo" hace falta completar su Matrícula)'];
+              if (duplicados) resumenPartes.push(duplicados + ' fila(s) omitida(s) por estar duplicadas');
+              if (omitidos) resumenPartes.push(omitidos + ' fila(s) omitida(s) por falta de nombre/apellido');
+              if (fallidos.length) resumenPartes.push(fallidos.length + ' fila(s) con error');
+
+              var htmlRevision = '';
+              if (filasParaRevisar.length) {
+                htmlRevision += '<p style="margin:10px 0 4px; font-weight:600;">' + filasParaRevisar.length + ' estudiante(s) con el programa sin confirmar — revisá su ficha en Estudiantes:</p>' +
+                  '<ul style="margin:0; padding-left:18px;">' +
+                  filasParaRevisar.slice(0, 25).map(function (r) { return '<li>' + r.nombre + ' — "' + r.texto + '" (' + r.motivo + ')</li>'; }).join('') +
+                  (filasParaRevisar.length > 25 ? '<li>… y ' + (filasParaRevisar.length - 25) + ' más.</li>' : '') +
+                  '</ul>';
+              }
+              if (fallidos.length) {
+                htmlRevision += '<p style="margin:10px 0 4px; font-weight:600; color:var(--rojo);">Filas con error (no se importaron):</p>' +
+                  '<ul style="margin:0; padding-left:18px; color:var(--rojo);">' +
+                  fallidos.slice(0, 25).map(function (f) { return '<li>' + f + '</li>'; }).join('') +
+                  (fallidos.length > 25 ? '<li>… y ' + (fallidos.length - 25) + ' más.</li>' : '') +
+                  '</ul>';
+              }
+
+              var msj = document.getElementById('msj-excel-estudiantes');
+              msj.style.color = 'var(--texto)';
+              msj.innerHTML = '<span style="color:var(--verde); font-weight:600;">' + resumenPartes.join(' · ') + '.</span>' + htmlRevision;
+              msj.style.display = 'block';
+              btnSubirExcelRef.disabled = false;
+              setTimeout(function () { renderContenido('estudiantes'); }, (filasParaRevisar.length || fallidos.length) ? 5000 : 900);
+            });
+          }
+
+          procesarFilaExcel(0);
         } catch (err) {
           alert('No se pudo leer el archivo. Revisá que sea un Excel/CSV válido, con columnas como Nombres, Apellidos, Programa, etc.');
         }
@@ -2125,6 +2159,15 @@ function activarLogicaMatricula() {
 
 var vistaPagos = 'cartera'; // 'cartera' o 'pagos' — separadas a propósito para no confundir.
 
+function heroPagos() {
+  return '' +
+    '<div class="contab-hero"><div class="contab-hero-inner">' +
+    '<p class="contab-hero-eyebrow">Cartera y comprobantes · Jacquin</p>' +
+    '<h1>Pagos y cartera</h1>' +
+    '<p>Quién debe, cuánto y desde cuándo, y el historial de pagos de la academia en un solo lugar.</p>' +
+    '</div></div>';
+}
+
 function renderPagos() {
   var alumnos = cargarAlumnos();
   var cargos = cargarCargos();
@@ -2135,7 +2178,7 @@ function renderPagos() {
     '<button id="btn-tab-pagos" style="height:38px; border-radius:6px; padding:0 16px; font-size:13px; cursor:pointer; font-family:var(--font-ui); border:2px solid var(--azul-oscuro); background:' + (vistaPagos === 'pagos' ? 'var(--azul-oscuro)' : 'transparent') + '; color:' + (vistaPagos === 'pagos' ? '#fff' : 'var(--azul-oscuro)') + ';">🧾 Pagos y comprobantes</button>' +
     '</div>';
 
-  return toggleHtml + (vistaPagos === 'cartera' ? renderCartera(alumnos, cargos) : renderPagosTab(alumnos, cargos));
+  return heroPagos() + toggleHtml + (vistaPagos === 'cartera' ? renderCartera(alumnos, cargos) : renderPagosTab(alumnos, cargos));
 }
 
 function renderCartera(alumnos, cargos) {
@@ -2589,10 +2632,6 @@ function renderHorariosSemana(sesion) {
     '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px; max-height:85vh; overflow-y:auto;">' +
     '<h2 style="margin-top:0;">Agendar en esta franja</h2>' +
     '<p id="modal-franja-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
-    '<div class="campo"><label>Profesor</label><select id="mo-profesor">' +
-    (CACHE_PROFESORES.length === 0 ? '<option value="">Sin profesores registrados</option>' :
-     CACHE_PROFESORES.map(function (p) { return '<option value="' + p.id + '">' + (p.nombre || p.email) + '</option>'; }).join('')) +
-    '</select></div>' +
     '<div class="campo"><label>Programa</label><select id="mo-programa">' +
     PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
     '</select></div>' +
@@ -2600,8 +2639,9 @@ function renderHorariosSemana(sesion) {
     '<div class="campo"><label>Sala (opcional)</label><select id="mo-sala"><option value="">Sin sala asignada</option>' +
     CACHE_SALAS.map(function (s) { return '<option value="' + s.id + '">' + s.nombre + '</option>'; }).join('') +
     '</select></div>' +
-    '<div class="campo"><label>Estudiante (opcional, se puede asignar después)</label><select id="mo-alumno"><option value="">Sin asignar todavía</option>' +
-    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+    '<div class="campo"><label>Estudiante</label><select id="mo-alumno">' +
+    (alumnos.length === 0 ? '<option value="">Sin estudiantes registrados</option>' :
+     alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('')) +
     '</select></div>' +
     '<button class="btn-primario" id="btn-confirmar-agendar">Confirmar</button>' +
     '<button id="btn-cancelar-agendar" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
@@ -2714,23 +2754,24 @@ function activarLogicaHorarios() {
     btnConfirmar.addEventListener('click', function () {
       var dia = Number(modalAgendar.getAttribute('data-dia'));
       var hora = modalAgendar.getAttribute('data-hora');
-      var profesorId = Number(document.getElementById('mo-profesor').value);
       var salaId = document.getElementById('mo-sala').value;
       var alumnoSel = document.getElementById('mo-alumno').value;
       var alumnoElegido = alumnoSel !== '' ? cargarAlumnos()[Number(alumnoSel)] : null;
-      if (!profesorId) { alert('Elegí un profesor — el backend lo exige para crear la clase.'); return; }
+      if (!alumnoElegido || !alumnoElegido.id) { alert('Elegí un estudiante — toda clase necesita al menos uno.'); return; }
 
       btnConfirmar.disabled = true;
       apiFetch('/api/horarios/clases', {
         method: 'POST',
         body: JSON.stringify({
           clase: {
-            profesorId: profesorId, salaId: salaId ? Number(salaId) : null,
+            // El profesor ya no se elige al agendar — se asigna después,
+            // desde Profesores/Horarios, si hace falta.
+            profesorId: null, salaId: salaId ? Number(salaId) : null,
             programa: document.getElementById('mo-programa').value,
             tipo: document.getElementById('mo-tipo').value,
             diaSemana: dia, horaInicio: hora, duracionMinutos: 45
           },
-          alumnosIds: (alumnoElegido && alumnoElegido.id) ? [alumnoElegido.id] : []
+          alumnosIds: [alumnoElegido.id]
         })
       })
         .then(function () { return refrescarCacheClases(); })
@@ -3403,7 +3444,9 @@ function renderEvaluacionMensualPanel(sesion) {
 
   var historialFilas = evaluacionesMensuales.slice().sort(function (a, b) { return (b.mes || '').localeCompare(a.mes || ''); }).map(function (e) {
     var alumno = alumnos[e.alumnoIdx];
-    var boton = '<button class="btn-ver-resultado-mensual" data-alumno-idx="' + e.alumnoIdx + '" data-mes="' + e.mes + '" style="font-size:11px; padding:5px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">Ver avance</button>';
+    var idxOriginal = evaluacionesMensuales.indexOf(e);
+    var boton = '<button class="btn-ver-resultado-mensual" data-alumno-idx="' + e.alumnoIdx + '" data-mes="' + e.mes + '" style="font-size:11px; padding:5px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">Ver avance</button>' +
+      '<button class="btn-eliminar-avance-mensual" data-idx="' + idxOriginal + '" style="font-size:11px; padding:5px 12px; border-radius:8px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer; font-family:var(--font-ui); white-space:nowrap; margin-left:6px;">Eliminar</button>';
     return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td><td>' + e.mes + '</td><td>' + (e.fecha || '—') + '</td><td>' + (e.observaciones || '—') + '</td><td>' + boton + '</td></tr>';
   }).join('');
 
@@ -3461,6 +3504,17 @@ function activarLogicaEvaluacionMensual() {
 
   var modal = document.getElementById('modal-eval-mensual');
   if (!modal) return;
+
+  document.querySelectorAll('.btn-eliminar-avance-mensual').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var idx = Number(btn.getAttribute('data-idx'));
+      if (!confirm('¿Eliminar este avance registrado? Esta acción no se puede deshacer.')) return;
+      var evaluaciones = cargarEvaluacionesMensuales();
+      evaluaciones.splice(idx, 1);
+      guardarEvaluacionesMensuales(evaluaciones);
+      renderContenido('evaluacion');
+    });
+  });
 
   document.querySelectorAll('.btn-evaluar-mensual').forEach(function (btn) {
     btn.addEventListener('click', function () {
