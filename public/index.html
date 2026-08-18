@@ -704,6 +704,27 @@ async function buscarOCrearPlanId(programa, tipo, valorReal) {
   return creado.id;
 }
 
+// Corre `fn` sobre cada item de `lista` en paralelo, pero como máximo
+// `limite` a la vez — Inscripciones, Cargos y Asistencia necesitan un
+// pedido POR ESTUDIANTE (el backend no tiene "traer todos"), y antes lo
+// hacían uno detrás de otro: con 40-150+ estudiantes eso tardaba tanto
+// que la pantalla parecía haberse quedado sin datos (2026-08-18). Con
+// esto salen en paralelo de a `limite` sin saturar al backend de una.
+async function mapearEnParalelo(lista, limite, fn) {
+  var resultados = new Array(lista.length);
+  var siguiente = 0;
+  async function trabajador() {
+    while (siguiente < lista.length) {
+      var i = siguiente++;
+      resultados[i] = await fn(lista[i], i);
+    }
+  }
+  var trabajadores = [];
+  for (var w = 0; w < Math.min(limite, lista.length); w++) trabajadores.push(trabajador());
+  await Promise.all(trabajadores);
+  return resultados;
+}
+
 // CACHE_INSCRIPCIONES no tiene un solo endpoint "traer todas" en el backend
 // (solo existe "inscripciones de este alumno") — se arma pidiendo, por cada
 // estudiante en caché, sus propias inscripciones, y se traduce a la misma
@@ -713,14 +734,12 @@ async function buscarOCrearPlanId(programa, tipo, valorReal) {
 var CACHE_INSCRIPCIONES = [];
 async function refrescarCacheInscripciones() {
   try {
-    var todas = [];
-    for (var i = 0; i < CACHE_ALUMNOS.length; i++) {
-      var alumno = CACHE_ALUMNOS[i];
+    var resultados = await mapearEnParalelo(CACHE_ALUMNOS, 8, async function (alumno, i) {
       var propias = await apiFetch('/api/matricula/inscripciones/alumno/' + alumno.id, { method: 'GET' });
-      (propias || []).forEach(function (ins) {
+      return (propias || []).map(function (ins) {
         var plan = CACHE_PLANES.find(function (p) { return p.id === ins.plan_id; });
         var tipoCoincidente = plan ? TIPOS_PLAN.find(function (t) { return t.horasSemana === plan.horas_semanales; }) : null;
-        todas.push({
+        return {
           alumnoIdx: i,
           tipoPlanNombre: tipoCoincidente ? tipoCoincidente.nombre : (plan ? plan.nombre : '—'),
           horas: plan ? plan.horas_semanales : null,
@@ -728,10 +747,10 @@ async function refrescarCacheInscripciones() {
           descuentoPorcentaje: 0,
           fechaInicio: ins.fecha_inicio,
           pagado: alumno.estado === 'activo'
-        });
+        };
       });
-    }
-    CACHE_INSCRIPCIONES = todas;
+    });
+    CACHE_INSCRIPCIONES = [].concat.apply([], resultados);
   } catch (err) {
     console.error('No se pudo cargar Inscripciones desde el backend:', err.message);
   }
@@ -813,20 +832,18 @@ function guardarCargos(lista) { CACHE_CARGOS = lista; }
 var CACHE_CARGOS = [];
 async function refrescarCacheCargos() {
   try {
-    var todos = [];
-    for (var i = 0; i < CACHE_ALUMNOS.length; i++) {
-      var alumno = CACHE_ALUMNOS[i];
+    var resultados = await mapearEnParalelo(CACHE_ALUMNOS, 8, async function (alumno, i) {
       var propios = await apiFetch('/api/pagos/cargos/alumno/' + alumno.id, { method: 'GET' });
-      (propios || []).forEach(function (c) {
+      return (propios || []).map(function (c) {
         var concepto = CACHE_CONCEPTOS.find(function (cc) { return cc.id === c.concepto_id; });
-        todos.push({
+        return {
           id: c.id, alumnoIdx: i, concepto: concepto ? concepto.nombre : ('Concepto #' + c.concepto_id),
           valor: Number(c.valor), descuento: Number(c.descuento || 0), saldo: Number(c.saldo_pendiente),
           vencimiento: c.fecha_vencimiento, estado: c.estado
-        });
+        };
       });
-    }
-    CACHE_CARGOS = todos;
+    });
+    CACHE_CARGOS = [].concat.apply([], resultados);
   } catch (err) {
     console.error('No se pudo cargar Cargos desde el backend:', err.message);
   }
@@ -1016,16 +1033,14 @@ function fechaColumnaSemana(semanaStr, diaIndice) {
 var CACHE_ASISTENCIAS = [];
 async function refrescarCacheAsistencias() {
   try {
-    var todas = [];
-    for (var i = 0; i < CACHE_ALUMNOS.length; i++) {
-      var alumno = CACHE_ALUMNOS[i];
+    var resultados = await mapearEnParalelo(CACHE_ALUMNOS, 8, async function (alumno, i) {
       var propias = await apiFetch('/api/asistencia/alumno/' + alumno.id, { method: 'GET' });
-      (propias || []).forEach(function (a) {
+      return (propias || []).map(function (a) {
         var claseIdx = CACHE_CLASES.findIndex(function (c) { return c.id === a.clase_id; });
-        todas.push({ alumnoIdx: i, claseIdx: claseIdx, fecha: a.fecha, estado: a.estado });
+        return { alumnoIdx: i, claseIdx: claseIdx, fecha: a.fecha, estado: a.estado };
       });
-    }
-    CACHE_ASISTENCIAS = todas;
+    });
+    CACHE_ASISTENCIAS = [].concat.apply([], resultados);
   } catch (err) {
     console.error('No se pudo cargar Asistencias desde el backend:', err.message);
   }
@@ -5626,7 +5641,13 @@ function navegar() {
   // medida que se conectan. Inscripciones depende de que Alumnos y Planes
   // ya estén frescos (arma su caché combinando ambos), por eso va al final.
   refrescarCacheAlumnos()
-    .then(function () { return refrescarCachePlanes(); })
+    .then(function () {
+      // Estudiantes ya tiene con esto todo lo que necesita — se repinta
+      // acá mismo en vez de esperar a Cargos/Asistencia/etc, que dependen
+      // de un pedido por estudiante y tardan más (ver mapearEnParalelo).
+      if ((location.hash.replace('#', '') || 'dashboard') === clave) renderContenido(clave);
+      return refrescarCachePlanes();
+    })
     .then(function () { return refrescarCacheInscripciones(); })
     .then(function () { return refrescarCacheConceptos(); })
     .then(function () { return refrescarCacheCargos(); })
@@ -5642,6 +5663,12 @@ function navegar() {
       if ((location.hash.replace('#', '') || 'dashboard') === clave) {
         renderContenido(clave);
       }
+    })
+    .catch(function (err) {
+      // Red de seguridad: si algo de esta cadena llegara a fallar sin
+      // atraparse adentro, que quede en consola en vez de dejar la
+      // pantalla pegada esperando para siempre un repintado que no llega.
+      console.error('Error refrescando datos del backend:', err);
     });
 }
 
