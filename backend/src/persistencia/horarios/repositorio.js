@@ -32,6 +32,19 @@ export async function vincularAlumnoAClase(claseId, alumnoId) {
   await pool.query(`INSERT INTO clase_alumnos (clase_id, alumno_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [claseId, alumnoId]);
 }
 
+/**
+ * NUEVO: trae los alumnos ya vinculados a una clase — antes esta relación
+ * solo se podía escribir (al crear la clase), nunca releer. Lo necesita
+ * el HTML para saber a quién mostrar en la grilla de Horarios/Asistencia.
+ */
+export async function alumnosDeClase(claseId) {
+  const { rows } = await pool.query(
+    `SELECT al.* FROM clase_alumnos ca JOIN alumnos al ON al.id = ca.alumno_id WHERE ca.clase_id = $1`,
+    [claseId]
+  );
+  return rows;
+}
+
 /** Detecta cruce: mismo profesor o misma sala, mismo día y hora — regla de "evitar que se crucen clases". */
 export async function buscarCruce({ profesorId, salaId, diaSemana, horaInicio }) {
   const { rows } = await pool.query(
