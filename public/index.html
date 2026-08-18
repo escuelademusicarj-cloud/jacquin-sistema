@@ -5159,10 +5159,11 @@ function renderAdmin() {
     '</div>' +
     '<div id="reglas-vivo">' + POLITICA_PASSWORD.map(function (r) { return '<div class="regla" id="regla-' + r.id + '">· ' + r.txt + '</div>'; }).join('') + '</div>' +
     '<button class="btn-primario" id="btn-crear-usuario" style="margin-top:10px; max-width:280px;" disabled>Crear usuario</button>' +
-    '<p id="msj-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Usuario creado (guardado en este navegador, no en el backend real).</p>' +
+    '<p id="msj-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Usuario creado en el sistema real — ya puede iniciar sesión.</p>' +
     '</div>' +
 
     '<div class="panel"><h2>Usuarios</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Esta lista es un espejo de lo creado desde esta pantalla en este navegador — el backend todavía no tiene forma de traer la lista completa de usuarios reales, así que puede no coincidir 100% con lo que hay en Supabase.</p>' +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th></tr></thead><tbody id="tbody-usuarios">' + filas + '</tbody></table></div>' +
     '</div>' +
 
@@ -5200,13 +5201,37 @@ function activarLogicaAdmin() {
     var nombre = document.getElementById('admin-nombre').value.trim();
     var email = document.getElementById('admin-email').value.trim();
     var rol = document.getElementById('admin-rol').value;
+    var password = pass.value;
     if (!nombre || !email) return;
     var nacimiento = document.getElementById('admin-nacimiento').value;
-    var usuarios = cargarUsuarios();
-    usuarios.push({ nombre: nombre, email: email, rol: rol, nacimiento: nacimiento });
-    guardarUsuarios(usuarios);
-    document.getElementById('msj-creado').style.display = 'block';
-    setTimeout(function () { renderContenido('admin'); }, 600);
+    var rolReal = CACHE_ROLES.find(function (r) { return r.nombre === rol; });
+    if (!rolReal) { alert('No se encontró el rol "' + rol + '" en el sistema — no se puede crear el usuario.'); return; }
+
+    btn.disabled = true;
+    apiFetch('/api/identidad/usuarios', {
+      method: 'POST',
+      body: JSON.stringify({ nombre: nombre, email: email, password: password, rolId: rolReal.id })
+    })
+      .then(function () {
+        // El backend no tiene un "traer todos los usuarios" — esta tabla de
+        // acá abajo sigue siendo un espejo local (no un reflejo 100% fiel de
+        // lo que hay en Supabase), solo para no perder de vista lo creado
+        // desde esta pantalla en esta sesión.
+        var usuarios = cargarUsuarios();
+        usuarios.push({ nombre: nombre, email: email, rol: rol, nacimiento: nacimiento });
+        guardarUsuarios(usuarios);
+        // Si es profesor, además refresca la lista real que usan Horarios/
+        // Eventos, para que aparezca ahí sin tener que ir a "Profesores".
+        return rol === 'PROFESOR' ? refrescarCacheProfesores() : Promise.resolve();
+      })
+      .then(function () {
+        document.getElementById('msj-creado').style.display = 'block';
+        setTimeout(function () { renderContenido('admin'); }, 600);
+      })
+      .catch(function (err) {
+        alert('No se pudo crear el usuario: ' + err.message);
+        btn.disabled = false;
+      });
   });
 
   function pintarPrevia() {
