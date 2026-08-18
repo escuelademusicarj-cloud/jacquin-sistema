@@ -1603,7 +1603,15 @@ function activarLogicaEstudiantes(volverA) {
             for (var i = 0; i < nombres.length; i++) {
               var objetivo = normalizarTexto(nombres[i]);
               var clave = claves.find(function (k) { return normalizarTexto(k) === objetivo; });
-              if (clave) return String(fila[clave]).trim();
+              if (clave) {
+                var valor = fila[clave];
+                // Si la celda de Excel era una fecha "de verdad" (no texto),
+                // el lector la entrega como objeto Date — hay que dejarla
+                // intacta para que formatearFecha la reconozca. Convertir
+                // todo a texto acá (como antes) rompía esas fechas siempre.
+                if (valor instanceof Date) return valor;
+                return String(valor).trim();
+              }
             }
             return '';
           }
