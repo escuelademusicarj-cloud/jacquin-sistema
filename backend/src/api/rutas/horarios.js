@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { obtenerSalas, crearClaseNueva, obtenerClases, registrarModificacion } from "../../servicios/horarios/servicio.js";
+import { obtenerSalas, crearClaseNueva, obtenerClases, registrarModificacion, obtenerAlumnosDeClase } from "../../servicios/horarios/servicio.js";
 import { DIAS_SEMANA, MAX_RECUPERACIONES_POR_MES } from "../../dominio/horarios/entidades.js";
 import { respuestaExitosa } from "../middlewares/manejoErrores.js";
 import { requiereAutenticacion } from "../middlewares/autenticacion.js";
@@ -15,6 +15,12 @@ rutasHorarios.get("/catalogos", requierePermiso("horarios:ver"), async (req, res
 
 rutasHorarios.get("/clases", requierePermiso("horarios:ver"), async (req, res, next) => {
   try { respuestaExitosa(res, await obtenerClases({ alumnoId: req.query.alumnoId }, { rol: req.usuario.rol, usuarioId: req.usuario.id })); }
+  catch (err) { next(err); }
+});
+
+// NUEVO: alumnos de una clase puntual — antes no había forma de releer esto.
+rutasHorarios.get("/clases/:id/alumnos", requierePermiso("horarios:ver"), async (req, res, next) => {
+  try { respuestaExitosa(res, await obtenerAlumnosDeClase(req.params.id)); }
   catch (err) { next(err); }
 });
 
