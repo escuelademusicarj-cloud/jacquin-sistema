@@ -5,16 +5,21 @@
 // Vive acá como lista de dominio porque el módulo de Cursos y
 // Programas todavía no existe como tabla propia — cuando se
 // construya, migrar esta validación a una consulta contra esa tabla.
+// Actualizado 2026-08-17: se agregó "Senior" y se unificaron
+// "Guitarra acústica"/"Guitarra eléctrica" en un solo programa
+// "Guitarra" (pedido explícito) — los alumnos/planes/clases ya
+// creados con los nombres viejos conservan su valor histórico tal
+// cual, solo cambia el catálogo hacia adelante.
 export const PROGRAMAS_OFICIALES = [
   "Piano",
-  "Guitarra acústica",
-  "Guitarra eléctrica",
+  "Guitarra",
   "Bajo",
   "Técnica vocal",
   "Violín",
   "Percusión",
   "Iniciación musical",
   "Exploración musical infantil",
+  "Senior",
 ];
 
 export const ESTADOS_ALUMNO = ["activo", "inactivo", "retirado", "preinscrito", "pendiente_matricula"];
