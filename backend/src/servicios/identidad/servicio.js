@@ -4,7 +4,10 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { crearUsuario } from "../../dominio/identidad/entidades.js";
-import { insertarUsuario, buscarUsuarioPorEmail, buscarRolPorNombre, buscarRolPorId, contarUsuarios } from "../../persistencia/identidad/repositorio.js";
+import {
+  insertarUsuario, buscarUsuarioPorEmail, buscarRolPorNombre, buscarRolPorId, contarUsuarios,
+  listarUsuarios, buscarUsuarioPorId, actualizarUsuario, actualizarPasswordUsuario, eliminarUsuario,
+} from "../../persistencia/identidad/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
 const RONDAS_HASH = 10;
@@ -17,10 +20,6 @@ function credencialesInvalidas() {
   return err;
 }
 
-/**
- * Login real (Fase 1). Verifica contraseña contra el hash guardado y
- * emite un token firmado — recién acá empieza a existir una sesión.
- */
 export async function login({ email, password }) {
   const usuario = await buscarUsuarioPorEmail(email);
   if (!usuario || !usuario.activo) {
@@ -30,46 +29,26 @@ export async function login({ email, password }) {
   const coincide = await bcrypt.compare(password, usuario.password_hash);
   if (!coincide) {
     await registrarAuditoria({
-      usuarioId: usuario.id,
-      accion: "login_fallido",
-      modulo: "identidad",
-      entidad: "usuario",
-      entidadId: usuario.id,
-      resultado: "error",
+      usuarioId: usuario.id, accion: "login_fallido", modulo: "identidad",
+      entidad: "usuario", entidadId: usuario.id, resultado: "error",
     });
     throw credencialesInvalidas();
   }
 
   const rol = await buscarRolPorId(usuario.rol_id);
-
-  const token = jwt.sign({ sub: usuario.id, rolId: usuario.rol_id }, process.env.JWT_SECRET, {
-    expiresIn: DURACION_TOKEN,
-  });
+  const token = jwt.sign({ sub: usuario.id, rolId: usuario.rol_id }, process.env.JWT_SECRET, { expiresIn: DURACION_TOKEN });
 
   await registrarAuditoria({
-    usuarioId: usuario.id,
-    accion: "login",
-    modulo: "identidad",
-    entidad: "usuario",
-    entidadId: usuario.id,
-    resultado: "exito",
+    usuarioId: usuario.id, accion: "login", modulo: "identidad",
+    entidad: "usuario", entidadId: usuario.id, resultado: "exito",
   });
 
   return {
     token,
-    // El HTML necesita el NOMBRE del rol (no solo el id) para decidir
-    // qué módulos mostrarle a cada usuario.
     usuario: { id: usuario.id, nombre: usuario.nombre, email: usuario.email, rolId: usuario.rol_id, rol: rol?.nombre ?? null },
   };
 }
 
-/**
- * Bootstrap de un solo uso: crea el primer usuario ADMINISTRADOR
- * cuando todavía no existe ninguno. Se autodesactiva solo — si ya hay
- * al menos un usuario en la base, rechaza. Pensado para publicar sin
- * necesitar Node.js/terminal local: se dispara visitando la URL una
- * vez desde el navegador.
- */
 export async function bootstrapAdmin() {
   const totalUsuarios = await contarUsuarios();
   if (totalUsuarios > 0) {
@@ -98,11 +77,6 @@ export async function bootstrapAdmin() {
   return { email, mensaje: "Admin creado. Usá el email de arriba con la contraseña que hayas definido en ADMIN_SEED_PASSWORD (o la de por defecto si no la cambiaste)." };
 }
 
-/**
- * Alta de un usuario del sistema (administrador, secretaría, profesor
- * o dirección). No es el flujo de login — eso es Fase 1. Esto es lo
- * mínimo necesario para poder cargar los usuarios semilla.
- */
 export async function altaUsuario({ nombre, email, password, rolId }, contextoAuditoria) {
   const existente = await buscarUsuarioPorEmail(email);
   if (existente) {
@@ -114,13 +88,50 @@ export async function altaUsuario({ nombre, email, password, rolId }, contextoAu
   const guardado = await insertarUsuario(usuario);
 
   await registrarAuditoria({
-    usuarioId: contextoAuditoria?.usuarioId ?? null,
-    accion: "crear",
-    modulo: "identidad",
-    entidad: "usuario",
-    entidadId: guardado.id,
-    resultado: "exito",
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "crear", modulo: "identidad",
+    entidad: "usuario", entidadId: guardado.id, resultado: "exito",
   });
 
   return guardado;
+}
+
+// NUEVO: lista completa — antes no existía ninguna forma de traerla.
+export async function obtenerUsuarios() {
+  return listarUsuarios();
+}
+
+// NUEVO: edita nombre/email/rol (y opcionalmente activo). Si viene
+// "password" en el body, también la cambia (con su propio hash).
+export async function editarUsuario(id, { nombre, email, rolId, activo, password }, contextoAuditoria) {
+  const actualizado = await actualizarUsuario(id, { nombre, email, rolId, activo });
+  if (!actualizado) {
+    const err = new Error("Usuario no encontrado.");
+    err.codigoHttp = 404;
+    throw err;
+  }
+  if (password) {
+    const passwordHash = await bcrypt.hash(password, RONDAS_HASH);
+    await actualizarPasswordUsuario(id, passwordHash);
+  }
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "editar", modulo: "identidad",
+    entidad: "usuario", entidadId: id, resultado: "exito",
+  });
+  return actualizado;
+}
+
+// NUEVO: elimina un usuario. No deja borrarse a sí mismo (evita que un
+// Administrador se quede afuera del sistema sin querer).
+export async function borrarUsuario(id, contextoAuditoria) {
+  if (contextoAuditoria?.usuarioId && Number(contextoAuditoria.usuarioId) === Number(id)) {
+    const err = new Error("No podés eliminar tu propio usuario mientras tenés la sesión abierta.");
+    err.codigoHttp = 400;
+    throw err;
+  }
+  await eliminarUsuario(id);
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "eliminar", modulo: "identidad",
+    entidad: "usuario", entidadId: id, resultado: "exito",
+  });
+  return { eliminado: true };
 }

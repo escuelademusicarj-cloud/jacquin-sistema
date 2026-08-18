@@ -1,7 +1,3 @@
-// Persistencia: único lugar del proyecto que sabe escribir SQL para
-// las tablas de identidad. Los Servicios llaman a estas funciones,
-// nunca escriben SQL directamente — así, si el día de mañana
-// cambiamos de PostgreSQL a otra base, solo se toca este archivo.
 import { pool } from "../../config/db.js";
 
 export async function insertarUsuario({ nombre, email, passwordHash, rolId }) {
@@ -22,9 +18,53 @@ export async function buscarUsuarioPorEmail(email) {
   return rows[0] ?? null;
 }
 
+export async function buscarUsuarioPorId(id) {
+  const { rows } = await pool.query(
+    `SELECT id, nombre, email, rol_id, activo, creado_en FROM usuarios WHERE id = $1`,
+    [id]
+  );
+  return rows[0] ?? null;
+}
+
 export async function contarUsuarios() {
   const { rows } = await pool.query(`SELECT COUNT(*)::int AS total FROM usuarios`);
   return rows[0].total;
+}
+
+// NUEVO: lista completa de usuarios con el nombre de su rol resuelto.
+export async function listarUsuarios() {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.nombre, u.email, u.rol_id, r.nombre AS rol, u.activo, u.creado_en
+     FROM usuarios u LEFT JOIN roles r ON r.id = u.rol_id
+     ORDER BY u.nombre`
+  );
+  return rows;
+}
+
+// NUEVO: edición parcial — solo pisa los campos que vengan definidos.
+export async function actualizarUsuario(id, { nombre, email, rolId, activo }) {
+  const actual = await buscarUsuarioPorId(id);
+  if (!actual) return null;
+  const nuevo = {
+    nombre: nombre !== undefined ? nombre : actual.nombre,
+    email: email !== undefined ? email : actual.email,
+    rolId: rolId !== undefined ? rolId : actual.rol_id,
+    activo: activo !== undefined ? activo : actual.activo,
+  };
+  const { rows } = await pool.query(
+    `UPDATE usuarios SET nombre=$1, email=$2, rol_id=$3, activo=$4 WHERE id=$5
+     RETURNING id, nombre, email, rol_id, activo, creado_en`,
+    [nuevo.nombre, nuevo.email, nuevo.rolId, nuevo.activo, id]
+  );
+  return rows[0];
+}
+
+export async function actualizarPasswordUsuario(id, passwordHash) {
+  await pool.query(`UPDATE usuarios SET password_hash=$1 WHERE id=$2`, [passwordHash, id]);
+}
+
+export async function eliminarUsuario(id) {
+  await pool.query(`DELETE FROM usuarios WHERE id=$1`, [id]);
 }
 
 export async function listarRoles() {
