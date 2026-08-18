@@ -1,7 +1,7 @@
 import { crearClase, verificarLimiteRecuperaciones } from "../../dominio/horarios/entidades.js";
 import {
   insertarClase, vincularAlumnoAClase, buscarCruce, listarClases,
-  insertarModificacion, recuperacionesDelMes, listarSalas,
+  insertarModificacion, recuperacionesDelMes, listarSalas, alumnosDeClase,
 } from "../../persistencia/horarios/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
@@ -11,10 +11,16 @@ export async function obtenerSalas() {
 
 /**
  * Crea una clase evitando cruces de profesor o sala en el mismo
- * día/hora — regla explícita de Sergio ("evitar que se crucen clases
- * o se asignen horarios que el profesor no puede atender").
+ * día/hora. El profesor ya NO es obligatorio (cambio pedido
+ * explícitamente) — en cambio, la clase SIEMPRE necesita al menos un
+ * estudiante, porque una clase se define por a quién le pertenece, no
+ * por quién la dicta.
  */
 export async function crearClaseNueva({ clase, alumnosIds = [] }, contextoAuditoria) {
+  if (!alumnosIds || alumnosIds.length === 0) {
+    throw new Error("La clase necesita al menos un estudiante.");
+  }
+
   const datos = crearClase(clase);
 
   const cruces = await buscarCruce({ profesorId: datos.profesorId, salaId: datos.salaId, diaSemana: datos.diaSemana, horaInicio: datos.horaInicio });
@@ -32,7 +38,7 @@ export async function crearClaseNueva({ clase, alumnosIds = [] }, contextoAudito
     entidad: "clase", entidadId: guardada.id, resultado: "exito",
   });
 
-  return guardada;
+  return { ...guardada, alumnos: await alumnosDeClase(guardada.id) };
 }
 
 /**
@@ -41,10 +47,25 @@ export async function crearClaseNueva({ clase, alumnosIds = [] }, contextoAudito
  * Estudiantes, no es negociable desde el frontend.
  */
 export async function obtenerClases(filtros, contexto) {
+  let clases;
   if (contexto?.rol === "PROFESOR") {
-    return listarClases({ ...filtros, profesorId: contexto.usuarioId });
+    clases = await listarClases({ ...filtros, profesorId: contexto.usuarioId });
+  } else {
+    clases = await listarClases(filtros);
   }
-  return listarClases(filtros);
+  // Cada clase incluye ya sus alumnos — antes esta relación no se podía
+  // releer (solo escribir al crear), por eso la grilla se quedaba sin
+  // mostrar a nadie.
+  const conAlumnos = [];
+  for (const c of clases) {
+    conAlumnos.push({ ...c, alumnos: await alumnosDeClase(c.id) });
+  }
+  return conAlumnos;
+}
+
+/** Trae los alumnos de una clase puntual — usado también solo, sin traer todas las clases. */
+export async function obtenerAlumnosDeClase(claseId) {
+  return alumnosDeClase(claseId);
 }
 
 /**
