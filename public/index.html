@@ -567,20 +567,20 @@ var POLITICA_PASSWORD = [
   { id: 'p-sim', txt: 'Al menos 1 símbolo', test: function (p) { return /[^A-Za-z0-9]/.test(p); } }
 ];
 
-var PROGRAMAS = ['Piano','Guitarra acústica','Guitarra eléctrica','Bajo','Técnica vocal','Violín','Percusión','Iniciación musical','Exploración musical infantil'];
+var PROGRAMAS = ['Piano','Guitarra','Bajo','Técnica vocal','Violín','Percusión','Iniciación musical','Exploración musical infantil','Senior'];
 
 // Un color propio por programa/instrumento — para identificarlos de un
 // vistazo en Horarios y Asistencia cuando se ve "General" (todos mezclados).
 var COLOR_PROGRAMA = {
   'Piano': '#223F61',
-  'Guitarra acústica': '#B5651D',
-  'Guitarra eléctrica': '#E78C3B',
+  'Guitarra': '#E78C3B',
   'Bajo': '#6A4C93',
   'Técnica vocal': '#C2185B',
   'Violín': '#2E7D32',
   'Percusión': '#0097A7',
   'Iniciación musical': '#93B6EE',
-  'Exploración musical infantil': '#8D6E63'
+  'Exploración musical infantil': '#8D6E63',
+  'Senior': '#5D4037'
 };
 function colorPrograma(nombre) { return COLOR_PROGRAMA[nombre] || 'var(--azul-oscuro)'; }
 function chipPrograma(nombre) {
@@ -685,17 +685,20 @@ async function refrescarCachePlanes() {
 function cargarPlanes() { return CACHE_PLANES; }
 function guardarPlanes(lista) { CACHE_PLANES = lista; }
 
-// Busca en CACHE_PLANES el plan real para (programa, tipo de TIPOS_PLAN). Si
-// no existe todavía, lo crea (solo funciona si quien está logueado es
-// ADMINISTRADOR — regla real del backend, ver servicios/matricula/servicio.js).
-async function buscarOCrearPlanId(programa, tipo) {
+// Busca en CACHE_PLANES el plan real para (programa, horas, valor real que
+// se va a cobrar). Si no existe todavía esa combinación exacta, la crea —
+// así una mensualidad corregida a mano queda como su propia variante real
+// del plan, en vez de perderse (solo funciona crear si quien está logueado
+// es ADMINISTRADOR — regla real del backend, ver servicios/matricula/servicio.js).
+async function buscarOCrearPlanId(programa, tipo, valorReal) {
+  var valor = valorReal != null ? Number(valorReal) : Number(tipo.valor);
   var existente = CACHE_PLANES.find(function (p) {
-    return p.programa === programa && Number(p.horas_semanales) === Number(tipo.horasSemana);
+    return p.programa === programa && Number(p.horas_semanales) === Number(tipo.horasSemana) && Number(p.valor) === valor;
   });
   if (existente) return existente.id;
   var creado = await apiFetch('/api/matricula/planes', {
     method: 'POST',
-    body: JSON.stringify({ programa: programa, horasSemanales: tipo.horasSemana, valor: tipo.valor })
+    body: JSON.stringify({ programa: programa, horasSemanales: tipo.horasSemana, valor: valor })
   });
   await refrescarCachePlanes();
   return creado.id;
@@ -1627,11 +1630,11 @@ function activarLogicaEstudiantes(volverA) {
 
           // Diccionario de coincidencias (texto normalizado sin tildes →
           // nombre oficial en PROGRAMAS). Se compara por "contiene", en
-          // orden de más específico a menos específico, para no confundir
-          // p.ej. "guitarra electrica" con "guitarra" a secas.
+          // orden de más específico a menos específico. "Guitarra acústica/
+          // eléctrica" se unificaron en un solo programa "Guitarra" —
+          // cualquier variante ya cae ahí, no hace falta desambiguar.
           var SINONIMOS_PROGRAMA = [
-            { patron: 'guitarra electr', oficial: 'Guitarra eléctrica' },
-            { patron: 'guitarra acust', oficial: 'Guitarra acústica' },
+            { patron: 'guitarra', oficial: 'Guitarra' },
             { patron: 'bajo', oficial: 'Bajo' },
             { patron: 'percusion', oficial: 'Percusión' },
             { patron: 'tecnica vocal', oficial: 'Técnica vocal' },
@@ -1640,14 +1643,13 @@ function activarLogicaEstudiantes(volverA) {
             { patron: 'violin', oficial: 'Violín' },
             { patron: 'exploracion', oficial: 'Exploración musical infantil' },
             { patron: 'iniciacion', oficial: 'Iniciación musical' },
+            { patron: 'senior', oficial: 'Senior' },
             { patron: 'pianp', oficial: 'Piano' }, // typo frecuente detectado en la planilla
-            { patron: 'piano', oficial: 'Piano' },
-            { patron: 'guitarra', oficial: 'Guitarra acústica' } // ambigua — sin "eléctrica" se asume acústica
+            { patron: 'piano', oficial: 'Piano' }
           ];
 
           // Reconoce un fragmento de texto de programa y devuelve el nombre
-          // oficial, o null si no coincide con nada conocido (p.ej. "Ukelele",
-          // "Seniors" — cosas que hoy no son un programa de PROGRAMAS).
+          // oficial, o null si no coincide con nada conocido.
           function reconocerPrograma(fragmento) {
             var norm = normalizarTexto(fragmento);
             if (!norm) return null;
@@ -1667,11 +1669,9 @@ function activarLogicaEstudiantes(volverA) {
 
             var reconocidos = [];
             var huboSinReconocer = false;
-            var huboAmbigua = false;
             partes.forEach(function (parte) {
               var oficial = reconocerPrograma(parte);
               if (!oficial) { huboSinReconocer = true; return; }
-              if (normalizarTexto(parte) === 'guitarra') huboAmbigua = true;
               if (reconocidos.indexOf(oficial) === -1) reconocidos.push(oficial);
             });
 
@@ -1679,7 +1679,7 @@ function activarLogicaEstudiantes(volverA) {
               programa: reconocidos[0] || '',
               programa2: reconocidos[1] || '',
               sinReconocer: huboSinReconocer,
-              ambigua: huboAmbigua
+              ambigua: false
             };
           }
 
@@ -1995,7 +1995,7 @@ function renderMatricula(sesion) {
         '</select></div>' +
         '<div class="campo-moderno"><label>Tipo de plan</label><select id="in-tipo-plan"></select></div>' +
         '<div class="campo-moderno"><label>Horas por semana</label><input id="in-horas" type="text" readonly /></div>' +
-        '<div class="campo-moderno"><label>Valor (mensualidad)</label><input id="in-valor" type="text" readonly /></div>' +
+        '<div class="campo-moderno"><label>Valor (mensualidad)</label><input id="in-valor" type="text" /></div>' +
         '<div class="campo-moderno"><label>Descuento (%)</label><input id="in-descuento" type="number" min="0" max="100" value="0" /></div>' +
         '<div class="campo-moderno"><label>Total con descuento</label><input id="in-total" type="text" readonly style="color:var(--azul-oscuro); font-weight:700;" /></div>' +
         '<div class="campo-moderno"><label>Fecha de inicio</label><input id="in-fecha" type="date" /></div>' +
@@ -2084,6 +2084,15 @@ function activarLogicaMatricula() {
   document.getElementById('in-programa').addEventListener('change', repoblarTiposPlanPorPrograma);
   document.getElementById('in-tipo-plan').addEventListener('change', aplicarTipoPlanSeleccionado);
   document.getElementById('in-descuento').addEventListener('input', recalcularTotal);
+  // El valor ya no es de solo lectura — se puede corregir a mano cuando la
+  // mensualidad real difiere del plan (pedido explícito). Al escribir un
+  // valor libre, se formatea como plata en vivo y recalcula el total.
+  var campoValor = document.getElementById('in-valor');
+  campoValor.addEventListener('input', function () {
+    var soloNumeros = campoValor.value.replace(/\D/g, '');
+    campoValor.value = soloNumeros ? formatearCOP(soloNumeros) : '';
+    recalcularTotal();
+  });
   alDefinirEstudiante(); // arranca ya cargado con el primer estudiante de la lista
 
   var selectPagado = document.getElementById('in-pagado');
@@ -2111,17 +2120,19 @@ function activarLogicaMatricula() {
       if (!alumno || !alumno.id) { alert('No se pudo identificar al estudiante — recargá la página e intentá de nuevo.'); return; }
 
       var programaElegido = document.getElementById('in-programa').value;
+      var valorReal = Number((document.getElementById('in-valor').value || '').replace(/\D/g, '')) || Number(tipo.valor);
       var descuentoPorcentaje = Number(document.getElementById('in-descuento').value || 0);
-      var descuentoMonto = Math.round(Number(tipo.valor) * (descuentoPorcentaje / 100));
-      var valorConDescuento = Number(tipo.valor) - descuentoMonto;
+      var descuentoMonto = Math.round(valorReal * (descuentoPorcentaje / 100));
+      var valorConDescuento = valorReal - descuentoMonto;
       var medioPagoInscripcion = pagado ? document.getElementById('in-medio-pago').value : '';
 
       btnInscribir.disabled = true;
-      // buscarOCrearPlanId: si esta combinación Programa+Tipo de plan nunca se
-      // usó, intenta crearla en Supabase — eso solo funciona si quien está
-      // logueado es ADMINISTRADOR (regla real del backend). Si falla por
-      // permisos, el catch de abajo lo explica en vez de fallar en silencio.
-      buscarOCrearPlanId(programaElegido, tipo)
+      // buscarOCrearPlanId: si esta combinación Programa+horas+valor nunca se
+      // usó (por ejemplo, porque se corrigió la mensualidad a mano), intenta
+      // crearla en Supabase como una variante propia del plan — eso solo
+      // funciona si quien está logueado es ADMINISTRADOR (regla real del
+      // backend). Si falla por permisos, el catch de abajo lo explica.
+      buscarOCrearPlanId(programaElegido, tipo, valorReal)
         .then(function (planId) {
           return apiFetch('/api/matricula/inscripciones', {
             method: 'POST',
@@ -4263,6 +4274,9 @@ function activarLogicaEventos() {
 // adaptado al lenguaje de la academia de música. Visible completo solo para
 // ADMINISTRADOR; SECRETARIA solo puede registrar (sin ver tablas ni resumen).
 var tabContabilidadActiva = 'ingresos';
+// Registro que se está editando actualmente (null = formulario en modo
+// "crear nuevo"). { tipo: 'ingreso'|'gasto'|'compra'|'nomina', idx: N }
+var contabEditando = null;
 
 function cambiarTabContabilidad(tab) {
   tabContabilidadActiva = tab;
@@ -4274,151 +4288,171 @@ function filaTablaContable(celdas) {
 }
 
 function panelIngresos(esAdmin) {
+  var ingresos = cargarIngresos();
+  var editIdx = (contabEditando && contabEditando.tipo === 'ingreso') ? contabEditando.idx : null;
+  var r = editIdx != null ? ingresos[editIdx] : null;
   var form =
-    '<div class="panel"><h2>Registrar ingreso</h2>' +
+    '<div class="panel"><h2>' + (r ? 'Editar ingreso' : 'Registrar ingreso') + '</h2>' +
     '<div class="grilla-2col">' +
-    '<div class="campo"><label>Fecha</label><input id="ing-fecha" type="date" /></div>' +
-    '<div class="campo"><label>Concepto</label><input id="ing-concepto" type="text" placeholder="Ej: Mensualidad de piano" /></div>' +
+    '<div class="campo"><label>Fecha</label><input id="ing-fecha" type="date" value="' + (r ? r.fecha || '' : '') + '" /></div>' +
+    '<div class="campo"><label>Concepto</label><input id="ing-concepto" type="text" placeholder="Ej: Mensualidad de piano" value="' + (r ? r.concepto || '' : '') + '" /></div>' +
     '<div class="campo"><label>Programa (opcional)</label><select id="ing-programa"><option value="">General</option>' +
-    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') + '</select></div>' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '"' + (r && r.programa === p ? ' selected' : '') + '>' + p + '</option>'; }).join('') + '</select></div>' +
     '<div class="campo"><label>Categoría</label><select id="ing-categoria">' +
-    CATEGORIAS_INGRESO.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Estudiante / cliente (opcional)</label><input id="ing-cliente" type="text" /></div>' +
+    CATEGORIAS_INGRESO.map(function (c) { return '<option value="' + c + '"' + (r && r.categoria === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estudiante / cliente (opcional)</label><input id="ing-cliente" type="text" value="' + (r ? r.cliente || '' : '') + '" /></div>' +
     '<div class="campo"><label>Método de pago</label><select id="ing-metodo">' +
-    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Estado</label><select id="ing-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>' +
-    '<div class="campo"><label>Valor</label><input id="ing-valor" type="number" min="0" /></div>' +
+    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '"' + (r && r.metodo === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estado</label><select id="ing-estado"><option value="pagado"' + (r && r.estado === 'pagado' ? ' selected' : '') + '>Pagado</option><option value="pendiente"' + (r && r.estado === 'pendiente' ? ' selected' : '') + '>Pendiente</option></select></div>' +
+    '<div class="campo"><label>Valor</label><input id="ing-valor" type="number" min="0" value="' + (r ? r.valor : '') + '" /></div>' +
     '</div>' +
-    '<button class="btn-primario" id="btn-crear-ingreso" style="max-width:280px;">Registrar ingreso</button>' +
+    '<button class="btn-primario" id="btn-crear-ingreso" style="max-width:280px;">' + (r ? 'Guardar cambios' : 'Registrar ingreso') + '</button>' +
+    (r ? '<button id="btn-cancelar-edicion-contable" style="max-width:280px; margin-left:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar edición</button>' : '') +
     '<p id="msj-ingreso-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Ingreso registrado.</p>' +
     '</div>';
 
   if (!esAdmin) return form;
 
-  var ingresos = cargarIngresos();
-  var total = ingresos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
-  var filas = ingresos.map(function (r, i) {
-    return filaTablaContable([r.fecha || '—', r.concepto, r.programa || '—', r.categoria, r.cliente || '—', r.metodo,
-      '<span class="chip-rol">' + (r.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
-      '<strong>' + formatearCOPContable(r.valor) + '</strong>']).replace('<tr>', '<tr data-idx-ingreso="' + i + '">');
+  var total = ingresos.reduce(function (s, x) { return s + Number(x.valor || 0); }, 0);
+  var filas = ingresos.map(function (x, i) {
+    var botones = '<button class="btn-editar-contable" data-tipo="ingreso" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; margin-right:4px;">Editar</button>' +
+      '<button class="btn-eliminar-contable" data-tipo="ingreso" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Eliminar</button>';
+    return filaTablaContable([x.fecha || '—', x.concepto, x.programa || '—', x.categoria, x.cliente || '—', x.metodo,
+      '<span class="chip-rol">' + (x.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong>' + formatearCOPContable(x.valor) + '</strong>', botones]);
   }).join('');
 
   return form +
     '<div class="panel"><h2>Ingresos registrados (' + ingresos.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
     (ingresos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay ingresos registrados.</p>' :
-     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Concepto</th><th>Programa</th><th>Categoría</th><th>Cliente</th><th>Método</th><th>Estado</th><th>Valor</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Concepto</th><th>Programa</th><th>Categoría</th><th>Cliente</th><th>Método</th><th>Estado</th><th>Valor</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>';
 }
 
 function panelGastos(esAdmin) {
+  var gastos = cargarGastos();
+  var editIdx = (contabEditando && contabEditando.tipo === 'gasto') ? contabEditando.idx : null;
+  var r = editIdx != null ? gastos[editIdx] : null;
   var form =
-    '<div class="panel"><h2>Registrar gasto</h2>' +
+    '<div class="panel"><h2>' + (r ? 'Editar gasto' : 'Registrar gasto') + '</h2>' +
     '<div class="grilla-2col">' +
-    '<div class="campo"><label>Fecha</label><input id="gas-fecha" type="date" /></div>' +
-    '<div class="campo"><label>Concepto</label><input id="gas-concepto" type="text" /></div>' +
+    '<div class="campo"><label>Fecha</label><input id="gas-fecha" type="date" value="' + (r ? r.fecha || '' : '') + '" /></div>' +
+    '<div class="campo"><label>Concepto</label><input id="gas-concepto" type="text" value="' + (r ? r.concepto || '' : '') + '" /></div>' +
     '<div class="campo"><label>Categoría</label><select id="gas-categoria">' +
-    CATEGORIAS_GASTO.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Proveedor (opcional)</label><input id="gas-proveedor" type="text" /></div>' +
+    CATEGORIAS_GASTO.map(function (c) { return '<option value="' + c + '"' + (r && r.categoria === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Proveedor (opcional)</label><input id="gas-proveedor" type="text" value="' + (r ? r.proveedor || '' : '') + '" /></div>' +
     '<div class="campo"><label>Método de pago</label><select id="gas-metodo">' +
-    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Estado</label><select id="gas-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>' +
-    '<div class="campo"><label>Valor</label><input id="gas-valor" type="number" min="0" /></div>' +
+    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '"' + (r && r.metodo === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estado</label><select id="gas-estado"><option value="pagado"' + (r && r.estado === 'pagado' ? ' selected' : '') + '>Pagado</option><option value="pendiente"' + (r && r.estado === 'pendiente' ? ' selected' : '') + '>Pendiente</option></select></div>' +
+    '<div class="campo"><label>Valor</label><input id="gas-valor" type="number" min="0" value="' + (r ? r.valor : '') + '" /></div>' +
     '</div>' +
-    '<button class="btn-primario" id="btn-crear-gasto" style="max-width:280px;">Registrar gasto</button>' +
+    '<button class="btn-primario" id="btn-crear-gasto" style="max-width:280px;">' + (r ? 'Guardar cambios' : 'Registrar gasto') + '</button>' +
+    (r ? '<button id="btn-cancelar-edicion-contable" style="max-width:280px; margin-left:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar edición</button>' : '') +
     '<p id="msj-gasto-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Gasto registrado.</p>' +
     '</div>';
 
   if (!esAdmin) return form;
 
-  var gastos = cargarGastos();
-  var total = gastos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
-  var filas = gastos.map(function (r) {
-    return filaTablaContable([r.fecha || '—', r.concepto, r.categoria, r.proveedor || '—', r.metodo,
-      '<span class="chip-rol">' + (r.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
-      '<strong>' + formatearCOPContable(r.valor) + '</strong>']);
+  var total = gastos.reduce(function (s, x) { return s + Number(x.valor || 0); }, 0);
+  var filas = gastos.map(function (x, i) {
+    var botones = '<button class="btn-editar-contable" data-tipo="gasto" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; margin-right:4px;">Editar</button>' +
+      '<button class="btn-eliminar-contable" data-tipo="gasto" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Eliminar</button>';
+    return filaTablaContable([x.fecha || '—', x.concepto, x.categoria, x.proveedor || '—', x.metodo,
+      '<span class="chip-rol">' + (x.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong>' + formatearCOPContable(x.valor) + '</strong>', botones]);
   }).join('');
 
   return form +
     '<div class="panel"><h2>Gastos registrados (' + gastos.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
     (gastos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay gastos registrados.</p>' :
-     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Proveedor</th><th>Método</th><th>Estado</th><th>Valor</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Concepto</th><th>Categoría</th><th>Proveedor</th><th>Método</th><th>Estado</th><th>Valor</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>';
 }
 
 function panelCompras(esAdmin) {
+  var compras = cargarCompras();
+  var editIdx = (contabEditando && contabEditando.tipo === 'compra') ? contabEditando.idx : null;
+  var r = editIdx != null ? compras[editIdx] : null;
   var form =
-    '<div class="panel"><h2>Registrar compra</h2>' +
+    '<div class="panel"><h2>' + (r ? 'Editar compra' : 'Registrar compra') + '</h2>' +
     '<div class="grilla-2col">' +
-    '<div class="campo"><label>Fecha</label><input id="com-fecha" type="date" /></div>' +
-    '<div class="campo"><label>Artículo</label><input id="com-articulo" type="text" placeholder="Ej: Cuerdas de guitarra" /></div>' +
+    '<div class="campo"><label>Fecha</label><input id="com-fecha" type="date" value="' + (r ? r.fecha || '' : '') + '" /></div>' +
+    '<div class="campo"><label>Artículo</label><input id="com-articulo" type="text" placeholder="Ej: Cuerdas de guitarra" value="' + (r ? r.articulo || '' : '') + '" /></div>' +
     '<div class="campo"><label>Categoría</label><select id="com-categoria">' +
-    CATEGORIAS_COMPRA.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Proveedor (opcional)</label><input id="com-proveedor" type="text" /></div>' +
-    '<div class="campo"><label>Cantidad</label><input id="com-cantidad" type="number" min="1" value="1" /></div>' +
-    '<div class="campo"><label>Valor unitario</label><input id="com-valor-unit" type="number" min="0" /></div>' +
+    CATEGORIAS_COMPRA.map(function (c) { return '<option value="' + c + '"' + (r && r.categoria === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Proveedor (opcional)</label><input id="com-proveedor" type="text" value="' + (r ? r.proveedor || '' : '') + '" /></div>' +
+    '<div class="campo"><label>Cantidad</label><input id="com-cantidad" type="number" min="1" value="' + (r ? r.cantidad : '1') + '" /></div>' +
+    '<div class="campo"><label>Valor unitario</label><input id="com-valor-unit" type="number" min="0" value="' + (r ? r.valorUnit : '') + '" /></div>' +
     '<div class="campo"><label>Método de pago</label><select id="com-metodo">' +
-    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Estado</label><select id="com-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>' +
+    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '"' + (r && r.metodo === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estado</label><select id="com-estado"><option value="pagado"' + (r && r.estado === 'pagado' ? ' selected' : '') + '>Pagado</option><option value="pendiente"' + (r && r.estado === 'pendiente' ? ' selected' : '') + '>Pendiente</option></select></div>' +
     '</div>' +
-    '<button class="btn-primario" id="btn-crear-compra" style="max-width:280px;">Registrar compra</button>' +
+    '<button class="btn-primario" id="btn-crear-compra" style="max-width:280px;">' + (r ? 'Guardar cambios' : 'Registrar compra') + '</button>' +
+    (r ? '<button id="btn-cancelar-edicion-contable" style="max-width:280px; margin-left:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar edición</button>' : '') +
     '<p id="msj-compra-creada" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Compra registrada.</p>' +
     '</div>';
 
   if (!esAdmin) return form;
 
-  var compras = cargarCompras();
-  var total = compras.reduce(function (s, r) { return s + Number(r.valorTotal || 0); }, 0);
-  var filas = compras.map(function (r) {
-    return filaTablaContable([r.fecha || '—', r.articulo, r.categoria, r.proveedor || '—', r.cantidad,
-      formatearCOPContable(r.valorUnit), r.metodo,
-      '<span class="chip-rol">' + (r.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
-      '<strong>' + formatearCOPContable(r.valorTotal) + '</strong>']);
+  var total = compras.reduce(function (s, x) { return s + Number(x.valorTotal || 0); }, 0);
+  var filas = compras.map(function (x, i) {
+    var botones = '<button class="btn-editar-contable" data-tipo="compra" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; margin-right:4px;">Editar</button>' +
+      '<button class="btn-eliminar-contable" data-tipo="compra" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Eliminar</button>';
+    return filaTablaContable([x.fecha || '—', x.articulo, x.categoria, x.proveedor || '—', x.cantidad,
+      formatearCOPContable(x.valorUnit), x.metodo,
+      '<span class="chip-rol">' + (x.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong>' + formatearCOPContable(x.valorTotal) + '</strong>', botones]);
   }).join('');
 
   return form +
     '<div class="panel"><h2>Compras registradas (' + compras.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
     (compras.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay compras registradas.</p>' :
-     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Artículo</th><th>Categoría</th><th>Proveedor</th><th>Cant.</th><th>V. unitario</th><th>Método</th><th>Estado</th><th>Total</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Artículo</th><th>Categoría</th><th>Proveedor</th><th>Cant.</th><th>V. unitario</th><th>Método</th><th>Estado</th><th>Total</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>';
 }
 
 function panelNomina(esAdmin) {
   var usuarios = cargarUsuarios();
+  var nomina = cargarNomina();
+  var editIdx = (contabEditando && contabEditando.tipo === 'nomina') ? contabEditando.idx : null;
+  var r = editIdx != null ? nomina[editIdx] : null;
   var form =
-    '<div class="panel"><h2>Registrar pago de nómina</h2>' +
+    '<div class="panel"><h2>' + (r ? 'Editar pago de nómina' : 'Registrar pago de nómina') + '</h2>' +
     '<div class="grilla-2col">' +
-    '<div class="campo"><label>Mes</label><input id="nom-mes" type="month" /></div>' +
+    '<div class="campo"><label>Mes</label><input id="nom-mes" type="month" value="' + (r ? r.mes || '' : '') + '" /></div>' +
     '<div class="campo"><label>Empleado</label><select id="nom-empleado">' +
-    usuarios.map(function (u) { return '<option value="' + u.email + '">' + u.nombre + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Cargo</label><input id="nom-cargo" type="text" placeholder="Ej: Profesor de piano" /></div>' +
-    '<div class="campo"><label>Horas</label><input id="nom-horas" type="number" min="0" /></div>' +
-    '<div class="campo"><label>Tarifa por hora</label><input id="nom-tarifa" type="number" min="0" /></div>' +
-    '<div class="campo"><label>Bonos</label><input id="nom-bonos" type="number" min="0" value="0" /></div>' +
-    '<div class="campo"><label>Descuentos</label><input id="nom-descuentos" type="number" min="0" value="0" /></div>' +
+    usuarios.map(function (u) { return '<option value="' + u.email + '"' + (r && r.empleado === u.email ? ' selected' : '') + '>' + u.nombre + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Cargo</label><input id="nom-cargo" type="text" placeholder="Ej: Profesor de piano" value="' + (r ? r.cargo || '' : '') + '" /></div>' +
+    '<div class="campo"><label>Horas</label><input id="nom-horas" type="number" min="0" value="' + (r ? r.horas : '') + '" /></div>' +
+    '<div class="campo"><label>Tarifa por hora</label><input id="nom-tarifa" type="number" min="0" value="' + (r ? r.tarifa : '') + '" /></div>' +
+    '<div class="campo"><label>Bonos</label><input id="nom-bonos" type="number" min="0" value="' + (r ? r.bonos : '0') + '" /></div>' +
+    '<div class="campo"><label>Descuentos</label><input id="nom-descuentos" type="number" min="0" value="' + (r ? r.descuentos : '0') + '" /></div>' +
     '<div class="campo"><label>Método de pago</label><select id="nom-metodo">' +
-    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Estado</label><select id="nom-estado"><option value="pagado">Pagado</option><option value="pendiente">Pendiente</option></select></div>' +
+    METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '"' + (r && r.metodo === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estado</label><select id="nom-estado"><option value="pagado"' + (r && r.estado === 'pagado' ? ' selected' : '') + '>Pagado</option><option value="pendiente"' + (r && r.estado === 'pendiente' ? ' selected' : '') + '>Pendiente</option></select></div>' +
     '</div>' +
-    '<button class="btn-primario" id="btn-crear-nomina" style="max-width:280px;">Registrar pago</button>' +
+    '<button class="btn-primario" id="btn-crear-nomina" style="max-width:280px;">' + (r ? 'Guardar cambios' : 'Registrar pago') + '</button>' +
+    (r ? '<button id="btn-cancelar-edicion-contable" style="max-width:280px; margin-left:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar edición</button>' : '') +
     '<p id="msj-nomina-creada" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Pago de nómina registrado.</p>' +
     '</div>';
 
   if (!esAdmin) return form;
 
-  var nomina = cargarNomina();
-  var total = nomina.reduce(function (s, r) { return s + Number(r.neto || 0); }, 0);
-  var filas = nomina.map(function (r) {
-    var nombreEmpleado = (usuarios.find(function (u) { return u.email === r.empleado; }) || {}).nombre || r.empleado;
-    return filaTablaContable([r.mes || '—', nombreEmpleado, r.cargo || '—', r.horas,
-      formatearCOPContable(r.basico), formatearCOPContable(r.bonos), formatearCOPContable(r.descuentos),
-      '<span class="chip-rol">' + (r.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
-      '<strong>' + formatearCOPContable(r.neto) + '</strong>']);
+  var total = nomina.reduce(function (s, x) { return s + Number(x.neto || 0); }, 0);
+  var filas = nomina.map(function (x, i) {
+    var nombreEmpleado = (usuarios.find(function (u) { return u.email === x.empleado; }) || {}).nombre || x.empleado;
+    var botones = '<button class="btn-editar-contable" data-tipo="nomina" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; margin-right:4px;">Editar</button>' +
+      '<button class="btn-eliminar-contable" data-tipo="nomina" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Eliminar</button>';
+    return filaTablaContable([x.mes || '—', nombreEmpleado, x.cargo || '—', x.horas,
+      formatearCOPContable(x.basico), formatearCOPContable(x.bonos), formatearCOPContable(x.descuentos),
+      '<span class="chip-rol">' + (x.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
+      '<strong>' + formatearCOPContable(x.neto) + '</strong>', botones]);
   }).join('');
 
   return form +
     '<div class="panel"><h2>Pagos de nómina (' + nomina.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
     (nomina.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay pagos de nómina registrados.</p>' :
-     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Mes</th><th>Empleado</th><th>Cargo</th><th>Horas</th><th>Básico</th><th>Bonos</th><th>Descuentos</th><th>Estado</th><th>Neto</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Mes</th><th>Empleado</th><th>Cargo</th><th>Horas</th><th>Básico</th><th>Bonos</th><th>Descuentos</th><th>Estado</th><th>Neto</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>';
 }
 
@@ -4671,6 +4705,34 @@ function renderContabilidad(sesion) {
 }
 
 function activarLogicaContabilidad() {
+  document.querySelectorAll('.btn-editar-contable').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      contabEditando = { tipo: btn.getAttribute('data-tipo'), idx: Number(btn.getAttribute('data-idx')) };
+      renderContenido('contabilidad');
+    });
+  });
+  document.querySelectorAll('.btn-eliminar-contable').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tipo = btn.getAttribute('data-tipo');
+      var idx = Number(btn.getAttribute('data-idx'));
+      if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
+      var cargar = { ingreso: cargarIngresos, gasto: cargarGastos, compra: cargarCompras, nomina: cargarNomina }[tipo];
+      var guardar = { ingreso: guardarIngresos, gasto: guardarGastos, compra: guardarCompras, nomina: guardarNomina }[tipo];
+      var lista = cargar();
+      lista.splice(idx, 1);
+      guardar(lista);
+      if (contabEditando && contabEditando.tipo === tipo && contabEditando.idx === idx) contabEditando = null;
+      renderContenido('contabilidad');
+    });
+  });
+  var btnCancelarEdicion = document.getElementById('btn-cancelar-edicion-contable');
+  if (btnCancelarEdicion) {
+    btnCancelarEdicion.addEventListener('click', function () {
+      contabEditando = null;
+      renderContenido('contabilidad');
+    });
+  }
+
   var btnIngreso = document.getElementById('btn-crear-ingreso');
   if (btnIngreso) {
     btnIngreso.addEventListener('click', function () {
@@ -4678,7 +4740,7 @@ function activarLogicaContabilidad() {
       var concepto = document.getElementById('ing-concepto').value.trim();
       if (!concepto || !valor) { alert('Concepto y valor son obligatorios.'); return; }
       var lista = cargarIngresos();
-      lista.push({
+      var registro = {
         fecha: document.getElementById('ing-fecha').value,
         concepto: concepto,
         programa: document.getElementById('ing-programa').value,
@@ -4687,7 +4749,9 @@ function activarLogicaContabilidad() {
         metodo: document.getElementById('ing-metodo').value,
         estado: document.getElementById('ing-estado').value,
         valor: valor
-      });
+      };
+      if (contabEditando && contabEditando.tipo === 'ingreso') { lista[contabEditando.idx] = registro; contabEditando = null; }
+      else lista.push(registro);
       guardarIngresos(lista);
       document.getElementById('msj-ingreso-creado').style.display = 'block';
       setTimeout(function () { renderContenido('contabilidad'); }, 500);
@@ -4701,7 +4765,7 @@ function activarLogicaContabilidad() {
       var concepto = document.getElementById('gas-concepto').value.trim();
       if (!concepto || !valor) { alert('Concepto y valor son obligatorios.'); return; }
       var lista = cargarGastos();
-      lista.push({
+      var registro = {
         fecha: document.getElementById('gas-fecha').value,
         concepto: concepto,
         categoria: document.getElementById('gas-categoria').value,
@@ -4709,7 +4773,9 @@ function activarLogicaContabilidad() {
         metodo: document.getElementById('gas-metodo').value,
         estado: document.getElementById('gas-estado').value,
         valor: valor
-      });
+      };
+      if (contabEditando && contabEditando.tipo === 'gasto') { lista[contabEditando.idx] = registro; contabEditando = null; }
+      else lista.push(registro);
       guardarGastos(lista);
       document.getElementById('msj-gasto-creado').style.display = 'block';
       setTimeout(function () { renderContenido('contabilidad'); }, 500);
@@ -4724,7 +4790,7 @@ function activarLogicaContabilidad() {
       var valorUnit = Number(document.getElementById('com-valor-unit').value) || 0;
       if (!articulo || !cantidad || !valorUnit) { alert('Artículo, cantidad y valor unitario son obligatorios.'); return; }
       var lista = cargarCompras();
-      lista.push({
+      var registro = {
         fecha: document.getElementById('com-fecha').value,
         articulo: articulo,
         categoria: document.getElementById('com-categoria').value,
@@ -4734,7 +4800,9 @@ function activarLogicaContabilidad() {
         valorTotal: cantidad * valorUnit,
         metodo: document.getElementById('com-metodo').value,
         estado: document.getElementById('com-estado').value
-      });
+      };
+      if (contabEditando && contabEditando.tipo === 'compra') { lista[contabEditando.idx] = registro; contabEditando = null; }
+      else lista.push(registro);
       guardarCompras(lista);
       document.getElementById('msj-compra-creada').style.display = 'block';
       setTimeout(function () { renderContenido('contabilidad'); }, 500);
@@ -4752,7 +4820,7 @@ function activarLogicaContabilidad() {
       var basico = horas * tarifa;
       var neto = basico + bonos - descuentos;
       var lista = cargarNomina();
-      lista.push({
+      var registro = {
         mes: document.getElementById('nom-mes').value,
         empleado: document.getElementById('nom-empleado').value,
         cargo: document.getElementById('nom-cargo').value.trim(),
@@ -4764,7 +4832,9 @@ function activarLogicaContabilidad() {
         neto: neto,
         metodo: document.getElementById('nom-metodo').value,
         estado: document.getElementById('nom-estado').value
-      });
+      };
+      if (contabEditando && contabEditando.tipo === 'nomina') { lista[contabEditando.idx] = registro; contabEditando = null; }
+      else lista.push(registro);
       guardarNomina(lista);
       document.getElementById('msj-nomina-creada').style.display = 'block';
       setTimeout(function () { renderContenido('contabilidad'); }, 500);
@@ -4775,6 +4845,171 @@ function activarLogicaContabilidad() {
 
 // ==================== INVENTARIO ====================
 var filtroInventario = '';
+
+// ==================== REPORTES ====================
+// Descarga en CSV (compatible con Excel) — no depende de librerías nuevas.
+function descargarCSV(nombreArchivo, columnas, filas) {
+  var lineas = [columnas.join(',')].concat(filas.map(function (fila) {
+    return columnas.map(function (_, i) {
+      var val = fila[i] == null ? '' : String(fila[i]);
+      return '"' + val.replace(/"/g, '""') + '"';
+    }).join(',');
+  }));
+  var csv = '\ufeff' + lineas.join('\r\n'); // BOM para que Excel abra bien los acentos
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = nombreArchivo;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+}
+
+// Un generador por reporte — se ejecuta recién al hacer clic en Descargar,
+// así siempre usa los datos más frescos (no una foto vieja del render).
+var REPORTES_DISPONIBLES = [
+  { modulo: 'Estudiantes', titulo: 'Base de datos de estudiantes', desc: 'Nombre, documento, programa, estado, contacto y acudiente de cada estudiante.',
+    generar: function () {
+      var alumnos = cargarAlumnos();
+      return { columnas: ['Nombres', 'Apellidos', 'Documento', 'Nacimiento', 'Programa', 'Programa 2', 'Estado', 'Teléfono', 'Correo', 'Acudiente', 'Celular acudiente'],
+        filas: alumnos.map(function (a) { return [a.nombres, a.apellidos, a.documento, a.nacimiento, a.programa, a.programa2, ETIQUETA_ESTADO[a.estado] || a.estado, a.telefono, a.correo, a.acudiente, a.celularAcudiente]; }) };
+    } },
+  { modulo: 'Estudiantes', titulo: 'Total de estudiantes por estado', desc: 'Cuántos estudiantes hay en cada estado (Preinscrito, Activo, etc.).',
+    generar: function () {
+      var alumnos = cargarAlumnos();
+      var conteo = {};
+      alumnos.forEach(function (a) { conteo[a.estado] = (conteo[a.estado] || 0) + 1; });
+      return { columnas: ['Estado', 'Cantidad'], filas: Object.keys(conteo).map(function (e) { return [ETIQUETA_ESTADO[e] || e, conteo[e]]; }) };
+    } },
+
+  { modulo: 'Matrícula', titulo: 'Inscripciones registradas', desc: 'Cada inscripción con su plan, fecha de inicio y si ya está pagada.',
+    generar: function () {
+      var alumnos = cargarAlumnos();
+      var inscripciones = cargarInscripciones();
+      return { columnas: ['Estudiante', 'Plan', 'Horas/semana', 'Valor', 'Fecha inicio', 'Estado del alumno'],
+        filas: inscripciones.map(function (ins) {
+          var a = alumnos[ins.alumnoIdx];
+          return [a ? a.nombres + ' ' + a.apellidos : '—', ins.tipoPlanNombre, ins.horas, ins.valor, ins.fechaInicio, ins.pagado ? 'Activo (pagado)' : 'Pendiente de matrícula'];
+        }) };
+    } },
+  { modulo: 'Matrícula', titulo: 'Estudiantes matriculados por mes', desc: 'Cuántas inscripciones se hicieron cada mes (según fecha de inicio).',
+    generar: function () {
+      var inscripciones = cargarInscripciones();
+      var conteo = {};
+      inscripciones.forEach(function (ins) { var mes = (ins.fechaInicio || '').slice(0, 7) || 'Sin fecha'; conteo[mes] = (conteo[mes] || 0) + 1; });
+      return { columnas: ['Mes', 'Estudiantes matriculados'], filas: Object.keys(conteo).sort().map(function (m) { return [m, conteo[m]]; }) };
+    } },
+
+  { modulo: 'Pagos y cartera', titulo: 'Cartera pendiente', desc: 'Quién debe y cuánto, con el saldo total por estudiante.',
+    generar: function () {
+      var alumnos = cargarAlumnos();
+      var cargos = cargarCargos();
+      var cartera = {};
+      cargos.forEach(function (c) { if (c.saldo > 0) cartera[c.alumnoIdx] = (cartera[c.alumnoIdx] || 0) + c.saldo; });
+      return { columnas: ['Estudiante', 'Saldo pendiente'], filas: Object.keys(cartera).map(function (idx) { var a = alumnos[idx]; return [a ? a.nombres + ' ' + a.apellidos : '—', cartera[idx]]; }) };
+    } },
+  { modulo: 'Pagos y cartera', titulo: 'Cargos generados', desc: 'Cada cargo con su concepto, valor, saldo y estado.',
+    generar: function () {
+      var alumnos = cargarAlumnos();
+      var cargos = cargarCargos();
+      return { columnas: ['Estudiante', 'Concepto', 'Valor', 'Descuento', 'Saldo', 'Vencimiento', 'Estado'],
+        filas: cargos.map(function (c) { var a = alumnos[c.alumnoIdx]; return [a ? a.nombres + ' ' + a.apellidos : '—', c.concepto, c.valor, c.descuento, c.saldo, c.vencimiento, c.estado]; }) };
+    } },
+
+  { modulo: 'Horarios', titulo: 'Clases agendadas', desc: 'Día, hora, programa, profesor, sala y estudiantes de cada clase.',
+    generar: function () {
+      var alumnos = cargarAlumnos();
+      var clases = cargarClases();
+      return { columnas: ['Programa', 'Tipo', 'Día', 'Hora', 'Profesor', 'Sala', 'Estudiantes'],
+        filas: clases.map(function (c) {
+          var nombresAlumnos = (c.alumnos || []).map(function (idx) { var a = alumnos[idx]; return a ? a.nombres + ' ' + a.apellidos : '—'; }).join('; ');
+          return [c.programa, c.tipo, DIAS_SEMANA[c.dia], c.hora, c.profesorNombre || '—', c.sala || '—', nombresAlumnos || '—'];
+        }) };
+    } },
+
+  { modulo: 'Profesores', titulo: 'Base de datos de profesores', desc: 'Nombre, email, instrumento, teléfono y experiencia de cada profesor.',
+    generar: function () {
+      return { columnas: ['Nombre', 'Email', 'Instrumento', 'Teléfono', 'Experiencia'],
+        filas: CACHE_PROFESORES.map(function (p) { return [p.nombre, p.email, p.instrumentos, p.telefono, p.experiencia]; }) };
+    } },
+
+  { modulo: 'Asistencia', titulo: 'Historial de asistencia', desc: 'Cada registro de asistencia con estudiante, clase, fecha y estado.',
+    generar: function () {
+      var alumnos = cargarAlumnos();
+      var clases = cargarClases();
+      var asistencias = cargarAsistencias();
+      return { columnas: ['Estudiante', 'Programa de la clase', 'Fecha', 'Estado'],
+        filas: asistencias.map(function (a) {
+          var alumno = alumnos[a.alumnoIdx];
+          var clase = clases[a.claseIdx];
+          return [alumno ? alumno.nombres + ' ' + alumno.apellidos : '—', clase ? clase.programa : '—', a.fecha, ETIQUETA_ASISTENCIA[a.estado] || a.estado];
+        }) };
+    } },
+  { modulo: 'Asistencia', titulo: 'Total de asistencia por estado (mes actual)', desc: 'Cuántas asistencias, faltas, excusas, etc. hubo este mes.',
+    generar: function () {
+      var asistencias = cargarAsistencias();
+      var mesActual = mesActualStr();
+      var conteo = {};
+      asistencias.forEach(function (a) { if ((a.fecha || '').slice(0, 7) === mesActual) conteo[a.estado] = (conteo[a.estado] || 0) + 1; });
+      return { columnas: ['Estado', 'Cantidad (' + mesActual + ')'], filas: Object.keys(conteo).map(function (e) { return [ETIQUETA_ASISTENCIA[e] || e, conteo[e]]; }) };
+    } },
+
+  { modulo: 'Eventos', titulo: 'Eventos programados', desc: 'Tipo, título, fecha, estado y cuántos invitados confirmaron.',
+    generar: function () {
+      var eventos = cargarEventos();
+      return { columnas: ['Tipo', 'Título', 'Fecha', 'Hora', 'Estado', 'Invitados', 'Confirmados'],
+        filas: eventos.map(function (e) {
+          var invitaciones = e.invitaciones || {};
+          var total = e.estudiantesIdx.length + e.profesoresEmails.length;
+          var confirmados = Object.keys(invitaciones).filter(function (k) { return invitaciones[k].confirmado; }).length;
+          return [e.tipo, e.titulo, e.fecha, e.hora, e.estado, total, confirmados];
+        }) };
+    } },
+
+  { modulo: 'Contabilidad', titulo: 'Resumen financiero', desc: 'Totales de ingresos, gastos, compras y nómina registrados.',
+    generar: function () {
+      var ingresos = cargarIngresos(), gastos = cargarGastos(), compras = cargarCompras(), nomina = cargarNomina();
+      var sumar = function (lista, campo) { return lista.reduce(function (s, r) { return s + Number(r[campo] || 0); }, 0); };
+      return { columnas: ['Concepto', 'Total'], filas: [
+        ['Ingresos', sumar(ingresos, 'valor')], ['Gastos', sumar(gastos, 'valor')],
+        ['Compras', sumar(compras, 'valorTotal')], ['Nómina', sumar(nomina, 'neto')]
+      ] };
+    } }
+];
+
+function renderReportes() {
+  var porModulo = {};
+  REPORTES_DISPONIBLES.forEach(function (r) { (porModulo[r.modulo] = porModulo[r.modulo] || []).push(r); });
+
+  var paneles = Object.keys(porModulo).map(function (modulo, idxModulo) {
+    var filas = porModulo[modulo].map(function (r, idxReporte) {
+      return '<div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid #eee;">' +
+        '<div><p style="margin:0; font-weight:600; font-size:13px;">' + r.titulo + '</p><p style="margin:2px 0 0; font-size:12px; color:var(--muted);">' + r.desc + '</p></div>' +
+        '<button class="btn-descargar-reporte" data-modulo="' + idxModulo + '" data-reporte="' + idxReporte + '" style="white-space:nowrap; font-size:12px; padding:8px 14px; border-radius:8px; border:1px solid var(--naranja); background:#fff; color:var(--naranja); cursor:pointer; font-family:var(--font-ui);">⬇ Descargar CSV</button>' +
+        '</div>';
+    }).join('');
+    return '<div class="panel"><h2>' + modulo + '</h2>' + filas + '</div>';
+  }).join('');
+
+  return '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Reportes</h1>' +
+    '<p style="font-size:12px; color:var(--muted); margin:0 0 16px;">Descargá un CSV con los datos más recientes de cada módulo — se abre directo en Excel.</p>' +
+    paneles;
+}
+
+function activarLogicaReportes() {
+  var porModulo = {};
+  REPORTES_DISPONIBLES.forEach(function (r) { (porModulo[r.modulo] = porModulo[r.modulo] || []).push(r); });
+  var modulos = Object.keys(porModulo);
+
+  document.querySelectorAll('.btn-descargar-reporte').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var reporte = porModulo[modulos[Number(btn.getAttribute('data-modulo'))]][Number(btn.getAttribute('data-reporte'))];
+      var datos = reporte.generar();
+      var nombreArchivo = reporte.titulo.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.csv';
+      descargarCSV(nombreArchivo, datos.columnas, datos.filas);
+    });
+  });
+}
+// ==================== FIN REPORTES ====================
 
 function renderInventario() {
   var inventario = cargarInventario();
@@ -5363,6 +5598,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'inventario') {
     document.getElementById('contenido').innerHTML = renderInventario();
     activarLogicaInventario();
+  } else if (mod.key === 'reportes') {
+    document.getElementById('contenido').innerHTML = renderReportes();
+    activarLogicaReportes();
   } else if (mod.key === 'comunicacion') {
     document.getElementById('contenido').innerHTML = renderComunicacion(sesion);
     activarLogicaComunicacion();
