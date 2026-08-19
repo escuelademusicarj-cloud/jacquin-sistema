@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { obtenerSalas, crearClaseNueva, obtenerClases, registrarModificacion, obtenerAlumnosDeClase } from "../../servicios/horarios/servicio.js";
+import {
+  obtenerSalas, crearClaseNueva, obtenerClases, registrarModificacion, obtenerAlumnosDeClase,
+  agregarAlumnoAClase, quitarAlumnoDeClase,
+} from "../../servicios/horarios/servicio.js";
 import { DIAS_SEMANA, MAX_RECUPERACIONES_POR_MES } from "../../dominio/horarios/entidades.js";
 import { respuestaExitosa } from "../middlewares/manejoErrores.js";
 import { requiereAutenticacion } from "../middlewares/autenticacion.js";
@@ -22,6 +25,23 @@ rutasHorarios.get("/clases", requierePermiso("horarios:ver"), async (req, res, n
 rutasHorarios.get("/clases/:id/alumnos", requierePermiso("horarios:ver"), async (req, res, next) => {
   try { respuestaExitosa(res, await obtenerAlumnosDeClase(req.params.id)); }
   catch (err) { next(err); }
+});
+
+// NUEVO (2026-08-19): agregar un alumno a una clase que ya existe.
+// Body: { alumnoId }
+rutasHorarios.post("/clases/:id/alumnos", requierePermiso("horarios:crear"), async (req, res, next) => {
+  try {
+    const resultado = await agregarAlumnoAClase(req.params.id, req.body.alumnoId, { usuarioId: req.usuario?.id });
+    respuestaExitosa(res, resultado);
+  } catch (err) { next(err); }
+});
+
+// NUEVO (2026-08-19): quitar un alumno de una clase (la clase sigue existiendo).
+rutasHorarios.delete("/clases/:id/alumnos/:alumnoId", requierePermiso("horarios:crear"), async (req, res, next) => {
+  try {
+    const resultado = await quitarAlumnoDeClase(req.params.id, req.params.alumnoId, { usuarioId: req.usuario?.id });
+    respuestaExitosa(res, resultado);
+  } catch (err) { next(err); }
 });
 
 rutasHorarios.post("/clases", requierePermiso("horarios:crear"), async (req, res, next) => {
