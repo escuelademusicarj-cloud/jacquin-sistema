@@ -8,6 +8,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;0,600;1,400&family=Caveat:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root {
     --azul-oscuro: #223F61;
@@ -1497,6 +1499,18 @@ function renderEstudiantes() {
       : '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Programa</th><th>Estado</th><th>Acudiente</th><th>Profesor</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>' +
 
+    '<div class="panel"><h2>Certificado de estudio</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí un estudiante y generá su constancia de estudio en PDF — se completa sola con sus datos.</p>' +
+    '<div class="grilla-2col" style="align-items:end;">' +
+    '<div class="campo"><label>Estudiante</label><select id="cert-alumno">' +
+    (alumnos.length === 0 ? '<option value="">No hay estudiantes registrados</option>' :
+      alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('')) +
+    '</select></div>' +
+    '<button class="btn-primario" id="btn-generar-certificado" style="max-width:260px;"' + (alumnos.length === 0 ? ' disabled' : '') + '>Generar certificado de estudio</button>' +
+    '</div>' +
+    '<p id="msj-certificado" style="font-size:12px; color:var(--muted); display:none; margin-top:8px;">Generando PDF…</p>' +
+    '</div>' +
+
     '<div class="panel"><h2>Editor de estudiantes matriculados (' + matriculados.length + ')</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Estudiantes que ya completaron registro e inscripción de Matrícula. Podés editar cualquier dato — menos lo que se calcula solo (valor pagado, cargos y saldo, eso se maneja desde Pagos y cartera).</p>' +
     (matriculados.length === 0
@@ -1562,6 +1576,20 @@ function renderModalEditorEstudiante(profesoresDisponibles) {
 
 function activarLogicaEstudiantes(volverA) {
   volverA = volverA || 'estudiantes';
+
+  var btnCertificado = document.getElementById('btn-generar-certificado');
+  if (btnCertificado) {
+    btnCertificado.addEventListener('click', function () {
+      var idx = Number(document.getElementById('cert-alumno').value);
+      var alumno = cargarAlumnos()[idx];
+      if (!alumno) { alert('No se pudo identificar al estudiante.'); return; }
+      var msj = document.getElementById('msj-certificado');
+      msj.style.display = 'block';
+      btnCertificado.disabled = true;
+      descargarCertificadoPDF(alumno, msj, btnCertificado);
+    });
+  }
+
   function esMenor(fechaStr) {
     if (!fechaStr) return null;
     var nacimiento = new Date(fechaStr);
@@ -2368,6 +2396,101 @@ function renderPagosTab(alumnos, cargos) {
     '<div id="comprobante-imprimir" style="display:none;"></div>';
 }
 
+// ---- Certificado de estudio (constancia) — 2026-08-19 ----
+// Se arma como un HTML fijo (idéntico al formato de referencia FM-ADM-06),
+// se convierte a una sola imagen con html2canvas y esa imagen se mete en
+// un PDF de una página con jsPDF — así el PDF sale igual sin importar
+// fuentes/renderizado del navegador de quien lo abra después.
+function generarHtmlCertificadoEstudio(alumno) {
+  var hoy = new Date();
+  var dia = hoy.getDate();
+  var mes = hoy.toLocaleDateString('es-CO', { month: 'long' });
+  var anio = hoy.getFullYear();
+  var nombreCompleto = alumno.nombres + ' ' + alumno.apellidos;
+  var documento = alumno.documento || '—';
+  var programa = (alumno.programa || '').toUpperCase();
+
+  return '' +
+    '<div id="certificado-render" style="width:800px; padding:36px; background:#fff; font-family:Georgia,\'Times New Roman\',serif; color:#111; border:2px solid #111; box-sizing:border-box;">' +
+      '<table style="width:100%; border-collapse:collapse; border:1.5px solid #111; margin-bottom:34px;">' +
+        '<tr>' +
+          '<td rowspan="3" style="width:150px; border:1.5px solid #111; text-align:center; padding:14px;">' +
+            '<img src="logo-jacquin-vertical-negro.png" alt="Jacquin" style="width:100px;" />' +
+          '</td>' +
+          '<td style="border:1.5px solid #111; text-align:center; font-weight:bold; font-size:17px; padding:8px 14px;">ADMINISTRACIÓN</td>' +
+          '<td style="border:1.5px solid #111; text-align:center; font-weight:bold; font-size:15px; padding:8px 14px;">CÓDIGO</td>' +
+        '</tr>' +
+        '<tr>' +
+          '<td style="border:1.5px solid #111; text-align:center; font-size:15px; padding:8px 14px; line-height:1.4;">ACADEMIA MUSICAL<br/>JACQUIN</td>' +
+          '<td style="border:1.5px solid #111; text-align:center; font-weight:bold; font-size:17px; padding:8px 14px;">FM – ADM – 06</td>' +
+        '</tr>' +
+        '<tr>' +
+          '<td style="border:1.5px solid #111; text-align:center; font-weight:bold; font-size:16px; padding:8px 14px;">CONSTANCIA DE ESTUDIO</td>' +
+          '<td style="border:1.5px solid #111; text-align:center; font-size:14px; padding:8px 14px;"><strong>Página:</strong> 1 de 1</td>' +
+        '</tr>' +
+      '</table>' +
+
+      '<p style="text-align:center; font-weight:bold; font-size:19px; margin:0 0 4px;">CONSTANCIA DE ESTUDIO</p>' +
+      '<p style="text-align:center; font-weight:bold; font-size:15px; margin:0 0 2px; line-height:1.4;">SANTA MARTA DISTRITO TURISTICO, CULTURAL E<br/>HISTORICO INSTUTO</p>' +
+      '<p style="text-align:center; font-weight:bold; font-size:15px; margin:0 0 34px;">' + anio + '</p>' +
+
+      '<p style="font-size:15.5px; line-height:1.9; text-align:justify; margin:0 0 24px;">' +
+        'La Academia Musical Jacquin hace constar que, el estudiante <strong>' + nombreCompleto + '</strong> ' +
+        'con número de identificación ' + documento + ' se encuentra matriculado en el curso de: ' + programa + ', ' +
+        'en la ACADEMIA MUSICAL JACQUIN de la ciudad de Santa Marta.' +
+      '</p>' +
+
+      '<p style="font-size:15.5px; line-height:1.9; text-align:justify; margin:0 0 70px;">' +
+        'La presente certificación se expide a petición de los interesados en Santa Marta el día ' + dia + ' de ' +
+        mes.charAt(0).toUpperCase() + mes.slice(1) + ' de ' + anio + '.' +
+      '</p>' +
+
+      '<div style="margin-top:10px;">' +
+        '<p style="font-family:\'Caveat\',cursive; font-size:40px; margin:0 0 2px; color:#111;">Rafael Jacquin S.</p>' +
+        '<p style="margin:0; font-size:15px;">Director.</p>' +
+        '<p style="margin:2px 0 0; font-size:14px;">Correo: <span style="color:#1a4fa0; text-decoration:underline;">escuelademusicarj@gmail.com</span></p>' +
+      '</div>' +
+    '</div>';
+}
+
+function descargarCertificadoPDF(alumno, elMensaje, elBoton) {
+  var host = document.createElement('div');
+  host.style.position = 'fixed';
+  host.style.left = '-9999px';
+  host.style.top = '0';
+  host.innerHTML = generarHtmlCertificadoEstudio(alumno);
+  document.body.appendChild(host);
+
+  var nodo = document.getElementById('certificado-render');
+  html2canvas(nodo, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+    .then(function (canvas) {
+      var imgData = canvas.toDataURL('image/png');
+      var jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      var pdf = new jsPDFCtor({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+      var pageW = pdf.internal.pageSize.getWidth();
+      var pageH = pdf.internal.pageSize.getHeight();
+      var margen = 24;
+      var anchoDisponible = pageW - margen * 2;
+      var altoImagen = (canvas.height / canvas.width) * anchoDisponible;
+      if (altoImagen > pageH - margen * 2) {
+        altoImagen = pageH - margen * 2;
+        anchoDisponible = (canvas.width / canvas.height) * altoImagen;
+      }
+      var x = (pageW - anchoDisponible) / 2;
+      var y = margen;
+      pdf.addImage(imgData, 'PNG', x, y, anchoDisponible, altoImagen);
+      pdf.save('Constancia de estudio - ' + alumno.nombres + ' ' + alumno.apellidos + '.pdf');
+    })
+    .catch(function (err) {
+      alert('No se pudo generar el certificado: ' + err.message);
+    })
+    .then(function () {
+      document.body.removeChild(host);
+      if (elMensaje) elMensaje.style.display = 'none';
+      if (elBoton) elBoton.disabled = false;
+    });
+}
+
 function generarHtmlComprobante(pago, alumno) {
   return '' +
     '<div style="font-family:Arial,sans-serif; max-width:400px; margin:0 auto; padding:24px; border:1px solid #ccc;">' +
@@ -2526,6 +2649,14 @@ var FESTIVOS_2026 = {
 
 var vistaHorarios = 'semana'; // 'semana' (reservas) o 'mensual' (calendario tipo Outlook)
 var filtroProgramaHorario = 'General'; // 'General' o el nombre exacto de un programa
+// Por defecto el horario se ve en modo solo-lectura (sin ✎/✕/arrastrar/
+// agregar) — "Editar horario" lo habilita. Aplica igual al filtro General
+// y a cualquier curso puntual, porque es la misma grilla, solo filtrada.
+var horarioModoEdicion = false;
+function alternarModoEdicionHorario() {
+  horarioModoEdicion = !horarioModoEdicion;
+  renderContenido('horarios');
+}
 var mesCalendario = (function () { var hoy = new Date(); return { anio: hoy.getFullYear(), mes: hoy.getMonth() }; })();
 
 // ---- Semana de la vista "Calendario de reservas" ----
@@ -2650,6 +2781,9 @@ function renderHorariosSemana(sesion) {
   var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
   var clases = cargarClases();
   var esProfesor = sesion.rol === 'PROFESOR';
+  // El horario se ve en modo solo-lectura salvo que "Editar horario" esté
+  // activado — un profesor nunca edita, tenga o no ese modo prendido.
+  var permiteEditarHorario = !esProfesor && horarioModoEdicion;
   // Respaldo para estudiantes viejos sin fecha registrada — el lunes de
   // esta semana (no una fecha fija del pasado), para que sigan viéndose
   // en la semana actual y en adelante, pero no en semanas ya pasadas.
@@ -2691,14 +2825,14 @@ function renderHorariosSemana(sesion) {
         var chipsEstudiantes = alumnosVisibles.map(function (idx) {
           var al = alumnos[idx];
           var nombreCorto = al.nombres + ' ' + al.apellidos.split(' ')[0];
-          return '<div class="chip-estudiante-horario" draggable="' + (esProfesor ? 'false' : 'true') + '" ' +
+          return '<div class="chip-estudiante-horario" draggable="' + (permiteEditarHorario ? 'true' : 'false') + '" ' +
             'data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" data-programa="' + o.c.programa + '" ' +
-            'style="display:flex; align-items:center; justify-content:space-between; gap:6px; background:' + colorProg + '1a; border:1.5px solid ' + colorProg + '77; border-radius:8px; padding:5px 6px 5px 9px; margin-bottom:5px; ' + (esProfesor ? '' : 'cursor:grab;') + '">' +
+            'style="display:flex; align-items:center; justify-content:space-between; gap:6px; background:' + colorProg + '1a; border:1.5px solid ' + colorProg + '77; border-radius:8px; padding:5px 6px 5px 9px; margin-bottom:5px; ' + (permiteEditarHorario ? 'cursor:grab;' : '') + '">' +
             '<div style="min-width:0;">' +
             '<div style="font-weight:700; font-size:10px; color:' + colorProg + '; text-transform:uppercase; letter-spacing:0.03em;">' + o.c.programa + '</div>' +
             '<div style="font-weight:600; font-size:13px; color:var(--azul-oscuro); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + nombreCorto + '</div>' +
             '</div>' +
-            (esProfesor ? '' :
+            (!permiteEditarHorario ? '' :
               '<div style="display:flex; gap:1px; flex-shrink:0;">' +
               '<button class="btn-editar-estudiante-horario" data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" title="Editar / reemplazar estudiante" style="border:none; background:transparent; cursor:pointer; font-size:13px; padding:2px 4px; color:' + colorProg + ';">✎</button>' +
               '<button class="btn-quitar-estudiante-horario" data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" title="Quitar del horario" style="border:none; background:transparent; cursor:pointer; font-size:13px; padding:2px 4px; color:var(--rojo);">✕</button>' +
@@ -2706,11 +2840,11 @@ function renderHorariosSemana(sesion) {
             '</div>';
         }).join('');
 
-        var linkAgregar = esProfesor ? '' : '<div class="link-agregar-a-clase" data-clase-idx="' + o.i + '" style="font-size:11px; color:' + colorProg + '; font-weight:600; cursor:pointer; padding:2px 2px 8px;">+ agregar estudiante</div>';
+        var linkAgregar = !permiteEditarHorario ? '' : '<div class="link-agregar-a-clase" data-clase-idx="' + o.i + '" style="font-size:11px; color:' + colorProg + '; font-weight:600; cursor:pointer; padding:2px 2px 8px;">+ agregar estudiante</div>';
         return chipsEstudiantes + linkAgregar;
       }).join('');
 
-      var celdaBtn = (!esProfesor) ? '<button class="btn-celda-agendar" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:13px; background:transparent; border:1.5px dashed var(--azul-claro); border-radius:7px; width:100%; padding:8px; color:var(--azul-oscuro); cursor:pointer; margin-top:4px; font-weight:600;">+ Agendar</button>' : '';
+      var celdaBtn = permiteEditarHorario ? '<button class="btn-celda-agendar" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:13px; background:transparent; border:1.5px dashed var(--azul-claro); border-radius:7px; width:100%; padding:8px; color:var(--azul-oscuro); cursor:pointer; margin-top:4px; font-weight:600;">+ Agendar</button>' : '';
       var etiquetaHoraCelda = '<div style="font-size:12px; font-weight:700; color:' + (ocupada ? 'var(--rojo)' : 'var(--verde)') + '; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
 
       return '<td class="celda-horario-drop" data-dia="' + dia + '" data-hora="' + hora + '" style="border-left:4px solid ' + colorBorde + '; background:#fff; padding:12px; vertical-align:top; min-width:200px; min-height:120px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
@@ -2797,15 +2931,24 @@ function renderHorariosSemana(sesion) {
     '<button id="btn-cancelar-editar-estudiante-horario" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
     '</div></div>';
 
+  var btnToggleEdicion = esProfesor ? '' :
+    '<button id="btn-alternar-edicion-horario" style="font-size:12px; padding:7px 14px; border-radius:8px; border:1.5px solid var(--naranja); background:' + (horarioModoEdicion ? 'var(--naranja)' : '#fff') + '; color:' + (horarioModoEdicion ? '#fff' : 'var(--naranja)') + '; cursor:pointer; font-weight:600; white-space:nowrap;">' + (horarioModoEdicion ? '✓ Editando horario' : '✎ Editar horario') + '</button>';
+
   return '' +
-    '<div class="panel"><h2>Calendario de reservas' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">' + (esProfesor ? 'Se actualiza automáticamente cuando Secretaría o Administración agenda o matricula.' : 'Hacé clic en "+ Agendar" para reservar, en "+ agregar estudiante" para sumar a una clase, en ✎ para reemplazar, en ✕ para quitar, o arrastrá un estudiante a otra hora o día.') + '</p>' +
+    '<div class="panel"><div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">' +
+    '<h2 style="margin:0;">Calendario de reservas' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
+    btnToggleEdicion +
+    '</div>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:6px;">' + (esProfesor ? 'Se actualiza automáticamente cuando Secretaría o Administración agenda o matricula.' : (permiteEditarHorario ? 'Hacé clic en "+ Agendar" para reservar, en "+ agregar estudiante" para sumar a una clase, en ✎ para reemplazar, en ✕ para quitar, o arrastrá un estudiante a otra hora o día.' : 'Vista de solo lectura — tocá "Editar horario" arriba para poder agendar, quitar o mover estudiantes.')) + '</p>' +
     grillaHtml +
     '</div>' +
     htmlModalAgendar + htmlModalAsignar + htmlModalEditarEstudianteHorario;
 }
 
 function activarLogicaHorarios() {
+  var btnAlternarEdicion = document.getElementById('btn-alternar-edicion-horario');
+  if (btnAlternarEdicion) btnAlternarEdicion.addEventListener('click', alternarModoEdicionHorario);
+
   document.querySelectorAll('.btn-filtro-programa').forEach(function (btn) {
     btn.addEventListener('click', function () {
       filtroProgramaHorario = btn.getAttribute('data-programa');
@@ -3030,6 +3173,7 @@ function activarLogicaHorarios() {
     celda.addEventListener('dragover', function (ev) { ev.preventDefault(); });
     celda.addEventListener('drop', function (ev) {
       ev.preventDefault();
+      if (!horarioModoEdicion) return; // seguro extra: sin modo edición, ningún drop hace nada
       var datos;
       try { datos = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch (e) { return; }
       var diaDestino = Number(celda.getAttribute('data-dia'));
