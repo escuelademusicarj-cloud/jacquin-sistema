@@ -33,6 +33,16 @@ export async function vincularAlumnoAClase(claseId, alumnoId) {
 }
 
 /**
+ * NUEVO (2026-08-19): quita a un alumno de una clase — inverso de
+ * vincularAlumnoAClase. La clase en sí NO se borra aunque quede sin
+ * ningún alumno; borrar la clase completa es una acción aparte que no
+ * se pidió acá.
+ */
+export async function desvincularAlumnoDeClase(claseId, alumnoId) {
+  await pool.query(`DELETE FROM clase_alumnos WHERE clase_id = $1 AND alumno_id = $2`, [claseId, alumnoId]);
+}
+
+/**
  * NUEVO: trae los alumnos ya vinculados a una clase — antes esta relación
  * solo se podía escribir (al crear la clase), nunca releer. Lo necesita
  * el HTML para saber a quién mostrar en la grilla de Horarios/Asistencia.
