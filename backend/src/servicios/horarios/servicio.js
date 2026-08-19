@@ -1,91 +1,60 @@
-import { crearClase, verificarLimiteRecuperaciones } from "../../dominio/horarios/entidades.js";
+import { Router } from "express";
 import {
-  insertarClase, vincularAlumnoAClase, buscarCruce, listarClases,
-  insertarModificacion, recuperacionesDelMes, listarSalas, alumnosDeClase,
-} from "../../persistencia/horarios/repositorio.js";
-import { registrarAuditoria } from "../../auditoria/servicio.js";
+  obtenerSalas, crearClaseNueva, obtenerClases, registrarModificacion, obtenerAlumnosDeClase,
+  agregarAlumnoAClase, quitarAlumnoDeClase,
+} from "../../servicios/horarios/servicio.js";
+import { DIAS_SEMANA, MAX_RECUPERACIONES_POR_MES } from "../../dominio/horarios/entidades.js";
+import { respuestaExitosa } from "../middlewares/manejoErrores.js";
+import { requiereAutenticacion } from "../middlewares/autenticacion.js";
+import { requierePermiso } from "../middlewares/autorizacion.js";
 
-export async function obtenerSalas() {
-  return listarSalas();
-}
+export const rutasHorarios = Router();
+rutasHorarios.use(requiereAutenticacion);
 
-/**
- * Crea una clase evitando cruces de profesor o sala en el mismo
- * día/hora. El profesor ya NO es obligatorio (cambio pedido
- * explícitamente) — en cambio, la clase SIEMPRE necesita al menos un
- * estudiante, porque una clase se define por a quién le pertenece, no
- * por quién la dicta.
- */
-export async function crearClaseNueva({ clase, alumnosIds = [] }, contextoAuditoria) {
-  if (!alumnosIds || alumnosIds.length === 0) {
-    throw new Error("La clase necesita al menos un estudiante.");
-  }
+rutasHorarios.get("/catalogos", requierePermiso("horarios:ver"), async (req, res, next) => {
+  try { respuestaExitosa(res, { salas: await obtenerSalas(), dias: DIAS_SEMANA, maxRecuperacionesPorMes: MAX_RECUPERACIONES_POR_MES }); }
+  catch (err) { next(err); }
+});
 
-  const datos = crearClase(clase);
+rutasHorarios.get("/clases", requierePermiso("horarios:ver"), async (req, res, next) => {
+  try { respuestaExitosa(res, await obtenerClases({ alumnoId: req.query.alumnoId }, { rol: req.usuario.rol, usuarioId: req.usuario.id })); }
+  catch (err) { next(err); }
+});
 
-  const cruces = await buscarCruce({ profesorId: datos.profesorId, salaId: datos.salaId, diaSemana: datos.diaSemana, horaInicio: datos.horaInicio });
-  if (cruces.length > 0) {
-    throw new Error("Ese profesor o esa sala ya tienen una clase en ese día y horario.");
-  }
+// NUEVO: alumnos de una clase puntual — antes no había forma de releer esto.
+rutasHorarios.get("/clases/:id/alumnos", requierePermiso("horarios:ver"), async (req, res, next) => {
+  try { respuestaExitosa(res, await obtenerAlumnosDeClase(req.params.id)); }
+  catch (err) { next(err); }
+});
 
-  const guardada = await insertarClase(datos);
-  for (const alumnoId of alumnosIds) {
-    await vincularAlumnoAClase(guardada.id, alumnoId);
-  }
+// NUEVO (2026-08-19): agregar un alumno a una clase que ya existe.
+// Body: { alumnoId }
+rutasHorarios.post("/clases/:id/alumnos", requierePermiso("horarios:crear"), async (req, res, next) => {
+  try {
+    const resultado = await agregarAlumnoAClase(req.params.id, req.body.alumnoId, { usuarioId: req.usuario?.id });
+    respuestaExitosa(res, resultado);
+  } catch (err) { next(err); }
+});
 
-  await registrarAuditoria({
-    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "crear", modulo: "horarios",
-    entidad: "clase", entidadId: guardada.id, resultado: "exito",
-  });
+// NUEVO (2026-08-19): quitar un alumno de una clase (la clase sigue existiendo).
+rutasHorarios.delete("/clases/:id/alumnos/:alumnoId", requierePermiso("horarios:crear"), async (req, res, next) => {
+  try {
+    const resultado = await quitarAlumnoDeClase(req.params.id, req.params.alumnoId, { usuarioId: req.usuario?.id });
+    respuestaExitosa(res, resultado);
+  } catch (err) { next(err); }
+});
 
-  return { ...guardada, alumnos: await alumnosDeClase(guardada.id) };
-}
+rutasHorarios.post("/clases", requierePermiso("horarios:crear"), async (req, res, next) => {
+  try {
+    const clase = await crearClaseNueva(req.body, { usuarioId: req.usuario?.id });
+    respuestaExitosa(res, clase);
+  } catch (err) { next(err); }
+});
 
-/**
- * Filtrado por fila: PROFESOR solo ve sus propias clases, ignorando
- * cualquier profesorId que venga en la query — mismo criterio que en
- * Estudiantes, no es negociable desde el frontend.
- */
-export async function obtenerClases(filtros, contexto) {
-  let clases;
-  if (contexto?.rol === "PROFESOR") {
-    clases = await listarClases({ ...filtros, profesorId: contexto.usuarioId });
-  } else {
-    clases = await listarClases(filtros);
-  }
-  // Cada clase incluye ya sus alumnos — antes esta relación no se podía
-  // releer (solo escribir al crear), por eso la grilla se quedaba sin
-  // mostrar a nadie.
-  const conAlumnos = [];
-  for (const c of clases) {
-    conAlumnos.push({ ...c, alumnos: await alumnosDeClase(c.id) });
-  }
-  return conAlumnos;
-}
-
-/** Trae los alumnos de una clase puntual — usado también solo, sin traer todas las clases. */
-export async function obtenerAlumnosDeClase(claseId) {
-  return alumnosDeClase(claseId);
-}
-
-/**
- * Registra cancelación, reprogramación o recuperación de una clase en
- * una fecha puntual. Para "recuperada" aplica el límite de 2 por mes
- * por alumno — regla dura, no configurable desde acá.
- */
-export async function registrarModificacion({ claseId, alumnoId, tipo, fechaOriginal, fechaNueva, motivo }, contextoAuditoria) {
-  if (tipo === "recuperada") {
-    if (!alumnoId) throw new Error("Una recuperación necesita especificar el alumno.");
-    const usadas = await recuperacionesDelMes(alumnoId, fechaOriginal);
-    verificarLimiteRecuperaciones(usadas);
-  }
-
-  const mod = await insertarModificacion({ claseId, alumnoId, tipo, fechaOriginal, fechaNueva, motivo });
-
-  await registrarAuditoria({
-    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: tipo, modulo: "horarios",
-    entidad: "clase_modificacion", entidadId: mod.id, resultado: "exito",
-  });
-
-  return mod;
-}
+// Cancelar / reprogramar / recuperar una clase en una fecha puntual.
+rutasHorarios.post("/clases/:id/modificaciones", requierePermiso("horarios:crear"), async (req, res, next) => {
+  try {
+    const mod = await registrarModificacion({ claseId: req.params.id, ...req.body }, { usuarioId: req.usuario?.id });
+    respuestaExitosa(res, mod);
+  } catch (err) { next(err); }
+});
