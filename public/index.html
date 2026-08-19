@@ -972,6 +972,21 @@ async function refrescarCacheClases() {
 function cargarClases() { return CACHE_CLASES; }
 function guardarClases(lista) { CACHE_CLASES = lista; }
 
+// ---- Edición de estudiantes ya agendados en Horarios (2026-08-19) ----
+// OJO: estos 3 endpoints (quitar/agregar-a-clase-existente/mover) todavía
+// NO existen en el backend real — son nuevos, del mismo tipo que se tuvo
+// que construir para Eventos. Hasta que se suban, estas acciones van a
+// fallar con un alert (igual que agendar eventos fallaba antes de tener
+// la tabla). Contrato esperado:
+//   DELETE /api/horarios/clases/:claseId/alumnos/:alumnoId
+//   POST   /api/horarios/clases/:claseId/alumnos   body:{ alumnoId }
+function quitarEstudianteDeClaseBackend(claseId, alumnoId) {
+  return apiFetch('/api/horarios/clases/' + claseId + '/alumnos/' + alumnoId, { method: 'DELETE' });
+}
+function agregarEstudianteAClaseBackend(claseId, alumnoId) {
+  return apiFetch('/api/horarios/clases/' + claseId + '/alumnos', { method: 'POST', body: JSON.stringify({ alumnoId: alumnoId }) });
+}
+
 // Recuperaciones nunca tuvo pantalla propia en este HTML (queda como estaba).
 function cargarRecuperaciones() {
   var g = localStorage.getItem('jacquin_demo_recuperaciones');
@@ -2602,6 +2617,7 @@ function renderHorariosSemana(sesion) {
       var colorBorde = ocupada ? 'var(--rojo)' : 'var(--verde)';
 
       var contenidoOcupantes = ocupantes.map(function (o) {
+        var colorProg = colorPrograma(o.c.programa);
         // Un estudiante solo aparece desde la semana de su matrícula (o desde
         // que se lo agregó a esta clase) en adelante — nunca en semanas anteriores.
         var alumnosVisibles = (o.c.alumnos || []).filter(function (idx) {
@@ -2612,17 +2628,32 @@ function renderHorariosSemana(sesion) {
           var fechaEfectiva = fechaAlta > fechaAsignado ? fechaAlta : fechaAsignado;
           return fechaEfectiva <= fechaColumna;
         });
-        var nombresAlumnos = alumnosVisibles.map(function (idx) { return alumnos[idx].nombres + ' ' + alumnos[idx].apellidos.split(' ')[0]; });
-        return '<div class="celda-clase" data-clase-idx="' + o.i + '" style="font-size:13px; text-align:left; background:#fff; border-radius:7px; padding:8px 10px; margin-bottom:6px; cursor:pointer;">' +
-          '<div style="font-weight:600;">' + chipPrograma(o.c.programa) + '</div>' +
-          (nombresAlumnos.length ? '<div style="color:var(--azul-oscuro);">' + nombresAlumnos.join(', ') + '</div>' : '<div style="color:var(--muted); font-style:italic;">sin estudiante todavía</div>') +
-          '</div>';
+        var chipsEstudiantes = alumnosVisibles.length ? alumnosVisibles.map(function (idx) {
+          var al = alumnos[idx];
+          var nombreCorto = al.nombres + ' ' + al.apellidos.split(' ')[0];
+          return '<div class="chip-estudiante-horario" draggable="' + (esProfesor ? 'false' : 'true') + '" ' +
+            'data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" data-programa="' + o.c.programa + '" ' +
+            'style="display:flex; align-items:center; justify-content:space-between; gap:6px; background:' + colorProg + '1a; border:1.5px solid ' + colorProg + '77; border-radius:8px; padding:5px 6px 5px 9px; margin-bottom:5px; ' + (esProfesor ? '' : 'cursor:grab;') + '">' +
+            '<div style="min-width:0;">' +
+            '<div style="font-weight:700; font-size:10px; color:' + colorProg + '; text-transform:uppercase; letter-spacing:0.03em;">' + o.c.programa + '</div>' +
+            '<div style="font-weight:600; font-size:13px; color:var(--azul-oscuro); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + nombreCorto + '</div>' +
+            '</div>' +
+            (esProfesor ? '' :
+              '<div style="display:flex; gap:1px; flex-shrink:0;">' +
+              '<button class="btn-editar-estudiante-horario" data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" title="Editar / reemplazar estudiante" style="border:none; background:transparent; cursor:pointer; font-size:13px; padding:2px 4px; color:' + colorProg + ';">✎</button>' +
+              '<button class="btn-quitar-estudiante-horario" data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" title="Quitar del horario" style="border:none; background:transparent; cursor:pointer; font-size:13px; padding:2px 4px; color:var(--rojo);">✕</button>' +
+              '</div>') +
+            '</div>';
+        }).join('') : '<div style="font-size:12px; color:var(--muted); font-style:italic; padding:4px 2px;">' + chipPrograma(o.c.programa) + '<br>sin estudiante todavía</div>';
+
+        var linkAgregar = esProfesor ? '' : '<div class="link-agregar-a-clase" data-clase-idx="' + o.i + '" style="font-size:11px; color:' + colorProg + '; font-weight:600; cursor:pointer; padding:2px 2px 8px;">+ agregar estudiante</div>';
+        return chipsEstudiantes + linkAgregar;
       }).join('');
 
       var celdaBtn = (!esProfesor) ? '<button class="btn-celda-agendar" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:13px; background:transparent; border:1.5px dashed var(--azul-claro); border-radius:7px; width:100%; padding:8px; color:var(--azul-oscuro); cursor:pointer; margin-top:4px; font-weight:600;">+ Agendar</button>' : '';
       var etiquetaHoraCelda = '<div style="font-size:12px; font-weight:700; color:' + (ocupada ? 'var(--rojo)' : 'var(--verde)') + '; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
 
-      return '<td style="border-left:4px solid ' + colorBorde + '; background:#fff; padding:12px; vertical-align:top; min-width:200px; min-height:120px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
+      return '<td class="celda-horario-drop" data-dia="' + dia + '" data-hora="' + hora + '" style="border-left:4px solid ' + colorBorde + '; background:#fff; padding:12px; vertical-align:top; min-width:200px; min-height:120px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
     }).join('');
 
     var filaFranja = '<tr><td style="font-size:13px; color:var(--muted); font-weight:600; padding:12px; white-space:nowrap; vertical-align:top;">' + franja.etiquetaLunVie + '</td>' + celdas + '</tr>';
@@ -2695,12 +2726,23 @@ function renderHorariosSemana(sesion) {
     '<button id="btn-cancelar-asignar" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
     '</div></div>';
 
+  var htmlModalEditarEstudianteHorario =
+    '<div id="modal-editar-estudiante-horario" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:50; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px;">' +
+    '<h2 style="margin-top:0;">Editar estudiante del horario</h2>' +
+    '<p id="ee-horario-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
+    '<div class="campo"><label>Reemplazar por</label><select id="ee-horario-alumno"></select></div>' +
+    '<button class="btn-primario" id="btn-guardar-editar-estudiante-horario">Guardar cambio</button>' +
+    '<button id="btn-quitar-desde-modal-horario" style="width:100%; margin-top:8px; background:transparent; border:1px solid var(--rojo); border-radius:8px; padding:8px; color:var(--rojo); font-size:13px; cursor:pointer;">Quitar del horario</button>' +
+    '<button id="btn-cancelar-editar-estudiante-horario" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '</div></div>';
+
   return '' +
     '<div class="panel"><h2>Calendario de reservas' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">' + (esProfesor ? 'Se actualiza automáticamente cuando Secretaría o Administración agenda o matricula.' : 'Hacé clic en "+ Agendar" para reservar, o en una clase existente para asignarle un estudiante.') + '</p>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">' + (esProfesor ? 'Se actualiza automáticamente cuando Secretaría o Administración agenda o matricula.' : 'Hacé clic en "+ Agendar" para reservar, en "+ agregar estudiante" para sumar a una clase, en ✎ para reemplazar, en ✕ para quitar, o arrastrá un estudiante a otra hora o día.') + '</p>' +
     grillaHtml +
     '</div>' +
-    htmlModalAgendar + htmlModalAsignar;
+    htmlModalAgendar + htmlModalAsignar + htmlModalEditarEstudianteHorario;
 }
 
 function activarLogicaHorarios() {
@@ -2820,7 +2862,7 @@ function activarLogicaHorarios() {
     });
   }
 
-  document.querySelectorAll('.celda-clase').forEach(function (el) {
+  document.querySelectorAll('.link-agregar-a-clase').forEach(function (el) {
     el.addEventListener('click', function () {
       var idx = Number(el.getAttribute('data-clase-idx'));
       modalAsignar.setAttribute('data-clase-idx', idx);
@@ -2831,6 +2873,134 @@ function activarLogicaHorarios() {
       document.getElementById('as-programa').value = c.programa;
       document.getElementById('as-observaciones').value = '';
       modalAsignar.style.display = 'flex';
+    });
+  });
+
+  // ---- Quitar estudiante del horario (botón ✕ en el chip) ----
+  document.querySelectorAll('.btn-quitar-estudiante-horario').forEach(function (btn) {
+    btn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var claseIdx = Number(btn.getAttribute('data-clase-idx'));
+      var alumnoIdx = Number(btn.getAttribute('data-alumno-idx'));
+      var clase = cargarClases()[claseIdx];
+      var alumno = cargarAlumnos()[alumnoIdx];
+      if (!clase || !alumno) return;
+      if (!confirm('¿Quitar a ' + alumno.nombres + ' de este horario?')) return;
+      btn.disabled = true;
+      quitarEstudianteDeClaseBackend(clase.id, alumno.id)
+        .then(function () { return refrescarCacheClases(); })
+        .then(function () { renderContenido('horarios'); })
+        .catch(function (err) { alert('No se pudo quitar del horario: ' + err.message); btn.disabled = false; });
+    });
+  });
+
+  // ---- Editar / reemplazar estudiante (botón ✎ en el chip) ----
+  var modalEditarEstHorario = document.getElementById('modal-editar-estudiante-horario');
+  document.querySelectorAll('.btn-editar-estudiante-horario').forEach(function (btn) {
+    btn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var claseIdx = Number(btn.getAttribute('data-clase-idx'));
+      var alumnoIdx = Number(btn.getAttribute('data-alumno-idx'));
+      var clase = cargarClases()[claseIdx];
+      var alumnoActual = cargarAlumnos()[alumnoIdx];
+      if (!clase || !alumnoActual || !modalEditarEstHorario) return;
+      modalEditarEstHorario.setAttribute('data-clase-idx', claseIdx);
+      modalEditarEstHorario.setAttribute('data-alumno-idx', alumnoIdx);
+      document.getElementById('ee-horario-info').textContent = clase.programa + ' — ' + DIAS_SEMANA[clase.dia] + ' ' + clase.hora + ' · actualmente: ' + alumnoActual.nombres + ' ' + alumnoActual.apellidos;
+      var selectAlumno = document.getElementById('ee-horario-alumno');
+      var candidatos = cargarAlumnos().map(function (a, i) { return { a: a, i: i }; })
+        .filter(function (o) { return o.a.programa === clase.programa && (clase.alumnos || []).indexOf(o.i) === -1; });
+      selectAlumno.innerHTML = candidatos.length
+        ? candidatos.map(function (o) { return '<option value="' + o.i + '">' + o.a.nombres + ' ' + o.a.apellidos + '</option>'; }).join('')
+        : '<option value="">No hay otros estudiantes de ' + clase.programa + ' disponibles</option>';
+      modalEditarEstHorario.style.display = 'flex';
+    });
+  });
+  var btnCancelarEditarEstHorario = document.getElementById('btn-cancelar-editar-estudiante-horario');
+  if (btnCancelarEditarEstHorario) btnCancelarEditarEstHorario.addEventListener('click', function () { modalEditarEstHorario.style.display = 'none'; });
+
+  var btnQuitarDesdeModalHorario = document.getElementById('btn-quitar-desde-modal-horario');
+  if (btnQuitarDesdeModalHorario) {
+    btnQuitarDesdeModalHorario.addEventListener('click', function () {
+      var claseIdx = Number(modalEditarEstHorario.getAttribute('data-clase-idx'));
+      var alumnoIdx = Number(modalEditarEstHorario.getAttribute('data-alumno-idx'));
+      var clase = cargarClases()[claseIdx];
+      var alumno = cargarAlumnos()[alumnoIdx];
+      if (!clase || !alumno) return;
+      if (!confirm('¿Quitar a ' + alumno.nombres + ' de este horario?')) return;
+      btnQuitarDesdeModalHorario.disabled = true;
+      quitarEstudianteDeClaseBackend(clase.id, alumno.id)
+        .then(function () { return refrescarCacheClases(); })
+        .then(function () { modalEditarEstHorario.style.display = 'none'; renderContenido('horarios'); })
+        .catch(function (err) { alert('No se pudo quitar del horario: ' + err.message); btnQuitarDesdeModalHorario.disabled = false; });
+    });
+  }
+
+  var btnGuardarEditarEstHorario = document.getElementById('btn-guardar-editar-estudiante-horario');
+  if (btnGuardarEditarEstHorario) {
+    btnGuardarEditarEstHorario.addEventListener('click', function () {
+      var claseIdx = Number(modalEditarEstHorario.getAttribute('data-clase-idx'));
+      var alumnoIdxActual = Number(modalEditarEstHorario.getAttribute('data-alumno-idx'));
+      var nuevoIdxStr = document.getElementById('ee-horario-alumno').value;
+      if (nuevoIdxStr === '') { alert('No hay ningún estudiante para reemplazar.'); return; }
+      var clase = cargarClases()[claseIdx];
+      var alumnoActual = cargarAlumnos()[alumnoIdxActual];
+      var alumnoNuevo = cargarAlumnos()[Number(nuevoIdxStr)];
+      if (!clase || !alumnoActual || !alumnoNuevo) return;
+      btnGuardarEditarEstHorario.disabled = true;
+      agregarEstudianteAClaseBackend(clase.id, alumnoNuevo.id)
+        .then(function () { return quitarEstudianteDeClaseBackend(clase.id, alumnoActual.id); })
+        .then(function () { return refrescarCacheClases(); })
+        .then(function () { modalEditarEstHorario.style.display = 'none'; renderContenido('horarios'); })
+        .catch(function (err) { alert('No se pudo reemplazar el estudiante: ' + err.message); btnGuardarEditarEstHorario.disabled = false; });
+    });
+  }
+
+  // ---- Arrastrar (drag & drop) un estudiante a otra hora/día ----
+  document.querySelectorAll('.chip-estudiante-horario[draggable="true"]').forEach(function (chip) {
+    chip.addEventListener('dragstart', function (ev) {
+      ev.dataTransfer.setData('text/plain', JSON.stringify({
+        claseIdx: Number(chip.getAttribute('data-clase-idx')),
+        alumnoIdx: Number(chip.getAttribute('data-alumno-idx')),
+        programa: chip.getAttribute('data-programa')
+      }));
+    });
+  });
+  document.querySelectorAll('.celda-horario-drop').forEach(function (celda) {
+    celda.addEventListener('dragover', function (ev) { ev.preventDefault(); });
+    celda.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      var datos;
+      try { datos = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch (e) { return; }
+      var diaDestino = Number(celda.getAttribute('data-dia'));
+      var horaDestino = celda.getAttribute('data-hora');
+      var clases = cargarClases();
+      var claseOrigen = clases[datos.claseIdx];
+      var alumno = cargarAlumnos()[datos.alumnoIdx];
+      if (!claseOrigen || !alumno) return;
+      if (claseOrigen.dia === diaDestino && claseOrigen.hora === horaDestino) return; // soltó en la misma celda
+
+      // Si ya hay una clase del mismo programa en la celda destino, se suma
+      // a esa clase; si no, se crea una clase nueva ahí con este estudiante.
+      var claseDestino = clases.find(function (c) { return c.dia === diaDestino && c.hora === horaDestino && c.programa === datos.programa; });
+      var otraClaseOcupando = clases.find(function (c) { return c.dia === diaDestino && c.hora === horaDestino && c.programa !== datos.programa; });
+      if (otraClaseOcupando) { alert('Esa celda ya tiene una clase de ' + otraClaseOcupando.programa + ' — no se puede mezclar con ' + datos.programa + '.'); return; }
+
+      var promesaDestino = claseDestino
+        ? agregarEstudianteAClaseBackend(claseDestino.id, alumno.id)
+        : apiFetch('/api/horarios/clases', {
+            method: 'POST',
+            body: JSON.stringify({
+              clase: { profesorId: null, salaId: null, programa: datos.programa, tipo: claseOrigen.tipo || 'individual', diaSemana: diaDestino, horaInicio: horaDestino, duracionMinutos: 45 },
+              alumnosIds: [alumno.id]
+            })
+          });
+
+      promesaDestino
+        .then(function () { return quitarEstudianteDeClaseBackend(claseOrigen.id, alumno.id); })
+        .then(function () { return refrescarCacheClases(); })
+        .then(function () { renderContenido('horarios'); })
+        .catch(function (err) { alert('No se pudo mover el estudiante: ' + err.message); });
     });
   });
   var btnCancelarAsignar = document.getElementById('btn-cancelar-asignar');
@@ -3317,44 +3487,51 @@ function activarLogicaProfesores() {
 
 function renderCursos() {
   var alumnos = cargarAlumnos();
-  var usuariosDemo = cargarUsuarios();
-  var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
   var clases = cargarClases();
-  var COLORES_ACENTO = ['#223F61', '#93B6EE', '#E78C3B'];
 
-  function horarioDeAlumnoEnPrograma(alumnoIdx, programa) {
-    var clase = clases.find(function (c) { return c.programa === programa && (c.alumnos || []).indexOf(alumnoIdx) !== -1; });
-    if (!clase) return null;
-    var franja = FRANJAS.find(function (fr) { return (clase.dia === 6 ? fr.horaSabado : fr.horaLunVie) === clase.hora; });
-    var etiquetaHora = franja ? (clase.dia === 6 ? franja.etiquetaSabado : franja.etiquetaLunVie) : clase.hora;
-    return DIAS_SEMANA[clase.dia] + ' · ' + etiquetaHora;
+  // Un estudiante puede tener más de una clase agendada dentro del mismo
+  // programa (p. ej. 2 horarios/semana) — se muestran todos, no solo el primero.
+  function horariosDeAlumnoEnPrograma(alumnoIdx, programa) {
+    var clasesDelAlumno = clases.filter(function (c) { return c.programa === programa && (c.alumnos || []).indexOf(alumnoIdx) !== -1; });
+    return clasesDelAlumno.map(function (clase) {
+      var franja = FRANJAS.find(function (fr) { return (clase.dia === 6 ? fr.horaSabado : fr.horaLunVie) === clase.hora; });
+      var etiquetaHora = franja ? (clase.dia === 6 ? franja.etiquetaSabado : franja.etiquetaLunVie) : clase.hora;
+      return DIAS_SEMANA[clase.dia] + ' · ' + etiquetaHora;
+    });
   }
 
   var tarjetasHtml = PROGRAMAS.map(function (programa, idx) {
     var alumnosPrograma = alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return o.a.programa === programa; });
-    var colorAcento = COLORES_ACENTO[idx % 3];
+    var colorAcento = colorPrograma(programa);
 
     var filas = alumnosPrograma.map(function (o) {
-      var prof = profesores.find(function (p) { return p.email === o.a.profesor; });
-      var horario = horarioDeAlumnoEnPrograma(o.i, programa);
+      var horarios = horariosDeAlumnoEnPrograma(o.i, programa);
+      var horarioHtml = horarios.length
+        ? horarios.map(function (h) { return '<span style="display:inline-block; font-size:11px; font-weight:600; background:' + colorAcento + '1a; color:' + colorAcento + '; border-radius:6px; padding:2px 8px; margin:1px 4px 1px 0;">' + h + '</span>'; }).join('')
+        : '<span style="color:var(--muted); font-style:italic; font-size:12px;">sin horario</span>';
       var nombreCompleto = o.a.nombres + ' ' + o.a.apellidos;
       return '<tr class="fila-consulta-estudiante" data-nombre="' + nombreCompleto.toLowerCase() + '">' +
         '<td style="font-weight:600;">' + nombreCompleto + '</td>' +
-        '<td>' + (prof ? prof.nombre : '<span style="color:var(--muted); font-style:italic;">sin asignar</span>') + '</td>' +
-        '<td>' + (horario ? horario : '<span style="color:var(--muted); font-style:italic;">sin horario</span>') + '</td>' +
+        '<td>' + horarioHtml + '</td>' +
         '<td><span class="chip-rol">' + ETIQUETA_ESTADO[o.a.estado] + '</span></td>' +
         '</tr>';
     }).join('');
 
     return '' +
-      '<div class="panel tarjeta-programa" style="border-top:4px solid ' + colorAcento + '; margin-bottom:16px;">' +
-      '<div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:4px;">' +
-      '<h2 style="margin:0;">' + programa + '</h2>' +
-      '<span style="font-size:12px; color:var(--muted); font-weight:600;">' + alumnosPrograma.length + ' estudiante' + (alumnosPrograma.length === 1 ? '' : 's') + '</span>' +
-      '</div>' +
-      (alumnosPrograma.length === 0
-        ? '<p class="sin-resultado-programa" style="font-size:13px; color:var(--muted); margin:8px 0 2px;">Todavía no hay estudiantes en este programa.</p>'
-        : '<div class="tabla-scroll" style="margin-top:10px;"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Profesor</th><th>Horario</th><th>Estado</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+      '<div class="panel tarjeta-programa" style="padding:0; overflow:hidden; margin-bottom:14px; border-radius:14px; box-shadow:0 1px 3px rgba(21,42,68,0.08); border:1px solid #eee;">' +
+      '<button class="btn-toggle-programa-curso" data-programa="' + programa + '" style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; background:#fff; border:none; border-left:5px solid ' + colorAcento + '; padding:16px 18px; cursor:pointer; text-align:left;">' +
+      '<span style="display:flex; align-items:center; gap:10px;">' +
+      '<span style="width:9px; height:9px; border-radius:50%; background:' + colorAcento + '; display:inline-block;"></span>' +
+      '<span style="font-family:var(--font-wordmark); font-weight:500; font-size:18px; color:var(--azul-oscuro);">' + programa + '</span>' +
+      '</span>' +
+      '<span style="display:flex; align-items:center; gap:10px;">' +
+      '<span style="font-size:12px; color:' + colorAcento + '; font-weight:700; background:' + colorAcento + '1a; border-radius:20px; padding:3px 12px;">' + alumnosPrograma.length + ' estudiante' + (alumnosPrograma.length === 1 ? '' : 's') + '</span>' +
+      '<span class="icono-toggle-programa-curso" style="font-size:13px; color:var(--muted); display:inline-block; transition:transform .15s;">▾</span>' +
+      '</span>' +
+      '</button>' +
+      '<div class="cuerpo-programa-curso" data-programa="' + programa + '" style="display:none; padding:0 18px 16px;">' + (alumnosPrograma.length === 0
+        ? '<p class="sin-resultado-programa" style="font-size:13px; color:var(--muted); margin:4px 0 2px;">Todavía no hay estudiantes en este programa.</p>'
+        : '<div class="tabla-scroll" style="margin-top:4px;"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Horario</th><th>Estado</th></tr></thead><tbody>' + filas + '</tbody></table></div>') + '</div>' +
       '</div>';
   }).join('');
 
@@ -3399,6 +3576,20 @@ function renderCursos() {
 function activarLogicaCursos() {
   activarLogicaEstudiantes('cursos');
 
+  // Acordeón: cada programa arranca cerrado; un clic muestra/oculta sus
+  // estudiantes para no mostrarlos todos a la vez.
+  document.querySelectorAll('.btn-toggle-programa-curso').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var programa = btn.getAttribute('data-programa');
+      var cuerpo = document.querySelector('.cuerpo-programa-curso[data-programa="' + programa + '"]');
+      var icono = btn.querySelector('.icono-toggle-programa-curso');
+      if (!cuerpo) return;
+      var abrir = cuerpo.style.display === 'none';
+      cuerpo.style.display = abrir ? 'block' : 'none';
+      if (icono) icono.style.transform = abrir ? 'rotate(180deg)' : 'rotate(0deg)';
+    });
+  });
+
   var buscador = document.getElementById('buscar-estudiante-cursos');
   if (buscador) {
     buscador.addEventListener('input', function () {
@@ -3408,9 +3599,17 @@ function activarLogicaCursos() {
       });
       document.querySelectorAll('.tarjeta-programa').forEach(function (tarjeta) {
         var filas = tarjeta.querySelectorAll('.fila-consulta-estudiante');
-        if (filas.length === 0) return; // tarjeta sin estudiantes, no tocar
+        var cuerpo = tarjeta.querySelector('.cuerpo-programa-curso');
+        var icono = tarjeta.querySelector('.icono-toggle-programa-curso');
+        if (filas.length === 0) { tarjeta.style.display = termino ? 'none' : ''; return; }
         var algunaVisible = Array.prototype.some.call(filas, function (f) { return f.style.display !== 'none'; });
         tarjeta.style.display = algunaVisible ? '' : (termino ? 'none' : '');
+        // Con una búsqueda activa, se abre automáticamente el programa que
+        // tiene resultados; sin búsqueda, cada quien vuelve a su estado
+        // de acordeón normal (cerrado al re-renderizar).
+        if (cuerpo) {
+          if (termino) { cuerpo.style.display = algunaVisible ? 'block' : 'none'; if (icono) icono.style.transform = algunaVisible ? 'rotate(180deg)' : 'rotate(0deg)'; }
+        }
       });
     });
   }
