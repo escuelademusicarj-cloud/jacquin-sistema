@@ -1451,15 +1451,12 @@ function renderEstudiantes() {
       '<div class="split-der">' +
         '<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">' +
         '<div><h2 style="margin-bottom:2px;">Nuevo estudiante</h2><p class="ayuda" style="margin-bottom:0;">Todos los campos con * son obligatorios.</p></div>' +
-        '<div>' +
+        '<div style="text-align:right;">' +
         '<input type="file" id="input-excel-estudiantes" accept=".xlsx,.xls,.csv" style="display:none;" />' +
-        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">' +
-        '<select id="sel-estado-excel-estudiantes" style="font-size:12px; padding:8px 10px; border-radius:10px; border:1px solid #d8dce3; color:var(--texto); font-family:var(--font-ui);">' +
-        '<option value="activo">Importar como Activo (ya matriculados)</option>' +
-        '<option value="preinscrito">Importar como Preinscrito (sin matricular)</option>' +
-        '</select>' +
+        '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end;">' +
         '<button type="button" id="btn-subir-excel-estudiantes" style="font-size:12px; padding:8px 14px; border-radius:10px; border:1px solid var(--naranja); background:#fff; color:var(--naranja); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">⬆ Subir por Excel</button>' +
         '</div>' +
+        '<p style="font-size:11px; color:var(--muted); margin:6px 0 0; max-width:280px;">Si la fila trae horas/semana, valor y fecha de inicio, el estudiante queda matriculado (Activo) de una vez.</p>' +
         '</div></div>' +
         '<p id="msj-excel-estudiantes" style="font-size:12px; color:var(--verde); display:none; margin:8px 0 0;"></p>' +
         '<div class="grilla-moderna" style="margin-top:16px;">' +
@@ -1689,8 +1686,6 @@ function activarLogicaEstudiantes(volverA) {
       if (!archivo) return;
       if (typeof XLSX === 'undefined') { alert('No se pudo cargar el lector de Excel — revisá tu conexión a internet e intentá de nuevo.'); return; }
 
-      var estadoElegido = (document.getElementById('sel-estado-excel-estudiantes') || {}).value || 'preinscrito';
-
       var lector = new FileReader();
       lector.onload = function (e) {
         try {
@@ -1795,7 +1790,7 @@ function activarLogicaEstudiantes(volverA) {
 
           var alumnosExistentes = cargarAlumnos();
           var yaEnviados = []; // evita duplicados dentro de la misma planilla mientras se procesa
-          var importados = 0, omitidos = 0, duplicados = 0, fallidos = [];
+          var importados = 0, matriculados = 0, omitidos = 0, duplicados = 0, fallidos = [];
           var filasParaRevisar = []; // { nombre, textoOriginal, motivo }
           var btnSubirExcelRef = btnSubirExcel;
           btnSubirExcelRef.disabled = true;
@@ -1847,6 +1842,20 @@ function activarLogicaEstudiantes(volverA) {
             var acudienteTxt = buscarCampo(fila, ['acudiente', 'nombre del acudiente']);
             var celularAcudienteTxt = buscarCampo(fila, ['celular del acudiente', 'celular acudiente', 'telefono acudiente']);
 
+            // ---- Columnas de Matrícula (opcionales) — si vienen completas,
+            // la fila no se queda en "Preinscrito": además de registrar al
+            // estudiante se le crea la inscripción real (Matrícula) y el
+            // pago, igual que si se hubiera matriculado a mano una por una.
+            var horasSemanaTxt = buscarCampo(fila, ['horas por semana', 'horas semana', 'horas']);
+            var valorMensualidadTxt = buscarCampo(fila, ['valor mensualidad', 'valor mensualidad (cop)', 'mensualidad', 'valor']);
+            var fechaInicioTxt = formatearFecha(buscarCampo(fila, ['fecha de inicio', 'fecha inicio']));
+            var medioPagoTxt = buscarCampo(fila, ['medio de pago', 'medio pago', 'metodo de pago', 'método de pago']);
+            var fechaPagoTxt = formatearFecha(buscarCampo(fila, ['fecha de pago', 'fecha pago'])) || fechaInicioTxt;
+            var horasSemana = Number(horasSemanaTxt);
+            var valorMensualidad = Number(String(valorMensualidadTxt).replace(/[^\d.]/g, ''));
+            var intentaMatricular = horasSemana > 0 && valorMensualidad > 0 && !!fechaInicioTxt;
+            var medioPagoFinal = METODOS_PAGO_CONTABLE.indexOf(medioPagoTxt) !== -1 ? medioPagoTxt : 'Transferencia';
+
             var payload = {
               alumno: {
                 nombres: nombres, apellidos: apellidos, documento: documento || null,
@@ -1861,10 +1870,45 @@ function activarLogicaEstudiantes(volverA) {
             };
 
             apiFetch('/api/academico/estudiantes', { method: 'POST', body: JSON.stringify(payload) })
-              .then(function () {
+              .then(function (creado) {
                 importados++;
                 yaEnviados.push({ nombres: nombres, apellidos: apellidos, documento: documento, nacimiento: nacimiento });
-                procesarFilaExcel(indice + 1);
+                var alumnoId = creado && creado.id;
+
+                if (!intentaMatricular) { procesarFilaExcel(indice + 1); return; }
+                if (!alumnoId) {
+                  fallidos.push(nombres + ' ' + apellidos + ': se registró pero no se pudo matricular (no se recibió su id).');
+                  procesarFilaExcel(indice + 1);
+                  return;
+                }
+
+                buscarOCrearPlanId(programaFinal, { horasSemana: horasSemana, valor: valorMensualidad }, valorMensualidad)
+                  .then(function (planId) {
+                    return apiFetch('/api/matricula/inscripciones', {
+                      method: 'POST',
+                      body: JSON.stringify({ alumnoId: alumnoId, planId: planId, fechaInicio: fechaInicioTxt, pagado: true, fecha: fechaPagoTxt, medioPago: medioPagoFinal })
+                    });
+                  })
+                  .then(function () {
+                    return crearIngresoBackend({
+                      fecha: fechaPagoTxt,
+                      concepto: 'Matrícula — ' + nombres + ' ' + apellidos,
+                      programa: programaFinal,
+                      categoria: 'Matrícula',
+                      cliente: nombres + ' ' + apellidos,
+                      metodo: medioPagoFinal,
+                      estado: 'pagado',
+                      valor: valorMensualidad
+                    }).catch(function () { /* si falla el ingreso, la matrícula ya quedó hecha — no bloquea la fila */ });
+                  })
+                  .then(function () {
+                    matriculados++;
+                    procesarFilaExcel(indice + 1);
+                  })
+                  .catch(function (err) {
+                    fallidos.push(nombres + ' ' + apellidos + ': se registró pero falló la matrícula (' + err.message + ').');
+                    procesarFilaExcel(indice + 1);
+                  });
               })
               .catch(function (err) {
                 fallidos.push(nombres + ' ' + apellidos + ': ' + err.message);
@@ -1873,8 +1917,12 @@ function activarLogicaEstudiantes(volverA) {
           }
 
           function terminarImportacionExcel() {
-            refrescarCacheAlumnos().then(function () {
-              var resumenPartes = [importados + ' estudiante(s) importado(s) de verdad (quedan como "Preinscrito" — para pasar a "Activo" hace falta completar su Matrícula)'];
+            Promise.all([refrescarCacheAlumnos(), refrescarCacheInscripciones()]).then(function () {
+              var soloRegistrados = importados - matriculados;
+              var resumenPartes = [];
+              if (matriculados) resumenPartes.push(matriculados + ' estudiante(s) importado(s) y matriculado(s) — ya quedan "Activo(s)"');
+              if (soloRegistrados) resumenPartes.push(soloRegistrados + ' estudiante(s) importado(s) solo con registro (quedan como "Preinscrito" — faltó horas/valor/fecha de inicio en la fila, o completar la Matrícula a mano)');
+              if (!importados) resumenPartes.push('0 estudiantes importados');
               if (duplicados) resumenPartes.push(duplicados + ' fila(s) omitida(s) por estar duplicadas');
               if (omitidos) resumenPartes.push(omitidos + ' fila(s) omitida(s) por falta de nombre/apellido');
               if (fallidos.length) resumenPartes.push(fallidos.length + ' fila(s) con error');
@@ -2850,13 +2898,13 @@ function renderHorariosSemana(sesion) {
       return '<td class="celda-horario-drop" data-dia="' + dia + '" data-hora="' + hora + '" style="border-left:4px solid ' + colorBorde + '; background:#fff; padding:12px; vertical-align:top; min-width:200px; min-height:120px;">' + etiquetaHoraCelda + contenidoOcupantes + celdaBtn + '</td>';
     }).join('');
 
-    var filaFranja = '<tr><td style="font-size:13px; color:var(--muted); font-weight:600; padding:12px; white-space:nowrap; vertical-align:top;">' + franja.etiquetaLunVie + '</td>' + celdas + '</tr>';
+    var filaFranja = '<tr>' + celdas + '</tr>';
     var esUltima = FRANJAS.indexOf(franja) === FRANJAS.length - 1;
-    var filaDivisoria = esUltima ? '' : '<tr><td colspan="' + (COLUMNAS_DIAS.length + 1) + '" style="padding:0; border:none;"><div style="height:1px; background:#e6e6e6; margin:2px 8px;"></div></td></tr>';
+    var filaDivisoria = esUltima ? '' : '<tr><td colspan="' + COLUMNAS_DIAS.length + '" style="padding:0; border:none;"><div style="height:1px; background:#e6e6e6; margin:2px 8px;"></div></td></tr>';
     return filaFranja + filaDivisoria;
   }).join('');
 
-  var encabezado = '<tr><td></td>' + COLUMNAS_DIAS.map(function (d) {
+  var encabezado = '<tr>' + COLUMNAS_DIAS.map(function (d) {
     var fechaCol = sumarDiasFecha(semanaHorarioSeleccionada, d - 1);
     return '<td style="font-size:15px; font-weight:700; text-align:center; padding:10px; color:var(--azul-oscuro);">' + DIAS_SEMANA[d] +
       '<div style="font-size:12px; font-weight:500; color:var(--muted);">' + formatearFechaCorta(fechaCol) + '</div></td>';
