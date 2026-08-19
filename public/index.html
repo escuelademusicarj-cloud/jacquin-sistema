@@ -764,33 +764,85 @@ var CONCEPTOS_PAGO = ['Matrícula', 'Mensualidad', 'Clase suelta', 'Programa esp
 // tomando como referencia el módulo de contabilidad de otro proyecto
 // (ingresos/gastos/compras/nómina/categorías/KPIs) ya construido antes.
 var METODOS_PAGO_CONTABLE = ['Efectivo', 'Transferencia', 'Tarjeta'];
+
+// Metas financieras (meta mensual/anual de ingresos) — solo un par de
+// números de referencia para la barra de progreso; se quedan locales
+// (no hay endpoint para esto en el backend real).
+function cargarMetasContables() {
+  var g = localStorage.getItem('jacquin_demo_metas_contab');
+  return g ? JSON.parse(g) : { mensual: 0, anual: 0 };
+}
+function guardarMetasContables(obj) { localStorage.setItem('jacquin_demo_metas_contab', JSON.stringify(obj)); }
+
 var CATEGORIAS_INGRESO = ['Matrícula', 'Mensualidad', 'Clase suelta', 'Eventos', 'Venta de material', 'Otro'];
 var CATEGORIAS_GASTO = ['Nómina', 'Arriendo', 'Servicios públicos', 'Mantenimiento de instrumentos', 'Marketing', 'Insumos de oficina', 'Otro'];
 var CATEGORIAS_COMPRA = ['Instrumentos', 'Partituras y libros', 'Mobiliario', 'Insumos', 'Tecnología', 'Otro'];
 
-function cargarIngresos() {
-  var g = localStorage.getItem('jacquin_demo_ingresos');
-  return g ? JSON.parse(g) : [];
-}
-function guardarIngresos(lista) { localStorage.setItem('jacquin_demo_ingresos', JSON.stringify(lista)); }
+// ---- Contabilidad: conectado al backend real (2026-08-19) ----
+// OJO: el backend de este módulo se construyó desde cero en la sesión del
+// 2026-08-18 sin tener a la vista el archivo repositorio.js real — los
+// nombres de campo de abajo son la mejor suposición (mismo formato que ya
+// usaba este HTML en modo local) y necesitan confirmarse contra la base de
+// datos real. Si algo da error de columna al probar, pedir
+// backend/src/persistencia/contabilidad/repositorio.js para ajustar,
+// mismo patrón de precaución que con Horarios/Eventos.
+var CACHE_CONTAB_INGRESOS = [];
+var CACHE_CONTAB_GASTOS = [];
+var CACHE_CONTAB_COMPRAS = [];
+var CACHE_CONTAB_NOMINA = [];
 
-function cargarGastos() {
-  var g = localStorage.getItem('jacquin_demo_gastos');
-  return g ? JSON.parse(g) : [];
+async function refrescarCacheContabIngresos() {
+  try { CACHE_CONTAB_INGRESOS = await apiFetch('/api/contabilidad/ingresos', { method: 'GET' }) || []; }
+  catch (err) { console.error('No se pudo cargar Ingresos (Contabilidad) desde el backend:', err.message); }
 }
-function guardarGastos(lista) { localStorage.setItem('jacquin_demo_gastos', JSON.stringify(lista)); }
+async function refrescarCacheContabGastos() {
+  try { CACHE_CONTAB_GASTOS = await apiFetch('/api/contabilidad/gastos', { method: 'GET' }) || []; }
+  catch (err) { console.error('No se pudo cargar Gastos (Contabilidad) desde el backend:', err.message); }
+}
+async function refrescarCacheContabCompras() {
+  try {
+    var compras = await apiFetch('/api/contabilidad/compras', { method: 'GET' }) || [];
+    CACHE_CONTAB_COMPRAS = compras.map(function (c) {
+      return Object.assign({}, c, {
+        valorUnit: c.valorUnit != null ? c.valorUnit : c.valor_unitario,
+        valorTotal: c.valorTotal != null ? c.valorTotal : c.valor_total
+      });
+    });
+  } catch (err) { console.error('No se pudo cargar Compras (Contabilidad) desde el backend:', err.message); }
+}
+async function refrescarCacheContabNomina() {
+  try { CACHE_CONTAB_NOMINA = await apiFetch('/api/contabilidad/nomina', { method: 'GET' }) || []; }
+  catch (err) { console.error('No se pudo cargar Nómina (Contabilidad) desde el backend:', err.message); }
+}
 
-function cargarCompras() {
-  var g = localStorage.getItem('jacquin_demo_compras');
-  return g ? JSON.parse(g) : [];
-}
-function guardarCompras(lista) { localStorage.setItem('jacquin_demo_compras', JSON.stringify(lista)); }
+function cargarIngresos() { return CACHE_CONTAB_INGRESOS; }
+function cargarGastos() { return CACHE_CONTAB_GASTOS; }
+function cargarCompras() { return CACHE_CONTAB_COMPRAS; }
+function cargarNomina() { return CACHE_CONTAB_NOMINA; }
+// guardarX ya no escribe nada — la escritura real pasa por
+// crear/editar/eliminarXBackend (abajo). Se dejan como no-op para no
+// romper si algún sitio viejo las sigue llamando.
+function guardarIngresos() {}
+function guardarGastos() {}
+function guardarCompras() {}
+function guardarNomina() {}
 
-function cargarNomina() {
-  var g = localStorage.getItem('jacquin_demo_nomina');
-  return g ? JSON.parse(g) : [];
-}
-function guardarNomina(lista) { localStorage.setItem('jacquin_demo_nomina', JSON.stringify(lista)); }
+function crearIngresoBackend(registro) { return apiFetch('/api/contabilidad/ingresos', { method: 'POST', body: JSON.stringify(registro) }); }
+function editarIngresoBackend(id, registro) { return apiFetch('/api/contabilidad/ingresos/' + id, { method: 'PUT', body: JSON.stringify(registro) }); }
+function eliminarIngresoBackend(id) { return apiFetch('/api/contabilidad/ingresos/' + id, { method: 'DELETE' }); }
+
+function crearGastoBackend(registro) { return apiFetch('/api/contabilidad/gastos', { method: 'POST', body: JSON.stringify(registro) }); }
+function editarGastoBackend(id, registro) { return apiFetch('/api/contabilidad/gastos/' + id, { method: 'PUT', body: JSON.stringify(registro) }); }
+function eliminarGastoBackend(id) { return apiFetch('/api/contabilidad/gastos/' + id, { method: 'DELETE' }); }
+
+function crearCompraBackend(registro) { return apiFetch('/api/contabilidad/compras', { method: 'POST', body: JSON.stringify(registro) }); }
+function editarCompraBackend(id, registro) { return apiFetch('/api/contabilidad/compras/' + id, { method: 'PUT', body: JSON.stringify(registro) }); }
+function eliminarCompraBackend(id) { return apiFetch('/api/contabilidad/compras/' + id, { method: 'DELETE' }); }
+
+function crearNominaBackend(registro) { return apiFetch('/api/contabilidad/nomina', { method: 'POST', body: JSON.stringify(registro) }); }
+function editarNominaBackend(id, registro) { return apiFetch('/api/contabilidad/nomina/' + id, { method: 'PUT', body: JSON.stringify(registro) }); }
+function eliminarNominaBackend(id) { return apiFetch('/api/contabilidad/nomina/' + id, { method: 'DELETE' }); }
+
 
 function formatearCOPContable(numero) {
   return '$ ' + Math.round(Number(numero) || 0).toLocaleString('es-CO');
@@ -2176,11 +2228,10 @@ function activarLogicaMatricula() {
           return Promise.all([refrescarCacheAlumnos(), refrescarCachePlanes()]).then(refrescarCacheInscripciones);
         })
         .then(function () {
-          // Conecta con Contabilidad (todavía local): todo pago registrado
-          // acá aparece como Ingreso, sin tener que cargarlo dos veces.
+          // Conecta con Contabilidad real: todo pago registrado acá crea
+          // un Ingreso de verdad en el backend (antes solo quedaba local).
           if (pagado) {
-            var ingresosDesdeMatricula = cargarIngresos();
-            ingresosDesdeMatricula.push({
+            return crearIngresoBackend({
               fecha: fechaPago,
               concepto: 'Matrícula — ' + alumno.nombres + ' ' + alumno.apellidos,
               programa: programaElegido,
@@ -2189,9 +2240,10 @@ function activarLogicaMatricula() {
               metodo: medioPagoInscripcion,
               estado: 'pagado',
               valor: valorConDescuento
-            });
-            guardarIngresos(ingresosDesdeMatricula);
+            }).then(function () { return refrescarCacheContabIngresos(); });
           }
+        })
+        .then(function () {
           document.getElementById('msj-inscripcion').textContent = pagado
             ? 'Inscripción creada y pago registrado — el estudiante ya quedó "Activo", y el cargo aparece saldado en Pagos y cartera (visible ahí cuando ese módulo también esté conectado).'
             : 'Inscripción creada — el estudiante queda "Pendiente de matrícula" y el cargo aparece pendiente hasta que se registre el pago.';
@@ -2404,10 +2456,9 @@ function activarLogicaPagos() {
           guardarPagosRegistrados(pagos);
 
           // Misma conexión que en Matrícula: todo pago que se registra acá
-          // aparece automáticamente como Ingreso en Contabilidad (todavía local).
+          // crea un Ingreso de verdad en Contabilidad (backend real).
           var alumnoDelCargo = cargarAlumnos()[cargo.alumnoIdx];
-          var ingresosDesdePago = cargarIngresos();
-          ingresosDesdePago.push({
+          return crearIngresoBackend({
             fecha: fechaPagoCargo,
             concepto: cargo.concepto + (alumnoDelCargo ? ' — ' + alumnoDelCargo.nombres + ' ' + alumnoDelCargo.apellidos : ''),
             programa: alumnoDelCargo ? alumnoDelCargo.programa : '',
@@ -2416,9 +2467,9 @@ function activarLogicaPagos() {
             metodo: medioPago,
             estado: 'pagado',
             valor: valor
-          });
-          guardarIngresos(ingresosDesdePago);
-
+          }).then(function () { return refrescarCacheContabIngresos(); });
+        })
+        .then(function () {
           document.getElementById('msj-pago').style.display = 'block';
           setTimeout(function () { renderContenido('pagos'); }, 700);
         })
@@ -2613,11 +2664,7 @@ function renderHorariosSemana(sesion) {
       if (esProfesor) ocupantes = ocupantes.filter(function (o) { return o.c.profesor === sesion.email; });
       if (filtroProgramaHorario !== 'General') ocupantes = ocupantes.filter(function (o) { return o.c.programa === filtroProgramaHorario; });
 
-      var ocupada = ocupantes.length > 0;
-      var colorBorde = ocupada ? 'var(--rojo)' : 'var(--verde)';
-
-      var contenidoOcupantes = ocupantes.map(function (o) {
-        var colorProg = colorPrograma(o.c.programa);
+      var ocupantesConAlumnos = ocupantes.map(function (o) {
         // Un estudiante solo aparece desde la semana de su matrícula (o desde
         // que se lo agregó a esta clase) en adelante — nunca en semanas anteriores.
         var alumnosVisibles = (o.c.alumnos || []).filter(function (idx) {
@@ -2628,7 +2675,20 @@ function renderHorariosSemana(sesion) {
           var fechaEfectiva = fechaAlta > fechaAsignado ? fechaAlta : fechaAsignado;
           return fechaEfectiva <= fechaColumna;
         });
-        var chipsEstudiantes = alumnosVisibles.length ? alumnosVisibles.map(function (idx) {
+        return { o: o, alumnosVisibles: alumnosVisibles };
+      }).filter(function (x) { return x.alumnosVisibles.length > 0; });
+      // Una clase sin ningún estudiante visible (porque se quitó, se movió a
+      // otra celda, o todavía no se le asignó nadie) NO se muestra — la celda
+      // queda igual de vacía que si nunca hubiera existido esa clase, en vez
+      // de dejar colgado el rótulo del instrumento sin nadie adentro.
+
+      var ocupada = ocupantesConAlumnos.length > 0;
+      var colorBorde = ocupada ? 'var(--rojo)' : 'var(--verde)';
+
+      var contenidoOcupantes = ocupantesConAlumnos.map(function (x) {
+        var o = x.o, alumnosVisibles = x.alumnosVisibles;
+        var colorProg = colorPrograma(o.c.programa);
+        var chipsEstudiantes = alumnosVisibles.map(function (idx) {
           var al = alumnos[idx];
           var nombreCorto = al.nombres + ' ' + al.apellidos.split(' ')[0];
           return '<div class="chip-estudiante-horario" draggable="' + (esProfesor ? 'false' : 'true') + '" ' +
@@ -2644,7 +2704,7 @@ function renderHorariosSemana(sesion) {
               '<button class="btn-quitar-estudiante-horario" data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" title="Quitar del horario" style="border:none; background:transparent; cursor:pointer; font-size:13px; padding:2px 4px; color:var(--rojo);">✕</button>' +
               '</div>') +
             '</div>';
-        }).join('') : '<div style="font-size:12px; color:var(--muted); font-style:italic; padding:4px 2px;">' + chipPrograma(o.c.programa) + '<br>sin estudiante todavía</div>';
+        }).join('');
 
         var linkAgregar = esProfesor ? '' : '<div class="link-agregar-a-clase" data-clase-idx="' + o.i + '" style="font-size:11px; color:' + colorProg + '; font-weight:600; cursor:pointer; padding:2px 2px 8px;">+ agregar estudiante</div>';
         return chipsEstudiantes + linkAgregar;
@@ -2982,8 +3042,12 @@ function activarLogicaHorarios() {
 
       // Si ya hay una clase del mismo programa en la celda destino, se suma
       // a esa clase; si no, se crea una clase nueva ahí con este estudiante.
-      var claseDestino = clases.find(function (c) { return c.dia === diaDestino && c.hora === horaDestino && c.programa === datos.programa; });
-      var otraClaseOcupando = clases.find(function (c) { return c.dia === diaDestino && c.hora === horaDestino && c.programa !== datos.programa; });
+      // Solo cuenta como "ocupada por otro programa" si esa clase todavía
+      // tiene al menos un estudiante — una clase que quedó vacía (por un
+      // quite o un arrastre anterior) ya no se ve en la grilla, así que
+      // tampoco debe bloquear que se suelte algo ahí.
+      var claseDestino = clases.find(function (c) { return c.dia === diaDestino && c.hora === horaDestino && c.programa === datos.programa && (c.alumnos || []).length > 0; });
+      var otraClaseOcupando = clases.find(function (c) { return c.dia === diaDestino && c.hora === horaDestino && c.programa !== datos.programa && (c.alumnos || []).length > 0; });
       if (otraClaseOcupando) { alert('Esa celda ya tiene una clase de ' + otraClaseOcupando.programa + ' — no se puede mezclar con ' + datos.programa + '.'); return; }
 
       var promesaDestino = claseDestino
@@ -3487,6 +3551,8 @@ function activarLogicaProfesores() {
 
 function renderCursos() {
   var alumnos = cargarAlumnos();
+  var usuariosDemo = cargarUsuarios();
+  var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
   var clases = cargarClases();
 
   // Un estudiante puede tener más de una clase agendada dentro del mismo
@@ -4756,6 +4822,162 @@ function tablaMovimientosContable(movimientos) {
 // ---- Resumen general — visión global desde el inicio hasta hoy, con
 // desglose por categoría y últimos movimientos (tomado como referencia
 // de renderDashboard() del proyecto Neuro Tone, adaptado sin gráficos SVG).
+// ---- Indicadores, efectivo/banco, tendencia y metas (2026-08-19) —
+// mismas piezas que ya se veían en el dashboard financiero de Neuro Tone,
+// con la paleta de Jacquin (var(--azul-oscuro)/var(--naranja)/var(--verde)/
+// var(--rojo), ya definidas en el archivo) en vez del negro+dorado.
+function calcularIndicadoresContable(totalIngresos, egresosTotal, balance, cantidadIngresos, totalNomina, balanceAnterior) {
+  var margenNeto = totalIngresos > 0 ? (balance / totalIngresos) * 100 : 0;
+  var relacion = totalIngresos > 0 ? (egresosTotal / totalIngresos) * 100 : 0;
+  var variacion = null;
+  if (balanceAnterior != null) {
+    variacion = balanceAnterior !== 0 ? ((balance - balanceAnterior) / Math.abs(balanceAnterior)) * 100 : (balance > 0 ? 100 : 0);
+  }
+  var ingresoPromedio = cantidadIngresos > 0 ? totalIngresos / cantidadIngresos : 0;
+  var pesoNomina = totalIngresos > 0 ? (totalNomina / totalIngresos) * 100 : 0;
+  return { margenNeto: margenNeto, relacion: relacion, variacion: variacion, ingresoPromedio: ingresoPromedio, pesoNomina: pesoNomina };
+}
+
+function tarjetaIndicadorContable(titulo, valor, sub) {
+  return '<div class="panel" style="padding:14px 16px; flex:1; min-width:150px;">' +
+    '<p style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:0 0 6px;">' + titulo + '</p>' +
+    '<p style="margin:0; font-size:19px; font-weight:800; color:var(--azul-oscuro);">' + valor + '</p>' +
+    '<p style="margin:4px 0 0; font-size:11px; color:var(--muted);">' + sub + '</p></div>';
+}
+
+function filaIndicadoresContable(ind) {
+  return '<div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px;">' +
+    tarjetaIndicadorContable('Margen neto', ind.margenNeto.toFixed(1) + '%', 'Balance / Ingresos') +
+    tarjetaIndicadorContable('Relación egresos/ingresos', ind.relacion.toFixed(1) + '%', 'Egresos / Ingresos') +
+    tarjetaIndicadorContable('Variación vs. período anterior', ind.variacion == null ? '—' : (ind.variacion >= 0 ? '+' : '') + ind.variacion.toFixed(1) + '%', 'Balance neto comparado') +
+    tarjetaIndicadorContable('Ingreso promedio', formatearCOPContable(ind.ingresoPromedio), 'Por registro de ingreso') +
+    tarjetaIndicadorContable('Peso de la nómina', ind.pesoNomina.toFixed(1) + '%', 'Nómina / Ingresos') +
+    '</div>';
+}
+
+function efectivoYBancoContable(ingresos, gastos, compras, nomina) {
+  function porMetodo(lista, campoValor, metodo) {
+    return lista.filter(function (r) { return (r.metodo || '') === metodo; }).reduce(function (s, r) { return s + Number(r[campoValor] || 0); }, 0);
+  }
+  function porMetodoDistinto(lista, campoValor, metodo) {
+    return lista.filter(function (r) { return (r.metodo || '') !== metodo; }).reduce(function (s, r) { return s + Number(r[campoValor] || 0); }, 0);
+  }
+  var ingEfectivo = porMetodo(ingresos, 'valor', 'Efectivo');
+  var ingBanco = porMetodoDistinto(ingresos, 'valor', 'Efectivo');
+  var egEfectivo = porMetodo(gastos, 'valor', 'Efectivo') + porMetodo(compras, 'valorTotal', 'Efectivo') + porMetodo(nomina, 'neto', 'Efectivo');
+  var egBanco = porMetodoDistinto(gastos, 'valor', 'Efectivo') + porMetodoDistinto(compras, 'valorTotal', 'Efectivo') + porMetodoDistinto(nomina, 'neto', 'Efectivo');
+  return { ingEfectivo: ingEfectivo, ingBanco: ingBanco, egEfectivo: egEfectivo, egBanco: egBanco, efectivoDisponible: ingEfectivo - egEfectivo, bancoDisponible: ingBanco - egBanco };
+}
+
+function tarjetaMiniContable(titulo, valor) {
+  return '<div style="background:var(--beige); border-radius:10px; padding:10px 12px; flex:1; min-width:120px;">' +
+    '<p style="font-size:10px; color:var(--muted); text-transform:uppercase; margin:0 0 4px;">' + titulo + '</p>' +
+    '<p style="margin:0; font-size:14px; font-weight:700; color:var(--azul-oscuro);">' + formatearCOPContable(valor) + '</p></div>';
+}
+
+function filaEfectivoBancoContable(datos, etiquetaPeriodo) {
+  return '<div class="panel"><h2>Efectivo y Banco</h2><p style="font-size:12px; color:var(--muted); margin-top:-6px;">Movimiento en efectivo y banco ' + etiquetaPeriodo + '</p>' +
+    '<div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0;">' +
+    '<div style="background:var(--azul-oscuro); color:#fff; border-radius:12px; padding:16px 18px;"><p style="font-size:11px; text-transform:uppercase; opacity:.8; margin:0 0 6px;">Efectivo disponible</p><p style="margin:0; font-size:23px; font-weight:800;">' + formatearCOPContable(datos.efectivoDisponible) + '</p><p style="margin:4px 0 0; font-size:11px; opacity:.7;">Ingresos − egresos en efectivo</p></div>' +
+    '<div style="background:var(--azul-oscuro); color:#fff; border-radius:12px; padding:16px 18px;"><p style="font-size:11px; text-transform:uppercase; opacity:.8; margin:0 0 6px;">Banco disponible</p><p style="margin:0; font-size:23px; font-weight:800;">' + formatearCOPContable(datos.bancoDisponible) + '</p><p style="margin:4px 0 0; font-size:11px; opacity:.7;">Ingresos − egresos en banco</p></div>' +
+    '</div>' +
+    '<div style="display:flex; gap:10px; flex-wrap:wrap;">' +
+    tarjetaMiniContable('Ingresos efectivo', datos.ingEfectivo) +
+    tarjetaMiniContable('Ingresos banco', datos.ingBanco) +
+    tarjetaMiniContable('Gastado efectivo', datos.egEfectivo) +
+    tarjetaMiniContable('Gastado banco', datos.egBanco) +
+    tarjetaMiniContable('Dinero disponible', datos.efectivoDisponible + datos.bancoDisponible) +
+    '</div></div>';
+}
+
+// Curva de acumulación diaria dentro de un mes — usada en Balance mensual.
+function chartAreaAcumuladoContable(movimientos, ym, color) {
+  var partes = ym.split('-'); var anio = Number(partes[0]), mes = Number(partes[1]);
+  var diasEnMes = new Date(anio, mes, 0).getDate();
+  var porDia = new Array(diasEnMes + 1).fill(0);
+  movimientos.forEach(function (m) {
+    var d = Number((m.fecha || '').slice(8, 10));
+    if (d >= 1 && d <= diasEnMes) porDia[d] += Number(m.valor || 0);
+  });
+  var acumulado = []; var run = 0;
+  for (var d = 1; d <= diasEnMes; d++) { run += porDia[d]; acumulado.push(run); }
+  var max = Math.max(1, Math.max.apply(null, acumulado));
+  var w = 280, h = 100;
+  var pts = acumulado.map(function (v, i) {
+    var x = diasEnMes > 1 ? (i / (diasEnMes - 1)) * w : 0;
+    var y = h - (v / max) * h;
+    return x.toFixed(1) + ',' + y.toFixed(1);
+  });
+  var pathLine = 'M' + pts.join(' L');
+  var pathArea = pathLine + ' L' + w + ',' + h + ' L0,' + h + ' Z';
+  return '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%; height:110px; display:block;" preserveAspectRatio="none">' +
+    '<path d="' + pathArea + '" fill="' + color + '22" stroke="none"/>' +
+    '<path d="' + pathLine + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>' +
+    '</svg>';
+}
+
+// Tendencia de los últimos N meses (ingresos vs egresos) — usada en Resumen general.
+function ultimosMesesContable(ingresos, gastos, compras, nomina, n) {
+  var hoy = new Date(); var meses = [];
+  for (var i = n - 1; i >= 0; i--) {
+    var d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+    meses.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+  }
+  return meses.map(function (ym) {
+    var ing = ingresos.filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ym; }).reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+    var gas = gastos.filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ym; }).reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+    var com = compras.filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ym; }).reduce(function (s, r) { return s + Number(r.valorTotal || 0); }, 0);
+    var nom = nomina.filter(function (r) { return r.mes === ym; }).reduce(function (s, r) { return s + Number(r.neto || 0); }, 0);
+    return { ym: ym, ingresos: ing, egresos: gas + com + nom };
+  });
+}
+
+function chartBarrasTendenciaContable(meses) {
+  var max = Math.max(1, meses.reduce(function (m, x) { return Math.max(m, x.ingresos, x.egresos); }, 0));
+  var w = meses.length * 46, h = 90;
+  var barras = meses.map(function (m, i) {
+    var xBase = i * 46;
+    var hIn = (m.ingresos / max) * h, hOut = (m.egresos / max) * h;
+    return '<rect x="' + xBase + '" y="' + (h - hIn).toFixed(1) + '" width="16" height="' + hIn.toFixed(1) + '" fill="var(--verde)" rx="2"/>' +
+      '<rect x="' + (xBase + 19) + '" y="' + (h - hOut).toFixed(1) + '" width="16" height="' + hOut.toFixed(1) + '" fill="var(--azul-oscuro)" rx="2"/>';
+  }).join('');
+  var etiquetas = meses.map(function (m, i) {
+    var mesTxt = new Date(m.ym + '-01T00:00:00').toLocaleDateString('es-CO', { month: 'short' });
+    return '<text x="' + (i * 46 + 17) + '" y="' + (h + 15) + '" font-size="10" fill="var(--muted)" text-anchor="middle">' + mesTxt + '</text>';
+  }).join('');
+  return '<svg viewBox="0 0 ' + w + ' ' + (h + 20) + '" style="width:100%; height:105px;">' + barras + etiquetas + '</svg>';
+}
+
+function tarjetaCarteraContable() {
+  var cargos = (typeof CACHE_CARGOS !== 'undefined') ? CACHE_CARGOS : [];
+  var pendientes = cargos.filter(function (c) { return Number(c.saldo || 0) > 0; });
+  var totalCartera = pendientes.reduce(function (s, c) { return s + Number(c.saldo || 0); }, 0);
+  return '<div class="panel"><h2>Cartera</h2><p style="font-size:12px; color:var(--muted); margin-top:-6px;">Acceso rápido a cuentas por cobrar reales (Pagos y cartera)</p>' +
+    '<div style="border-left:4px solid var(--rojo); background:var(--rojo-tint); border-radius:8px; padding:12px 14px; margin:12px 0;">' +
+    '<p style="font-size:11px; color:var(--muted); text-transform:uppercase; margin:0 0 4px;">Cuentas por cobrar</p>' +
+    '<p style="margin:0; font-size:20px; font-weight:800; color:var(--rojo);">' + formatearCOPContable(totalCartera) + '</p>' +
+    '<p style="margin:4px 0 0; font-size:11px; color:var(--muted);">' + pendientes.length + ' cargo(s) pendiente(s)</p>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-contab-ver-cartera" style="max-width:220px;">Ver cartera</button>' +
+    '</div>';
+}
+
+function tarjetaMetasContable(totalIngresosPeriodo, etiquetaMeta) {
+  var metas = cargarMetasContables();
+  var pct = metas.mensual > 0 ? Math.min(100, Math.round((totalIngresosPeriodo / metas.mensual) * 100)) : 0;
+  return '<div class="panel"><h2>Metas financieras</h2><p style="font-size:12px; color:var(--muted); margin-top:-6px;">Progreso de ingresos frente a la meta ' + etiquetaMeta + '</p>' +
+    '<div style="margin:14px 0;"><div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;"><span>Meta mensual</span><span>' + formatearCOPContable(totalIngresosPeriodo) + ' / ' + formatearCOPContable(metas.mensual) + '</span></div>' +
+    '<div style="background:var(--beige); border-radius:6px; height:8px; overflow:hidden;"><div style="width:' + pct + '%; height:100%; background:var(--naranja);"></div></div>' +
+    (metas.mensual === 0 ? '<p style="font-size:12px; color:var(--muted); margin-top:6px;">Definí una meta mensual para ver el progreso.</p>' : '') +
+    '</div>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Meta mensual (COP)</label><input id="meta-mensual-contab" type="number" min="0" value="' + (metas.mensual || '') + '" /></div>' +
+    '<div class="campo"><label>Meta anual (COP)</label><input id="meta-anual-contab" type="number" min="0" value="' + (metas.anual || '') + '" /></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-guardar-metas-contab" style="max-width:200px;">Guardar metas</button>' +
+    '</div>';
+}
+
 function panelResumenGeneral() {
   var ingresos = cargarIngresos(), gastos = cargarGastos(), compras = cargarCompras(), nomina = cargarNomina();
   var totalIngresos = ingresos.reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
@@ -4785,6 +5007,11 @@ function panelResumenGeneral() {
   ).sort(function (a, b) { return (b.fecha || '').localeCompare(a.fecha || ''); }).slice(0, 8);
 
   var pctIngreso = (totalIngresos + egresosTotal) > 0 ? (totalIngresos / (totalIngresos + egresosTotal)) * 100 : 0;
+  var indicadores = calcularIndicadoresContable(totalIngresos, egresosTotal, balance, ingresos.length, totalNomina, null);
+  var efectivoBanco = efectivoYBancoContable(ingresos, gastos, compras, nomina);
+  var tendencia = ultimosMesesContable(ingresos, gastos, compras, nomina, 6);
+  var mesActualYm = new Date().toISOString().slice(0, 7);
+  var ingresosMesActual = ingresos.filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === mesActualYm; }).reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
 
   return '' +
     '<div class="kpi-grid-contab">' +
@@ -4794,13 +5021,19 @@ function panelResumenGeneral() {
       tarjetaKPIModerna('Compras + nómina', totalCompras + totalNomina, 'warn', '🛒', 'Compras: ' + formatearCOPContable(totalCompras)) +
       tarjetaKPIModerna('Pendiente por pagar', totalPendiente, 'neu', '⏳', 'Gastos, compras y nómina') +
     '</div>' +
-    '<div class="dash-grid-3" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:18px;">' +
+    '<div class="dash-grid-3" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;">' +
+      '<div class="chart-card-contab"><h3>Tendencia mensual</h3><p class="sub">Ingresos vs. egresos totales — últimos 6 meses</p>' +
+      chartBarrasTendenciaContable(tendencia) +
+      '<div class="legend-row-contab"><span class="li"><span class="sw" style="background:var(--verde);"></span>Ingresos</span><span class="li"><span class="sw" style="background:var(--azul-oscuro);"></span>Egresos</span></div>' +
+      '</div>' +
       '<div class="chart-card-contab"><h3>Ingresos vs. egresos</h3><p class="sub">Participación histórica desde el inicio</p>' +
       donutProContab(pctIngreso) +
       '<div class="legend-row-contab">' +
         '<span class="li"><span class="sw" style="background:var(--verde);"></span>Ingresos · ' + formatearCOPContable(totalIngresos) + '</span>' +
         '<span class="li"><span class="sw" style="background:var(--linea);"></span>Egresos · ' + formatearCOPContable(egresosTotal) + '</span>' +
       '</div></div>' +
+    '</div>' +
+    '<div class="dash-grid-3" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;">' +
       '<div class="chart-card-contab"><h3>Ingresos por categoría</h3><p class="sub">Top categorías con más movimiento</p>' +
       (catIngreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin datos aún.</p>' :
        catIngreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxIn, 'var(--verde)'); }).join('')) +
@@ -4809,6 +5042,12 @@ function panelResumenGeneral() {
       (catEgreso.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Sin datos aún.</p>' :
        catEgreso.map(function (e) { return barraCategoriaContable(e[0], e[1], maxOut, 'var(--rojo)'); }).join('')) +
       '</div>' +
+    '</div>' +
+    filaIndicadoresContable(indicadores) +
+    filaEfectivoBancoContable(efectivoBanco, '(histórico)') +
+    '<div class="dash-grid-3" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:18px 0;">' +
+      tarjetaCarteraContable() +
+      tarjetaMetasContable(ingresosMesActual, '(mes en curso)') +
     '</div>' +
     '<div class="panel"><h2>Últimos movimientos</h2>' + tablaMovimientosContable(movimientos) + '</div>' +
     '<p style="font-size:11px; color:var(--muted);">Resumen financiero visible solo para Administración — la Secretaría puede registrar movimientos pero no ve estos totales.</p>';
@@ -4861,6 +5100,20 @@ function panelBalanceMensual() {
   var egresosMes = totalGastos + totalCompras + totalNomina;
   var pctIngresoMes = (totalIngresos + egresosMes) > 0 ? (totalIngresos / (totalIngresos + egresosMes)) * 100 : 0;
 
+  // Mes anterior — solo para la "variación vs. mes anterior" del indicador.
+  var partesYm = ym.split('-'); var ymAnteriorDate = new Date(Number(partesYm[0]), Number(partesYm[1]) - 2, 1);
+  var ymAnterior = ymAnteriorDate.getFullYear() + '-' + String(ymAnteriorDate.getMonth() + 1).padStart(2, '0');
+  var ingresosAnt = cargarIngresos().filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ymAnterior; }).reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var gastosAnt = cargarGastos().filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ymAnterior; }).reduce(function (s, r) { return s + Number(r.valor || 0); }, 0);
+  var comprasAnt = cargarCompras().filter(function (r) { return r.fecha && r.fecha.slice(0, 7) === ymAnterior; }).reduce(function (s, r) { return s + Number(r.valorTotal || 0); }, 0);
+  var nominaAnt = cargarNomina().filter(function (r) { return r.mes === ymAnterior; }).reduce(function (s, r) { return s + Number(r.neto || 0); }, 0);
+  var balanceAnterior = ingresosAnt - (gastosAnt + comprasAnt + nominaAnt);
+
+  var indicadores = calcularIndicadoresContable(totalIngresos, egresosMes, balanceMes, ingresos.length, totalNomina, balanceAnterior);
+  var efectivoBanco = efectivoYBancoContable(ingresos, gastos, compras, nomina);
+  var movimientosOrdenPorFecha = movimientos.filter(function (m) { return m.tipo === 'in'; });
+  var movimientosEgresoPorFecha = movimientos.filter(function (m) { return m.tipo === 'out'; });
+
   return '' +
     selector +
     '<p style="font-size:12px; color:var(--muted); margin:-10px 0 16px;">Mostrando el balance financiero de ' + ym + '.</p>' +
@@ -4871,6 +5124,16 @@ function panelBalanceMensual() {
       tarjetaKPIModerna('Compras del mes', totalCompras, 'warn', '🛒', compras.length + ' registro(s)') +
       tarjetaKPIModerna('Nómina del mes', totalNomina, 'neu', '👥', nomina.length + ' registro(s)') +
     '</div>' +
+    filaEfectivoBancoContable(efectivoBanco, 'del mes seleccionado') +
+    '<div class="dash-grid-3" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:18px 0;">' +
+      '<div class="chart-card-contab"><h3>Ingresos — acumulado del mes</h3><p class="sub">Curva de acumulación diaria (día a día)</p>' +
+      chartAreaAcumuladoContable(movimientosOrdenPorFecha, ym, 'var(--verde)') +
+      '</div>' +
+      '<div class="chart-card-contab"><h3>Egresos — acumulado del mes</h3><p class="sub">Curva de acumulación diaria (día a día)</p>' +
+      chartAreaAcumuladoContable(movimientosEgresoPorFecha, ym, 'var(--azul-oscuro)') +
+      '</div>' +
+    '</div>' +
+    filaIndicadoresContable(indicadores) +
     '<div class="dash-grid-3" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:18px;">' +
       '<div class="chart-card-contab"><h3>Ingresos vs. egresos</h3><p class="sub">Participación del mes</p>' +
       donutProContab(pctIngresoMes) +
@@ -4919,6 +5182,10 @@ function renderContabilidad(sesion) {
 }
 
 function activarLogicaContabilidad() {
+  var REFRESCAR_CONTAB = { ingreso: refrescarCacheContabIngresos, gasto: refrescarCacheContabGastos, compra: refrescarCacheContabCompras, nomina: refrescarCacheContabNomina };
+  var CARGAR_CONTAB = { ingreso: cargarIngresos, gasto: cargarGastos, compra: cargarCompras, nomina: cargarNomina };
+  var ELIMINAR_CONTAB = { ingreso: eliminarIngresoBackend, gasto: eliminarGastoBackend, compra: eliminarCompraBackend, nomina: eliminarNominaBackend };
+
   document.querySelectorAll('.btn-editar-contable').forEach(function (btn) {
     btn.addEventListener('click', function () {
       contabEditando = { tipo: btn.getAttribute('data-tipo'), idx: Number(btn.getAttribute('data-idx')) };
@@ -4930,13 +5197,16 @@ function activarLogicaContabilidad() {
       var tipo = btn.getAttribute('data-tipo');
       var idx = Number(btn.getAttribute('data-idx'));
       if (!confirm('¿Eliminar este registro? Esta acción no se puede deshacer.')) return;
-      var cargar = { ingreso: cargarIngresos, gasto: cargarGastos, compra: cargarCompras, nomina: cargarNomina }[tipo];
-      var guardar = { ingreso: guardarIngresos, gasto: guardarGastos, compra: guardarCompras, nomina: guardarNomina }[tipo];
-      var lista = cargar();
-      lista.splice(idx, 1);
-      guardar(lista);
-      if (contabEditando && contabEditando.tipo === tipo && contabEditando.idx === idx) contabEditando = null;
-      renderContenido('contabilidad');
+      var registro = CARGAR_CONTAB[tipo]()[idx];
+      if (!registro || !registro.id) { alert('No se pudo identificar el registro — recargá la página e intentá de nuevo.'); return; }
+      btn.disabled = true;
+      ELIMINAR_CONTAB[tipo](registro.id)
+        .then(function () { return REFRESCAR_CONTAB[tipo](); })
+        .then(function () {
+          if (contabEditando && contabEditando.tipo === tipo && contabEditando.idx === idx) contabEditando = null;
+          renderContenido('contabilidad');
+        })
+        .catch(function (err) { alert('No se pudo eliminar el registro: ' + err.message); btn.disabled = false; });
     });
   });
   var btnCancelarEdicion = document.getElementById('btn-cancelar-edicion-contable');
@@ -4953,7 +5223,6 @@ function activarLogicaContabilidad() {
       var valor = Number(document.getElementById('ing-valor').value) || 0;
       var concepto = document.getElementById('ing-concepto').value.trim();
       if (!concepto || !valor) { alert('Concepto y valor son obligatorios.'); return; }
-      var lista = cargarIngresos();
       var registro = {
         fecha: document.getElementById('ing-fecha').value,
         concepto: concepto,
@@ -4964,11 +5233,17 @@ function activarLogicaContabilidad() {
         estado: document.getElementById('ing-estado').value,
         valor: valor
       };
-      if (contabEditando && contabEditando.tipo === 'ingreso') { lista[contabEditando.idx] = registro; contabEditando = null; }
-      else lista.push(registro);
-      guardarIngresos(lista);
-      document.getElementById('msj-ingreso-creado').style.display = 'block';
-      setTimeout(function () { renderContenido('contabilidad'); }, 500);
+      btnIngreso.disabled = true;
+      var promesa = (contabEditando && contabEditando.tipo === 'ingreso')
+        ? editarIngresoBackend(cargarIngresos()[contabEditando.idx].id, registro)
+        : crearIngresoBackend(registro);
+      promesa
+        .then(function () { contabEditando = null; return refrescarCacheContabIngresos(); })
+        .then(function () {
+          document.getElementById('msj-ingreso-creado').style.display = 'block';
+          setTimeout(function () { renderContenido('contabilidad'); }, 500);
+        })
+        .catch(function (err) { alert('No se pudo guardar el ingreso: ' + err.message); btnIngreso.disabled = false; });
     });
   }
 
@@ -4978,7 +5253,6 @@ function activarLogicaContabilidad() {
       var valor = Number(document.getElementById('gas-valor').value) || 0;
       var concepto = document.getElementById('gas-concepto').value.trim();
       if (!concepto || !valor) { alert('Concepto y valor son obligatorios.'); return; }
-      var lista = cargarGastos();
       var registro = {
         fecha: document.getElementById('gas-fecha').value,
         concepto: concepto,
@@ -4988,11 +5262,17 @@ function activarLogicaContabilidad() {
         estado: document.getElementById('gas-estado').value,
         valor: valor
       };
-      if (contabEditando && contabEditando.tipo === 'gasto') { lista[contabEditando.idx] = registro; contabEditando = null; }
-      else lista.push(registro);
-      guardarGastos(lista);
-      document.getElementById('msj-gasto-creado').style.display = 'block';
-      setTimeout(function () { renderContenido('contabilidad'); }, 500);
+      btnGasto.disabled = true;
+      var promesa = (contabEditando && contabEditando.tipo === 'gasto')
+        ? editarGastoBackend(cargarGastos()[contabEditando.idx].id, registro)
+        : crearGastoBackend(registro);
+      promesa
+        .then(function () { contabEditando = null; return refrescarCacheContabGastos(); })
+        .then(function () {
+          document.getElementById('msj-gasto-creado').style.display = 'block';
+          setTimeout(function () { renderContenido('contabilidad'); }, 500);
+        })
+        .catch(function (err) { alert('No se pudo guardar el gasto: ' + err.message); btnGasto.disabled = false; });
     });
   }
 
@@ -5003,7 +5283,6 @@ function activarLogicaContabilidad() {
       var cantidad = Number(document.getElementById('com-cantidad').value) || 0;
       var valorUnit = Number(document.getElementById('com-valor-unit').value) || 0;
       if (!articulo || !cantidad || !valorUnit) { alert('Artículo, cantidad y valor unitario son obligatorios.'); return; }
-      var lista = cargarCompras();
       var registro = {
         fecha: document.getElementById('com-fecha').value,
         articulo: articulo,
@@ -5015,11 +5294,17 @@ function activarLogicaContabilidad() {
         metodo: document.getElementById('com-metodo').value,
         estado: document.getElementById('com-estado').value
       };
-      if (contabEditando && contabEditando.tipo === 'compra') { lista[contabEditando.idx] = registro; contabEditando = null; }
-      else lista.push(registro);
-      guardarCompras(lista);
-      document.getElementById('msj-compra-creada').style.display = 'block';
-      setTimeout(function () { renderContenido('contabilidad'); }, 500);
+      btnCompra.disabled = true;
+      var promesa = (contabEditando && contabEditando.tipo === 'compra')
+        ? editarCompraBackend(cargarCompras()[contabEditando.idx].id, registro)
+        : crearCompraBackend(registro);
+      promesa
+        .then(function () { contabEditando = null; return refrescarCacheContabCompras(); })
+        .then(function () {
+          document.getElementById('msj-compra-creada').style.display = 'block';
+          setTimeout(function () { renderContenido('contabilidad'); }, 500);
+        })
+        .catch(function (err) { alert('No se pudo guardar la compra: ' + err.message); btnCompra.disabled = false; });
     });
   }
 
@@ -5033,7 +5318,6 @@ function activarLogicaContabilidad() {
       if (!horas || !tarifa) { alert('Horas y tarifa son obligatorias.'); return; }
       var basico = horas * tarifa;
       var neto = basico + bonos - descuentos;
-      var lista = cargarNomina();
       var registro = {
         mes: document.getElementById('nom-mes').value,
         empleado: document.getElementById('nom-empleado').value,
@@ -5047,11 +5331,30 @@ function activarLogicaContabilidad() {
         metodo: document.getElementById('nom-metodo').value,
         estado: document.getElementById('nom-estado').value
       };
-      if (contabEditando && contabEditando.tipo === 'nomina') { lista[contabEditando.idx] = registro; contabEditando = null; }
-      else lista.push(registro);
-      guardarNomina(lista);
-      document.getElementById('msj-nomina-creada').style.display = 'block';
-      setTimeout(function () { renderContenido('contabilidad'); }, 500);
+      btnNomina.disabled = true;
+      var promesa = (contabEditando && contabEditando.tipo === 'nomina')
+        ? editarNominaBackend(cargarNomina()[contabEditando.idx].id, registro)
+        : crearNominaBackend(registro);
+      promesa
+        .then(function () { contabEditando = null; return refrescarCacheContabNomina(); })
+        .then(function () {
+          document.getElementById('msj-nomina-creada').style.display = 'block';
+          setTimeout(function () { renderContenido('contabilidad'); }, 500);
+        })
+        .catch(function (err) { alert('No se pudo guardar la nómina: ' + err.message); btnNomina.disabled = false; });
+    });
+  }
+
+  var btnVerCartera = document.getElementById('btn-contab-ver-cartera');
+  if (btnVerCartera) btnVerCartera.addEventListener('click', function () { location.hash = '#pagos'; });
+
+  var btnGuardarMetas = document.getElementById('btn-guardar-metas-contab');
+  if (btnGuardarMetas) {
+    btnGuardarMetas.addEventListener('click', function () {
+      var mensual = Number(document.getElementById('meta-mensual-contab').value) || 0;
+      var anual = Number(document.getElementById('meta-anual-contab').value) || 0;
+      guardarMetasContables({ mensual: mensual, anual: anual });
+      renderContenido('contabilidad');
     });
   }
 }
@@ -5856,6 +6159,10 @@ function navegar() {
     .then(function () { return refrescarCacheClases(); })
     .then(function () { return refrescarCacheAsistencias(); })
     .then(function () { return refrescarCacheEventos(); })
+    .then(function () { return refrescarCacheContabIngresos(); })
+    .then(function () { return refrescarCacheContabGastos(); })
+    .then(function () { return refrescarCacheContabCompras(); })
+    .then(function () { return refrescarCacheContabNomina(); })
     .then(function () {
       // Si el usuario ya cambió de pantalla mientras se esperaba la
       // respuesta, no pisar lo que se está viendo ahora.
