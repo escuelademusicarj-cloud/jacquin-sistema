@@ -65,3 +65,39 @@ export async function acudientesDeAlumno(alumnoId) {
   );
   return rows;
 }
+
+/**
+ * Estudiantes cuyo cumpleaños (mes-día, sin importar el año) cae en alguno
+ * de los días dados. diasMD es un arreglo de strings 'MM-DD', por ejemplo
+ * ['08-24','08-25',...] — se arma así (no con un rango de fechas completo)
+ * para que funcione bien incluso si la semana cruza de diciembre a enero.
+ * Agregado 2026-08-20 para el reporte semanal de Cowork.
+ */
+export async function estudiantesConCumpleanosEnDias(diasMD) {
+  const { rows } = await pool.query(
+    `SELECT id, nombres, apellidos, fecha_nacimiento
+     FROM alumnos
+     WHERE fecha_nacimiento IS NOT NULL
+       AND TO_CHAR(fecha_nacimiento, 'MM-DD') = ANY($1::text[])
+     ORDER BY TO_CHAR(fecha_nacimiento, 'MM-DD')`,
+    [diasMD]
+  );
+  return rows;
+}
+
+/**
+ * Estudiantes cuyo cumpleaños cae en un mes dado (1=enero ... 12=diciembre),
+ * sin importar el año. Se usa para el reporte mensual de cumpleaños.
+ * Agregado 2026-08-20.
+ */
+export async function estudiantesConCumpleanosEnMes(mes) {
+  const { rows } = await pool.query(
+    `SELECT id, nombres, apellidos, fecha_nacimiento
+     FROM alumnos
+     WHERE fecha_nacimiento IS NOT NULL
+       AND EXTRACT(MONTH FROM fecha_nacimiento) = $1
+     ORDER BY EXTRACT(DAY FROM fecha_nacimiento)`,
+    [mes]
+  );
+  return rows;
+}
