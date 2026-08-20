@@ -1,17 +1,23 @@
 // backend/src/api/rutas/reportes.js
 //
 // Rutas NUEVAS, independientes de todo lo demás. No usan requiereAutenticacion
-// (login normal) sino requiereApiKeyReportes (header X-Reportes-Key) — pensadas
-// para que un proceso externo automatizado (Cowork) las consulte sin sesión.
+// (login normal) sino requiereApiKeyReportes (header X-Reportes-Key o ?key=...
+// en la URL) — pensadas para que un proceso externo automatizado (Cowork) las
+// consulte sin sesión.
 // Montar en index.js con: app.use('/api/reportes', rutasReportes);
 
 import { Router } from "express";
 import { requiereApiKeyReportes } from "../middlewares/autenticacionReportes.js";
-import { estudiantesConCumpleanosEnDias } from "../../persistencia/academico/repositorio.js";
+import { estudiantesConCumpleanosEnDias, estudiantesConCumpleanosEnMes } from "../../persistencia/academico/repositorio.js";
 import { pagosDeSemana, carteraPendiente } from "../../persistencia/pagos/repositorio.js";
 
 export const rutasReportes = Router();
 rutasReportes.use(requiereApiKeyReportes);
+
+const NOMBRES_MES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+];
 
 // Lunes a domingo de la semana que contiene "hoy" (hora del servidor).
 // Devuelve { inicio: 'YYYY-MM-DD', fin: 'YYYY-MM-DD', diasMD: ['MM-DD', ...] }
@@ -47,6 +53,22 @@ rutasReportes.get("/cumpleanos-semana", async (req, res, next) => {
     const estudiantes = await estudiantesConCumpleanosEnDias(semana.diasMD);
     res.json({
       semana: { inicio: semana.inicio, fin: semana.fin },
+      estudiantes: estudiantes.map((e) => ({
+        nombre: `${e.nombres} ${e.apellidos}`,
+        fechaNacimiento: e.fecha_nacimiento
+      }))
+    });
+  } catch (err) { next(err); }
+});
+
+// Cumpleaños de TODO el mes actual (no solo la semana). Agregado 2026-08-20.
+rutasReportes.get("/cumpleanos-mes", async (req, res, next) => {
+  try {
+    const hoy = new Date();
+    const mesNumero = hoy.getMonth() + 1; // 1-12
+    const estudiantes = await estudiantesConCumpleanosEnMes(mesNumero);
+    res.json({
+      mes: { numero: mesNumero, nombre: NOMBRES_MES[mesNumero - 1] },
       estudiantes: estudiantes.map((e) => ({
         nombre: `${e.nombres} ${e.apellidos}`,
         fechaNacimiento: e.fecha_nacimiento
