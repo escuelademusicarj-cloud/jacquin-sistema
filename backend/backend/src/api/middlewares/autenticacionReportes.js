@@ -6,13 +6,16 @@
 // administrador ni un token de sesión.
 //
 // La key se define como variable de entorno REPORTES_API_KEY en Vercel
-// (Project Settings → Environment Variables). Generarla una sola vez con,
-// por ejemplo: `openssl rand -hex 32` en tu terminal, y pegar el resultado
-// como valor de esa variable. No se sube al repo.
+// (Project Settings → Environment Variables).
+//
+// Acepta la key de DOS formas (lo que llegue primero, header o URL):
+//   1) Header "X-Reportes-Key" (para pruebas manuales con Postman, curl, etc.)
+//   2) Parámetro en la URL "?key=..." (para Cowork, que solo puede abrir
+//      una URL normal y no puede enviar headers personalizados)
 
 export function requiereApiKeyReportes(req, res, next) {
   const keyEsperada = process.env.REPORTES_API_KEY;
-  const keyRecibida = req.header("X-Reportes-Key");
+  const keyRecibida = req.header("X-Reportes-Key") || req.query.key;
 
   if (!keyEsperada) {
     // Falta configurar la variable de entorno en Vercel — no dejamos pasar
