@@ -1417,7 +1417,8 @@ function renderEstudiantes() {
     var programaTxto = a.programa + (a.programa2 ? ' + ' + a.programa2 : '');
     return '<tr><td>' + a.nombres + ' ' + a.apellidos + '</td><td>' + programaTxto + '</td>' +
       '<td><span class="chip-rol">' + ETIQUETA_ESTADO[a.estado] + '</span></td>' +
-      '<td>' + (a.acudiente || '—') + '</td><td>' + (a.profesor ? (profesoresDisponibles.find(function (p) { return p.email === a.profesor; }) || {}).nombre || a.profesor : '—') + '</td></tr>';
+      '<td>' + (a.acudiente || '—') + '</td><td>' + (a.profesor ? (profesoresDisponibles.find(function (p) { return p.email === a.profesor; }) || {}).nombre || a.profesor : '—') + '</td>' +
+      '<td><button class="btn-editar-estudiante" data-alumno-idx="' + i + '" style="font-size:12px; padding:6px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">Editar / Eliminar</button></td></tr>';
   }).join('');
 
   // Editor de matriculados: solo estudiantes que ya tienen registro Y
@@ -1432,7 +1433,7 @@ function renderEstudiantes() {
     return '<tr><td>' + o.a.nombres + ' ' + o.a.apellidos + '</td><td>' + o.a.programa + '</td>' +
       '<td>' + (ins ? ins.tipoPlanNombre : '—') + '</td>' +
       '<td><span class="chip-rol">' + ETIQUETA_ESTADO[o.a.estado] + '</span></td>' +
-      '<td><button class="btn-editar-matriculado" data-alumno-idx="' + o.i + '" style="font-size:12px; padding:6px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui);">Editar</button></td></tr>';
+      '<td><button class="btn-editar-estudiante" data-alumno-idx="' + o.i + '" style="font-size:12px; padding:6px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui);">Editar</button></td></tr>';
   }).join('');
 
   var htmlModalEditor = renderModalEditorEstudiante(profesoresDisponibles);
@@ -1493,7 +1494,7 @@ function renderEstudiantes() {
     '<div class="panel"><h2>Estudiantes (' + alumnos.length + ')</h2>' +
     (alumnos.length === 0
       ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay estudiantes registrados.</p>'
-      : '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Programa</th><th>Estado</th><th>Acudiente</th><th>Profesor</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+      : '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Programa</th><th>Estado</th><th>Acudiente</th><th>Profesor</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>' +
 
     '<div class="panel"><h2>Certificado de estudio</h2>' +
@@ -1544,7 +1545,7 @@ function renderModalEditorEstudiante(profesoresDisponibles) {
     '</select></div>' +
     '<div class="campo-moderno"><label>Profesor asignado</label><select id="ed-profesor">' +
     '<option value="">Sin asignar</option>' +
-    profesoresDisponibles.map(function (p) { return '<option value="' + p.email + '">' + p.nombre + '</option>'; }).join('') +
+    CACHE_PROFESORES.map(function (p) { return '<option value="' + p.id + '">' + p.nombre + '</option>'; }).join('') +
     '</select></div>' +
     '<div class="campo-moderno"><label>Teléfono de contacto</label><input id="ed-telefono" type="text" /></div>' +
     '<div class="campo-moderno"><label>Correo electrónico</label><input id="ed-correo" type="email" /></div>' +
@@ -1553,6 +1554,7 @@ function renderModalEditorEstudiante(profesoresDisponibles) {
     '<div class="campo-moderno"><label>Celular del acudiente</label><input id="ed-celular-acudiente" type="text" /></div>' +
     '<div class="campo-moderno"><label>Observaciones</label><input id="ed-obs" type="text" /></div>' +
     '</div>' +
+    '<div id="ed-bloque-matricula">' +
     '<p style="font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; margin:16px 0 8px;">Datos de la matrícula</p>' +
     '<div class="grilla-moderna">' +
     '<div class="campo-moderno"><label>Tipo de plan</label><select id="ed-tipo-plan"></select></div>' +
@@ -1561,6 +1563,8 @@ function renderModalEditorEstudiante(profesoresDisponibles) {
     '<div class="campo-moderno"><label>Descuento (%)</label><input id="ed-descuento" type="number" min="0" max="100" /></div>' +
     '<div class="campo-moderno"><label>Fecha de inicio</label><input id="ed-fecha-inicio" type="date" /></div>' +
     '<div class="campo-moderno"><label>Estado (calculado)</label><input id="ed-estado-txt" type="text" readonly /></div>' +
+    '</div>' +
+    '<p style="font-size:11px; color:var(--muted); margin:6px 0 0;">Los datos de la matrícula (plan, descuento, fecha de inicio) todavía se guardan solo en este navegador — el backend real de Matrícula no tiene endpoint de edición todavía.</p>' +
     '</div>' +
     '</div>' +
     '<div style="padding:16px 26px 22px; border-top:1px solid #eee; flex-shrink:0;">' +
@@ -1961,16 +1965,16 @@ function activarLogicaEstudiantes(volverA) {
     });
   }
 
-  // ---- Editor de estudiantes matriculados ----
+  // ---- Editor de estudiantes (preinscritos y matriculados) ----
   var modalEditor = document.getElementById('modal-editar-estudiante');
   if (modalEditor) {
-    document.querySelectorAll('.btn-editar-matriculado').forEach(function (btn) {
+    document.querySelectorAll('.btn-editar-estudiante').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var idx = Number(btn.getAttribute('data-alumno-idx'));
         var alumno = cargarAlumnos()[idx];
+        if (!alumno) return;
         var inscripciones = cargarInscripciones().filter(function (x) { return x.alumnoIdx === idx; });
-        var ins = inscripciones[inscripciones.length - 1];
-        if (!alumno || !ins) return;
+        var ins = inscripciones[inscripciones.length - 1] || null;
 
         modalEditor.setAttribute('data-alumno-idx', idx);
         document.getElementById('ed-titulo').textContent = 'Editar — ' + alumno.nombres + ' ' + alumno.apellidos;
@@ -1988,26 +1992,46 @@ function activarLogicaEstudiantes(volverA) {
         document.getElementById('ed-celular-acudiente').value = alumno.celularAcudiente || '';
         document.getElementById('ed-obs').value = alumno.observaciones || '';
 
-        function formatearCOP(numero) { return '$ ' + Number(numero).toLocaleString('es-CO'); }
-        function repoblarTiposPlan() {
-          var selectTipo = document.getElementById('ed-tipo-plan');
-          var tipos = tiposPlanParaPrograma(alumno.programa);
-          selectTipo.innerHTML = tipos.map(function (t) { return '<option value="' + t.nombre + '">' + t.nombre + ' (' + t.horasSemana + 'h/sem)</option>'; }).join('');
-          selectTipo.value = ins.tipoPlanNombre;
-          if (selectTipo.value !== ins.tipoPlanNombre) selectTipo.selectedIndex = 0;
-          aplicarTipoEdicion();
+        var bloqueMatricula = document.getElementById('ed-bloque-matricula');
+        var btnEliminarEditor = document.getElementById('btn-eliminar-editor-estudiante');
+
+        if (ins) {
+          // Ya tiene una inscripción de Matrícula: se muestran esos datos y
+          // "Eliminar" pasa a ser "Retirar" (nunca se borra un matriculado,
+          // regla del sistema — el backend además anula sus cargos con
+          // saldo pendiente al retirarlo).
+          bloqueMatricula.style.display = '';
+          function formatearCOP(numero) { return '$ ' + Number(numero).toLocaleString('es-CO'); }
+          function repoblarTiposPlan() {
+            var selectTipo = document.getElementById('ed-tipo-plan');
+            var tipos = tiposPlanParaPrograma(alumno.programa);
+            selectTipo.innerHTML = tipos.map(function (t) { return '<option value="' + t.nombre + '">' + t.nombre + ' (' + t.horasSemana + 'h/sem)</option>'; }).join('');
+            selectTipo.value = ins.tipoPlanNombre;
+            if (selectTipo.value !== ins.tipoPlanNombre) selectTipo.selectedIndex = 0;
+            aplicarTipoEdicion();
+          }
+          function aplicarTipoEdicion() {
+            var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === document.getElementById('ed-tipo-plan').value; });
+            if (!tipo) return;
+            document.getElementById('ed-horas').value = tipo.horasSemana + ' h/semana';
+            document.getElementById('ed-valor').value = formatearCOP(tipo.valor);
+          }
+          repoblarTiposPlan();
+          document.getElementById('ed-tipo-plan').onchange = aplicarTipoEdicion;
+          document.getElementById('ed-descuento').value = ins.descuentoPorcentaje || 0;
+          document.getElementById('ed-fecha-inicio').value = ins.fechaInicio || '';
+          document.getElementById('ed-estado-txt').value = ETIQUETA_ESTADO[alumno.estado] || alumno.estado;
+
+          btnEliminarEditor.textContent = 'Retirar estudiante';
+          btnEliminarEditor.setAttribute('data-modo', 'retirar');
+        } else {
+          // Todavía sin matrícula (preinscrito / pendiente de matrícula):
+          // no hay nada de "Datos de la matrícula" que mostrar, y sí se
+          // puede borrar de verdad — no hay historial que proteger todavía.
+          bloqueMatricula.style.display = 'none';
+          btnEliminarEditor.textContent = 'Eliminar estudiante (borrado real)';
+          btnEliminarEditor.setAttribute('data-modo', 'eliminar');
         }
-        function aplicarTipoEdicion() {
-          var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === document.getElementById('ed-tipo-plan').value; });
-          if (!tipo) return;
-          document.getElementById('ed-horas').value = tipo.horasSemana + ' h/semana';
-          document.getElementById('ed-valor').value = formatearCOP(tipo.valor);
-        }
-        repoblarTiposPlan();
-        document.getElementById('ed-tipo-plan').addEventListener('change', aplicarTipoEdicion);
-        document.getElementById('ed-descuento').value = ins.descuentoPorcentaje || 0;
-        document.getElementById('ed-fecha-inicio').value = ins.fechaInicio || '';
-        document.getElementById('ed-estado-txt').value = ETIQUETA_ESTADO[alumno.estado] || alumno.estado;
 
         modalEditor.style.display = 'flex';
       });
@@ -2016,31 +2040,50 @@ function activarLogicaEstudiantes(volverA) {
     var btnCancelarEditor = document.getElementById('btn-cancelar-editor-estudiante');
     if (btnCancelarEditor) btnCancelarEditor.addEventListener('click', function () { modalEditor.style.display = 'none'; });
 
-    // "Eliminar" nunca borra el registro (regla del sistema: el historial de
-    // un estudiante es inmutable) — pasa su estado a "Retirado", que ya
-    // existe como estado válido y queda visible en el historial.
     var btnEliminarEditor = document.getElementById('btn-eliminar-editor-estudiante');
     if (btnEliminarEditor) {
       btnEliminarEditor.addEventListener('click', function () {
         var idx = Number(modalEditor.getAttribute('data-alumno-idx'));
-        var alumnos = cargarAlumnos();
-        var alumno = alumnos[idx];
+        var alumno = cargarAlumnos()[idx];
         if (!alumno) return;
-        if (!confirm('¿Retirar a ' + alumno.nombres + ' ' + alumno.apellidos + ' de la academia? No se borra su historial — queda marcado como "Retirado".')) return;
-        btnEliminarEditor.disabled = true;
-        apiFetch('/api/academico/estudiantes/' + alumno.id + '/estado', {
-          method: 'PATCH',
-          body: JSON.stringify({ estado: 'retirado', motivo: 'Retirado desde la ficha del estudiante' })
-        })
-          .then(function () { return refrescarCacheAlumnos(); })
-          .then(function () {
-            modalEditor.style.display = 'none';
-            renderContenido('estudiantes');
+        var modo = btnEliminarEditor.getAttribute('data-modo');
+
+        if (modo === 'retirar') {
+          // Nunca se borra el registro de un matriculado — pasa a
+          // "Retirado" y el backend anula automáticamente cualquier cargo
+          // (mensualidad, etc.) con saldo pendiente que tuviera.
+          if (!confirm('¿Retirar a ' + alumno.nombres + ' ' + alumno.apellidos + ' de la academia? No se borra su historial — queda marcado como "Retirado", y cualquier cargo pendiente que tenga se anula automáticamente.')) return;
+          btnEliminarEditor.disabled = true;
+          apiFetch('/api/academico/estudiantes/' + alumno.id + '/estado', {
+            method: 'PATCH',
+            body: JSON.stringify({ estado: 'retirado', motivo: 'Retirado desde la ficha del estudiante' })
           })
-          .catch(function (err) {
-            alert('No se pudo retirar al estudiante: ' + err.message);
-            btnEliminarEditor.disabled = false;
-          });
+            .then(function () { return refrescarCacheAlumnos(); })
+            .then(function () {
+              modalEditor.style.display = 'none';
+              renderContenido('estudiantes');
+            })
+            .catch(function (err) {
+              alert('No se pudo retirar al estudiante: ' + err.message);
+              btnEliminarEditor.disabled = false;
+            });
+        } else {
+          // Todavía no tiene matrícula: se puede borrar de verdad. El
+          // backend igual lo rechaza (409) si en el medio ya se le creó
+          // una inscripción, como red de seguridad extra.
+          if (!confirm('¿Borrar definitivamente a ' + alumno.nombres + ' ' + alumno.apellidos + '? Esta acción no se puede deshacer.')) return;
+          btnEliminarEditor.disabled = true;
+          apiFetch('/api/academico/estudiantes/' + alumno.id, { method: 'DELETE' })
+            .then(function () { return refrescarCacheAlumnos(); })
+            .then(function () {
+              modalEditor.style.display = 'none';
+              renderContenido('estudiantes');
+            })
+            .catch(function (err) {
+              alert('No se pudo borrar al estudiante: ' + err.message);
+              btnEliminarEditor.disabled = false;
+            });
+        }
       });
     }
 
@@ -2048,42 +2091,54 @@ function activarLogicaEstudiantes(volverA) {
     if (btnGuardarEditor) {
       btnGuardarEditor.addEventListener('click', function () {
         var idx = Number(modalEditor.getAttribute('data-alumno-idx'));
+        var alumno = cargarAlumnos()[idx];
+        if (!alumno) return;
         var nombres = document.getElementById('ed-nombres').value.trim();
         var apellidos = document.getElementById('ed-apellidos').value.trim();
         if (!nombres || !apellidos) { alert('Nombres y apellidos son obligatorios.'); return; }
 
-        var alumnos = cargarAlumnos();
-        var alumno = alumnos[idx];
-        alumno.nombres = nombres;
-        alumno.apellidos = apellidos;
-        alumno.documento = document.getElementById('ed-documento').value.trim();
-        alumno.nacimiento = document.getElementById('ed-nacimiento').value;
-        alumno.programa = document.getElementById('ed-programa').value;
-        alumno.programa2 = document.getElementById('ed-programa2').value;
-        alumno.profesor = document.getElementById('ed-profesor').value;
-        alumno.telefono = document.getElementById('ed-telefono').value.trim();
-        alumno.correo = document.getElementById('ed-correo').value.trim();
-        alumno.direccion = document.getElementById('ed-direccion').value.trim();
-        alumno.acudiente = document.getElementById('ed-acudiente').value.trim();
-        alumno.celularAcudiente = document.getElementById('ed-celular-acudiente').value.trim();
-        alumno.observaciones = document.getElementById('ed-obs').value.trim();
-        guardarAlumnos(alumnos);
+        // programa2 / dirección / celular del acudiente todavía no los
+        // recibe el backend real (mismo gap que "Registrar estudiante") —
+        // se siguen mostrando en el formulario pero no viajan en este PUT.
+        var payload = {
+          nombres: nombres,
+          apellidos: apellidos,
+          documento: document.getElementById('ed-documento').value.trim() || null,
+          fechaNacimiento: document.getElementById('ed-nacimiento').value || null,
+          telefonoContacto: document.getElementById('ed-telefono').value.trim() || null,
+          emailContacto: document.getElementById('ed-correo').value.trim() || null,
+          programaPrincipal: document.getElementById('ed-programa').value,
+          profesorId: document.getElementById('ed-profesor').value || null,
+          observaciones: document.getElementById('ed-obs').value.trim() || null
+        };
 
-        var inscripciones = cargarInscripciones();
-        var indicesIns = inscripciones.map(function (x, i) { return x.alumnoIdx === idx ? i : -1; }).filter(function (i) { return i !== -1; });
-        var ultimoIdx = indicesIns[indicesIns.length - 1];
-        if (ultimoIdx !== undefined) {
-          var tipoPlanNombre = document.getElementById('ed-tipo-plan').value;
-          var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === tipoPlanNombre; });
-          inscripciones[ultimoIdx].tipoPlanNombre = tipoPlanNombre;
-          if (tipo) { inscripciones[ultimoIdx].horas = tipo.horasSemana; inscripciones[ultimoIdx].valor = tipo.valor; }
-          inscripciones[ultimoIdx].descuentoPorcentaje = Number(document.getElementById('ed-descuento').value || 0);
-          inscripciones[ultimoIdx].fechaInicio = document.getElementById('ed-fecha-inicio').value;
-          guardarInscripciones(inscripciones);
-        }
+        btnGuardarEditor.disabled = true;
+        apiFetch('/api/academico/estudiantes/' + alumno.id, { method: 'PUT', body: JSON.stringify(payload) })
+          .then(function () { return refrescarCacheAlumnos(); })
+          .then(function () {
+            // Los datos de la matrícula (plan/descuento/fecha de inicio)
+            // siguen siendo locales — no hay endpoint de edición de
+            // inscripciones todavía, se guardan solo en este navegador.
+            var inscripciones = cargarInscripciones();
+            var indicesIns = inscripciones.map(function (x, i) { return x.alumnoIdx === idx ? i : -1; }).filter(function (i) { return i !== -1; });
+            var ultimoIdx = indicesIns[indicesIns.length - 1];
+            if (ultimoIdx !== undefined) {
+              var tipoPlanNombre = document.getElementById('ed-tipo-plan').value;
+              var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === tipoPlanNombre; });
+              inscripciones[ultimoIdx].tipoPlanNombre = tipoPlanNombre;
+              if (tipo) { inscripciones[ultimoIdx].horas = tipo.horasSemana; inscripciones[ultimoIdx].valor = tipo.valor; }
+              inscripciones[ultimoIdx].descuentoPorcentaje = Number(document.getElementById('ed-descuento').value || 0);
+              inscripciones[ultimoIdx].fechaInicio = document.getElementById('ed-fecha-inicio').value;
+              guardarInscripciones(inscripciones);
+            }
 
-        modalEditor.style.display = 'none';
-        renderContenido('estudiantes');
+            modalEditor.style.display = 'none';
+            renderContenido('estudiantes');
+          })
+          .catch(function (err) {
+            alert('No se pudo guardar los cambios: ' + err.message);
+            btnGuardarEditor.disabled = false;
+          });
       });
     }
   }
