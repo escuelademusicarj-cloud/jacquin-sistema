@@ -68,3 +68,27 @@ export async function carteraPendiente() {
   );
   return rows;
 }
+
+/**
+ * Pagos reales registrados dentro de una ventana de fechas (inclusive),
+ * con el nombre del alumno y del concepto ya resueltos. fechaInicio y
+ * fechaFin van en formato 'YYYY-MM-DD'.
+ * Fuente: tabla `pagos` real (cargo_id, valor, fecha_pago, medio_pago),
+ * unida con `cargos` (para llegar al alumno) y `conceptos_pago`.
+ * Agregado 2026-08-20 para el reporte semanal de Cowork.
+ */
+export async function pagosDeSemana(fechaInicio, fechaFin) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.valor, p.fecha_pago, p.medio_pago,
+            a.id AS alumno_id, a.nombres, a.apellidos,
+            cp.nombre AS concepto_nombre
+     FROM pagos p
+     JOIN cargos c ON c.id = p.cargo_id
+     JOIN alumnos a ON a.id = c.alumno_id
+     JOIN conceptos_pago cp ON cp.id = c.concepto_id
+     WHERE p.fecha_pago >= $1 AND p.fecha_pago <= $2
+     ORDER BY p.fecha_pago ASC`,
+    [fechaInicio, fechaFin]
+  );
+  return rows;
+}
