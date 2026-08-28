@@ -1137,17 +1137,32 @@ function sesionActual() {
   return raw ? JSON.parse(raw) : null;
 }
 
-function cargarPermisosOverride() {
-  var g = localStorage.getItem('jacquin_demo_permisos_override');
-  return g ? JSON.parse(g) : {};
+// Permisos por rol — backend real (tabla permisos_modulo_rol), ya no
+// localStorage. null = todavía no se pidió al backend (recién logueado);
+// {} u objeto con roles = ya se pidió. Mientras es null se usa el valor
+// por defecto del sistema (VISIBILIDAD_ROL) para no dejar la pantalla sin
+// nav mientras carga.
+var CACHE_PERMISOS = null;
+async function refrescarCachePermisos() {
+  try {
+    var filas = await apiFetch('/api/permisos/modulo-rol', { method: 'GET' }) || [];
+    var mapa = {};
+    filas.forEach(function (f) {
+      var rol = f.rol;
+      if (!mapa[rol]) mapa[rol] = [];
+      mapa[rol].push(f.modulo_clave);
+    });
+    CACHE_PERMISOS = mapa;
+  } catch (err) {
+    console.error('Error refrescando permisos por rol:', err);
+  }
 }
-function guardarPermisosOverride(obj) { localStorage.setItem('jacquin_demo_permisos_override', JSON.stringify(obj)); }
 
-// Si Administración editó los permisos desde "Usuarios y permisos", esa
-// personalización manda; si no, se usa la visibilidad por defecto del sistema.
+// Si el backend ya trajo permisos guardados para ese rol, esos mandan; si
+// el rol todavía no tiene ninguna fila en la tabla (o no se pidió todavía),
+// se usa la visibilidad por defecto del sistema.
 function modulosVisibles(rol) {
-  var overrides = cargarPermisosOverride();
-  if (overrides[rol]) return overrides[rol];
+  if (CACHE_PERMISOS && CACHE_PERMISOS.hasOwnProperty(rol)) return CACHE_PERMISOS[rol];
   return VISIBILIDAD_ROL[rol] || [];
 }
 
@@ -6128,14 +6143,14 @@ function activarLogicaComunicacion() {
 
 // ==================== USUARIOS Y PERMISOS ====================
 function renderUsuariosPermisos() {
-  var overrides = cargarPermisosOverride();
   var usuarios = cargarUsuarios();
+  var cargandoPermisos = CACHE_PERMISOS === null;
 
   var encabezadoRoles = ROLES_SISTEMA.map(function (rol) { return '<th style="text-align:center;">' + ETIQUETA_ROL_MENSAJE[rol] + '</th>'; }).join('');
 
   var filasMatriz = MODULOS.map(function (m) {
     var celdas = ROLES_SISTEMA.map(function (rol) {
-      var visibles = overrides[rol] || VISIBILIDAD_ROL[rol] || [];
+      var visibles = modulosVisibles(rol);
       var marcado = visibles.indexOf(m.key) !== -1;
       var esAdmin = rol === 'ADMINISTRADOR'; // Administración siempre tiene todo, para que nadie se bloquee el propio acceso.
       return '<td style="text-align:center;"><input type="checkbox" class="chk-permiso" data-rol="' + rol + '" data-modulo="' + m.key + '"' + (marcado ? ' checked' : '') + (esAdmin ? ' disabled' : '') + ' /></td>';
@@ -6147,10 +6162,12 @@ function renderUsuariosPermisos() {
     '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Usuarios y permisos</h1>' +
     '<div class="panel"><h2>Permisos por rol</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Marcá o desmarcá qué módulos puede ver cada rol y guardá los cambios. Administración siempre tiene acceso completo, para que nunca quede nadie bloqueado del todo.</p>' +
+    (cargandoPermisos ? '<p style="font-size:12px; color:var(--muted);">Cargando permisos guardados…</p>' : '') +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Módulo</th>' + encabezadoRoles + '</tr></thead><tbody>' + filasMatriz + '</tbody></table></div>' +
-    '<button class="btn-primario" id="btn-guardar-permisos" style="max-width:220px; margin-top:14px;">Guardar permisos</button>' +
-    '<button id="btn-restablecer-permisos" style="max-width:260px; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer; text-decoration:underline; display:block;">Restablecer valores por defecto</button>' +
+    '<button class="btn-primario" id="btn-guardar-permisos" style="max-width:220px; margin-top:14px;"' + (cargandoPermisos ? ' disabled' : '') + '>Guardar permisos</button>' +
+    '<button id="btn-restablecer-permisos" style="max-width:260px; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer; text-decoration:underline; display:block;"' + (cargandoPermisos ? ' disabled' : '') + '>Restablecer valores por defecto</button>' +
     '<p id="msj-permisos-guardados" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Permisos actualizados.</p>' +
+    '<p id="msj-permisos-error" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
     '</div>' +
 
     '<div class="panel"><h2>Usuarios y roles (' + usuarios.length + ')</h2>' +
@@ -6161,30 +6178,71 @@ function renderUsuariosPermisos() {
     '</div>';
 }
 
+// Guarda, rol por rol, la lista completa de módulos marcados contra el
+// backend real (PUT /api/permisos/modulo-rol/:rolId, reemplaza todo lo que
+// tenía ese rol). Administración se salta siempre: sus checkboxes están
+// deshabilitados y el backend igual la trata como acceso total.
+function guardarModulosDeRol(rol, modulos) {
+  var rolReal = CACHE_ROLES.find(function (r) { return r.nombre === rol; });
+  if (!rolReal) return Promise.reject(new Error('No se encontró el rol "' + rol + '" en el sistema.'));
+  return apiFetch('/api/permisos/modulo-rol/' + rolReal.id, {
+    method: 'PUT',
+    body: JSON.stringify({ modulos: modulos })
+  });
+}
+
 function activarLogicaUsuariosPermisos() {
   var btnGuardar = document.getElementById('btn-guardar-permisos');
   if (btnGuardar) {
     btnGuardar.addEventListener('click', function () {
-      var overrides = cargarPermisosOverride();
-      ROLES_SISTEMA.forEach(function (rol) {
-        if (rol === 'ADMINISTRADOR') return;
-        var marcados = Array.prototype.map.call(
+      var msjError = document.getElementById('msj-permisos-error');
+      msjError.style.display = 'none';
+      var rolesAGuardar = ROLES_SISTEMA.filter(function (rol) { return rol !== 'ADMINISTRADOR'; });
+      var cambios = {};
+      rolesAGuardar.forEach(function (rol) {
+        cambios[rol] = Array.prototype.map.call(
           document.querySelectorAll('.chk-permiso[data-rol="' + rol + '"]:checked'),
           function (c) { return c.getAttribute('data-modulo'); }
         );
-        overrides[rol] = marcados;
       });
-      guardarPermisosOverride(overrides);
-      document.getElementById('msj-permisos-guardados').style.display = 'block';
-      setTimeout(function () { renderContenido('usuarios-permisos'); }, 700);
+
+      btnGuardar.disabled = true;
+      Promise.all(rolesAGuardar.map(function (rol) { return guardarModulosDeRol(rol, cambios[rol]); }))
+        .then(function () { return refrescarCachePermisos(); })
+        .then(function () {
+          renderNavModulos(location.hash.replace('#', '') || 'dashboard');
+          renderContenido('usuarios-permisos');
+          setTimeout(function () {
+            var msj = document.getElementById('msj-permisos-guardados');
+            if (msj) msj.style.display = 'block';
+          }, 50);
+        })
+        .catch(function (err) {
+          btnGuardar.disabled = false;
+          msjError.textContent = 'No se pudieron guardar los permisos: ' + (err.message || 'error de conexión.');
+          msjError.style.display = 'block';
+        });
     });
   }
   var btnRestablecer = document.getElementById('btn-restablecer-permisos');
   if (btnRestablecer) {
     btnRestablecer.addEventListener('click', function () {
       if (!confirm('¿Restablecer los permisos de todos los roles a los valores originales del sistema?')) return;
-      guardarPermisosOverride({});
-      renderContenido('usuarios-permisos');
+      var msjError = document.getElementById('msj-permisos-error');
+      msjError.style.display = 'none';
+      var rolesAGuardar = ROLES_SISTEMA.filter(function (rol) { return rol !== 'ADMINISTRADOR'; });
+      btnRestablecer.disabled = true;
+      Promise.all(rolesAGuardar.map(function (rol) { return guardarModulosDeRol(rol, VISIBILIDAD_ROL[rol] || []); }))
+        .then(function () { return refrescarCachePermisos(); })
+        .then(function () {
+          renderNavModulos(location.hash.replace('#', '') || 'dashboard');
+          renderContenido('usuarios-permisos');
+        })
+        .catch(function (err) {
+          btnRestablecer.disabled = false;
+          msjError.textContent = 'No se pudo restablecer: ' + (err.message || 'error de conexión.');
+          msjError.style.display = 'block';
+        });
     });
   }
 }
@@ -6401,6 +6459,15 @@ function navegar() {
     .then(function () { return refrescarCacheConceptos(); })
     .then(function () { return refrescarCacheCargos(); })
     .then(function () { return refrescarCacheRoles(); })
+    .then(function () {
+      // Los permisos por rol pueden cambiar qué módulos ve el usuario
+      // logueado (ej. un Profesor) — por eso se repinta el nav apenas
+      // llegan, no solo el contenido.
+      return refrescarCachePermisos().then(function () {
+        renderNavModulos(clave);
+        if ((location.hash.replace('#', '') || 'dashboard') === clave) renderContenido(clave);
+      });
+    })
     .then(function () { return refrescarCacheSalas(); })
     .then(function () { return refrescarCacheProfesores(); })
     .then(function () { return refrescarCacheClases(); })
