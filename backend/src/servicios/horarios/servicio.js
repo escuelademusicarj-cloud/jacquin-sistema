@@ -42,17 +42,15 @@ export async function crearClaseNueva({ clase, alumnosIds = [] }, contextoAudito
 }
 
 /**
- * Filtrado por fila: PROFESOR solo ve sus propias clases, ignorando
- * cualquier profesorId que venga en la query — mismo criterio que en
- * Estudiantes, no es negociable desde el frontend.
+ * Decisión de negocio (2026-08-28): Profesor ve el mismo horario
+ * completo que Administración — ya no se recorta por profesorId. Antes
+ * filtraba automáticamente por profesorId = usuarioId cuando
+ * contexto.rol === "PROFESOR", devolviendo [] a cualquier profesor sin
+ * clases asignadas en la base de datos (que además hoy es imposible de
+ * asignar desde el modal "Agendar", que siempre manda profesorId: null).
  */
 export async function obtenerClases(filtros, contexto) {
-  let clases;
-  if (contexto?.rol === "PROFESOR") {
-    clases = await listarClases({ ...filtros, profesorId: contexto.usuarioId });
-  } else {
-    clases = await listarClases(filtros);
-  }
+  const clases = await listarClases(filtros);
   // Cada clase incluye ya sus alumnos — antes esta relación no se podía
   // releer (solo escribir al crear), por eso la grilla se quedaba sin
   // mostrar a nadie.
