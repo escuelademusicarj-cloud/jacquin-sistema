@@ -939,11 +939,35 @@ var ETIQUETA_INDICADOR = {
   repertorio: 'Repertorio', participacion: 'Participación', disciplina: 'Disciplina'
 };
 
-function cargarEvaluaciones() {
-  var g = localStorage.getItem('jacquin_demo_evaluaciones');
-  return g ? JSON.parse(g) : [];
+// ---- Seguimiento por indicadores: conectado al backend real, ya no
+// localStorage. A diferencia de Evaluación mensual (que trae TODO de una),
+// el backend solo permite pedir las evaluaciones de UN alumno a la vez
+// (?alumnoId=), así que se cachea solo el alumno actualmente seleccionado
+// en el desplegable — se vuelve a pedir cuando cambia la selección.
+var CACHE_INDICADORES = { alumnoIdx: null, lista: [] };
+async function refrescarIndicadoresDeAlumno(alumnoIdx) {
+  var alumno = cargarAlumnos()[alumnoIdx];
+  if (!alumno) { CACHE_INDICADORES = { alumnoIdx: alumnoIdx, lista: [] }; return; }
+  try {
+    var filas = await apiFetch('/api/avances/indicadores?alumnoId=' + alumno.id, { method: 'GET' }) || [];
+    var lista = filas.map(function (f) {
+      var obj = { id: f.id, alumnoIdx: alumnoIdx, fecha: f.fecha, observaciones: f.observaciones };
+      INDICADORES_EVALUACION.forEach(function (ind) { obj[ind] = (f.indicadores || {})[ind]; });
+      return obj;
+    });
+    CACHE_INDICADORES = { alumnoIdx: alumnoIdx, lista: lista };
+  } catch (err) {
+    console.error('No se pudo cargar Seguimiento por indicadores desde el backend:', err.message);
+    CACHE_INDICADORES = { alumnoIdx: alumnoIdx, lista: [] };
+  }
 }
-function guardarEvaluaciones(lista) { localStorage.setItem('jacquin_demo_evaluaciones', JSON.stringify(lista)); }
+function historialIndicadoresHtml(evaluacionesAlumno) {
+  var filas = evaluacionesAlumno.slice().sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); }).map(function (e) {
+    return '<tr><td>' + e.fecha + '</td><td>' + promedioEvaluacion(e).toFixed(1) + '/3</td><td>' + (e.observaciones || '—') + '</td></tr>';
+  }).join('');
+  return filas ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Promedio</th><th>Observaciones</th></tr></thead><tbody>' + filas + '</tbody></table></div>'
+    : '<p style="font-size:13px; color:var(--muted);">Sin evaluaciones todavía.</p>';
+}
 
 function promedioEvaluacion(ev) {
   var suma = 0;
@@ -968,11 +992,23 @@ var ESCALA_MENSUAL = ['mala', 'regular', 'normal', 'buena'];
 var ETIQUETA_ESCALA_MENSUAL = { mala: 'Mala', regular: 'Regular', normal: 'Normal', buena: 'Buena' };
 var COLOR_ESCALA_MENSUAL = { mala: 'var(--rojo)', regular: 'var(--naranja)', normal: 'var(--azul-claro)', buena: 'var(--verde)' };
 
-function cargarEvaluacionesMensuales() {
-  var g = localStorage.getItem('jacquin_demo_evaluaciones_mensuales');
-  return g ? JSON.parse(g) : [];
+// ---- Evaluación mensual: conectado al backend real (Supabase), ya no
+// localStorage. CACHE_EVALUACIONES_MENSUALES guarda las filas ya traducidas
+// a la forma plana que usa el resto del archivo (alumnoIdx en vez de
+// alumno_id, mismo patrón que CACHE_CLASES/CACHE_ALUMNOS).
+var CACHE_EVALUACIONES_MENSUALES = [];
+async function refrescarCacheEvaluacionesMensuales() {
+  try {
+    var filas = await apiFetch('/api/avances/mensual', { method: 'GET' }) || [];
+    CACHE_EVALUACIONES_MENSUALES = filas.map(function (f) {
+      var idx = CACHE_ALUMNOS.findIndex(function (a) { return a.id === f.alumno_id; });
+      return { id: f.id, alumnoIdx: idx, mes: f.mes, fecha: f.fecha, respuestas: f.respuestas || {}, observaciones: f.observaciones };
+    });
+  } catch (err) {
+    console.error('No se pudo cargar Evaluaciones mensuales desde el backend:', err.message);
+  }
 }
-function guardarEvaluacionesMensuales(lista) { localStorage.setItem('jacquin_demo_evaluaciones_mensuales', JSON.stringify(lista)); }
+function cargarEvaluacionesMensuales() { return CACHE_EVALUACIONES_MENSUALES; }
 
 function mesActualStr() { return new Date().toISOString().slice(0, 7); }
 
@@ -4031,9 +4067,8 @@ function renderEvaluacionMensualPanel(sesion) {
 
   var historialFilas = evaluacionesMensuales.slice().sort(function (a, b) { return (b.mes || '').localeCompare(a.mes || ''); }).map(function (e) {
     var alumno = alumnos[e.alumnoIdx];
-    var idxOriginal = evaluacionesMensuales.indexOf(e);
     var boton = '<button class="btn-ver-resultado-mensual" data-alumno-idx="' + e.alumnoIdx + '" data-mes="' + e.mes + '" style="font-size:11px; padding:5px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui); white-space:nowrap;">Ver avance</button>' +
-      '<button class="btn-eliminar-avance-mensual" data-idx="' + idxOriginal + '" style="font-size:11px; padding:5px 12px; border-radius:8px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer; font-family:var(--font-ui); white-space:nowrap; margin-left:6px;">Eliminar</button>';
+      '<button class="btn-eliminar-avance-mensual" data-id="' + e.id + '" style="font-size:11px; padding:5px 12px; border-radius:8px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer; font-family:var(--font-ui); white-space:nowrap; margin-left:6px;">Eliminar</button>';
     return '<tr><td>' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '—') + '</td><td>' + e.mes + '</td><td>' + (e.fecha || '—') + '</td><td>' + (e.observaciones || '—') + '</td><td>' + boton + '</td></tr>';
   }).join('');
 
@@ -4094,12 +4129,13 @@ function activarLogicaEvaluacionMensual() {
 
   document.querySelectorAll('.btn-eliminar-avance-mensual').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var idx = Number(btn.getAttribute('data-idx'));
+      var id = btn.getAttribute('data-id');
       if (!confirm('¿Eliminar este avance registrado? Esta acción no se puede deshacer.')) return;
-      var evaluaciones = cargarEvaluacionesMensuales();
-      evaluaciones.splice(idx, 1);
-      guardarEvaluacionesMensuales(evaluaciones);
-      renderContenido('evaluacion');
+      btn.disabled = true;
+      apiFetch('/api/avances/mensual/' + id, { method: 'DELETE' })
+        .then(function () { return refrescarCacheEvaluacionesMensuales(); })
+        .then(function () { renderContenido('evaluacion'); })
+        .catch(function (err) { btn.disabled = false; alert('No se pudo eliminar: ' + (err.message || 'error de conexión.')); });
     });
   });
 
@@ -4130,19 +4166,28 @@ function activarLogicaEvaluacionMensual() {
   if (btnGuardar) {
     btnGuardar.addEventListener('click', function () {
       var alumnoIdx = Number(modal.getAttribute('data-alumno-idx'));
+      var alumno = cargarAlumnos()[alumnoIdx];
       var mesActual = mesActualStr();
       var respuestas = {};
       PREGUNTAS_EVAL_MENSUAL.forEach(function (p) { respuestas[p.id] = document.getElementById('evm-' + p.id).value; });
       var observaciones = document.getElementById('evm-observaciones').value.trim();
+      if (!alumno) { alert('No se encontró el estudiante.'); return; }
 
-      var evaluaciones = cargarEvaluacionesMensuales();
-      var existenteIdx = evaluaciones.findIndex(function (e) { return e.alumnoIdx === alumnoIdx && e.mes === mesActual; });
-      var registro = { alumnoIdx: alumnoIdx, mes: mesActual, fecha: new Date().toISOString().slice(0, 10), respuestas: respuestas, observaciones: observaciones };
-      if (existenteIdx !== -1) evaluaciones[existenteIdx] = registro; else evaluaciones.push(registro);
-      guardarEvaluacionesMensuales(evaluaciones);
-
-      modal.style.display = 'none';
-      renderContenido('evaluacion');
+      btnGuardar.disabled = true;
+      apiFetch('/api/avances/mensual', {
+        method: 'POST',
+        body: JSON.stringify({ alumnoId: alumno.id, mes: mesActual, respuestas: respuestas, observaciones: observaciones })
+      })
+        .then(function () { return refrescarCacheEvaluacionesMensuales(); })
+        .then(function () {
+          modal.style.display = 'none';
+          btnGuardar.disabled = false;
+          renderContenido('evaluacion');
+        })
+        .catch(function (err) {
+          btnGuardar.disabled = false;
+          alert('No se pudo guardar la evaluación: ' + (err.message || 'error de conexión.'));
+        });
     });
   }
 
@@ -4239,18 +4284,15 @@ function renderEvaluacionLineaPanel(sesion) {
   var esProfesor = sesion.rol === 'PROFESOR'; // se usa más abajo solo para ocultar "Enviar informe al acudiente", no para filtrar datos.
   // Decisión (2026-08-28): Profesor ve todos los estudiantes, como Administración.
   var alumnosVisibles = alumnos.map(function (a, i) { return { a: a, i: i }; });
-  var evaluaciones = cargarEvaluaciones();
 
   if (alumnosVisibles.length === 0) {
     return '<div class="panel"><p style="font-size:13px; color:var(--muted);">Todavía no hay estudiantes registrados.</p></div>';
   }
 
   var alumnoSeleccionadoIdx = alumnosVisibles[0].i;
-  var evaluacionesAlumno = evaluaciones.filter(function (e) { return e.alumnoIdx === alumnoSeleccionadoIdx; });
-
-  var historialFilas = evaluacionesAlumno.slice().sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); }).map(function (e) {
-    return '<tr><td>' + e.fecha + '</td><td>' + promedioEvaluacion(e).toFixed(1) + '/3</td><td>' + (e.observaciones || '—') + '</td></tr>';
-  }).join('');
+  var cargado = CACHE_INDICADORES.alumnoIdx === alumnoSeleccionadoIdx;
+  var evaluacionesAlumno = cargado ? CACHE_INDICADORES.lista : [];
+  var cargandoTxt = '<p style="font-size:13px; color:var(--muted);">Cargando…</p>';
 
   return '' +
     '<div class="panel"><p style="font-size:12px; color:var(--muted); margin:0;">Método propio de Jacquin — cualitativo, por observación del profesor. No es examen ni nota numérica. Es un seguimiento aparte de la evaluación mensual, con más detalle por indicador.</p>' +
@@ -4260,7 +4302,7 @@ function renderEvaluacionLineaPanel(sesion) {
     '</div>' +
 
     '<div class="panel" id="panel-linea-tiempo"><h2>Línea de tiempo de avance</h2>' +
-    renderLineaTiempoEvaluacion(evaluacionesAlumno) +
+    (cargado ? renderLineaTiempoEvaluacion(evaluacionesAlumno) : cargandoTxt) +
     '</div>' +
 
     '<div class="panel"><h2>Nueva evaluación</h2>' +
@@ -4277,8 +4319,8 @@ function renderEvaluacionLineaPanel(sesion) {
     '<p id="msj-evaluacion-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Evaluación registrada — la línea de tiempo ya se actualizó.</p>' +
     '</div>' +
 
-    '<div class="panel"><h2>Historial</h2>' +
-    (historialFilas ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Promedio</th><th>Observaciones</th></tr></thead><tbody>' + historialFilas + '</tbody></table></div>' : '<p style="font-size:13px; color:var(--muted);">Sin evaluaciones todavía.</p>') +
+    '<div class="panel" id="panel-historial-indicadores"><h2>Historial</h2>' +
+    (cargado ? historialIndicadoresHtml(evaluacionesAlumno) : cargandoTxt) +
     '</div>' +
 
     (esProfesor ? '' :
@@ -4335,10 +4377,28 @@ function generarHtmlInformeEvaluacion(alumno, evaluaciones) {
 function activarLogicaEvaluacion() {
   var selectVer = document.getElementById('ev-alumno-ver');
   if (selectVer) {
+    var idxInicial = Number(selectVer.value);
+    if (CACHE_INDICADORES.alumnoIdx !== idxInicial) {
+      refrescarIndicadoresDeAlumno(idxInicial).then(function () {
+        if (Number(selectVer.value) !== idxInicial) return; // el usuario ya cambió de selección
+        var panelLinea = document.getElementById('panel-linea-tiempo');
+        if (panelLinea) panelLinea.innerHTML = '<h2>Línea de tiempo de avance</h2>' + renderLineaTiempoEvaluacion(CACHE_INDICADORES.lista);
+        var panelHist = document.getElementById('panel-historial-indicadores');
+        if (panelHist) panelHist.innerHTML = '<h2>Historial</h2>' + historialIndicadoresHtml(CACHE_INDICADORES.lista);
+      });
+    }
+
     selectVer.addEventListener('change', function () {
       var idx = Number(this.value);
-      var evaluaciones = cargarEvaluaciones().filter(function (e) { return e.alumnoIdx === idx; });
-      document.getElementById('panel-linea-tiempo').innerHTML = '<h2>Línea de tiempo de avance</h2>' + renderLineaTiempoEvaluacion(evaluaciones);
+      var panelLinea = document.getElementById('panel-linea-tiempo');
+      var panelHist = document.getElementById('panel-historial-indicadores');
+      if (panelLinea) panelLinea.innerHTML = '<h2>Línea de tiempo de avance</h2><p style="font-size:13px; color:var(--muted);">Cargando…</p>';
+      if (panelHist) panelHist.innerHTML = '<h2>Historial</h2><p style="font-size:13px; color:var(--muted);">Cargando…</p>';
+      refrescarIndicadoresDeAlumno(idx).then(function () {
+        if (Number(selectVer.value) !== idx) return;
+        if (panelLinea) panelLinea.innerHTML = '<h2>Línea de tiempo de avance</h2>' + renderLineaTiempoEvaluacion(CACHE_INDICADORES.lista);
+        if (panelHist) panelHist.innerHTML = '<h2>Historial</h2>' + historialIndicadoresHtml(CACHE_INDICADORES.lista);
+      });
     });
   }
 
@@ -4346,15 +4406,29 @@ function activarLogicaEvaluacion() {
   if (btnGuardar) {
     btnGuardar.addEventListener('click', function () {
       var alumnoIdx = Number(document.getElementById('ev-alumno-ver').value);
+      var alumno = cargarAlumnos()[alumnoIdx];
       var fecha = document.getElementById('ev-fecha').value;
       if (!fecha) { alert('La fecha es obligatoria.'); return; }
-      var nueva = { alumnoIdx: alumnoIdx, fecha: fecha, observaciones: document.getElementById('ev-observaciones').value.trim() };
-      INDICADORES_EVALUACION.forEach(function (ind) { nueva[ind] = document.getElementById('ev-' + ind).value; });
-      var evaluaciones = cargarEvaluaciones();
-      evaluaciones.push(nueva);
-      guardarEvaluaciones(evaluaciones);
-      document.getElementById('msj-evaluacion-ok').style.display = 'block';
-      setTimeout(function () { renderContenido('evaluacion'); }, 700);
+      if (!alumno) { alert('No se encontró el estudiante.'); return; }
+      var indicadores = {};
+      INDICADORES_EVALUACION.forEach(function (ind) { indicadores[ind] = document.getElementById('ev-' + ind).value; });
+      var observaciones = document.getElementById('ev-observaciones').value.trim();
+
+      btnGuardar.disabled = true;
+      apiFetch('/api/avances/indicadores', {
+        method: 'POST',
+        body: JSON.stringify({ alumnoId: alumno.id, fecha: fecha, indicadores: indicadores, observaciones: observaciones })
+      })
+        .then(function () { return refrescarIndicadoresDeAlumno(alumnoIdx); })
+        .then(function () {
+          btnGuardar.disabled = false;
+          document.getElementById('msj-evaluacion-ok').style.display = 'block';
+          setTimeout(function () { renderContenido('evaluacion'); }, 700);
+        })
+        .catch(function (err) {
+          btnGuardar.disabled = false;
+          alert('No se pudo guardar la evaluación: ' + (err.message || 'error de conexión.'));
+        });
     });
   }
 
@@ -4363,7 +4437,7 @@ function activarLogicaEvaluacion() {
     btnInforme.addEventListener('click', function () {
       var alumnoIdx = Number(document.getElementById('ev-alumno-ver').value);
       var alumno = cargarAlumnos()[alumnoIdx];
-      var evaluaciones = cargarEvaluaciones().filter(function (e) { return e.alumnoIdx === alumnoIdx; });
+      var evaluaciones = CACHE_INDICADORES.alumnoIdx === alumnoIdx ? CACHE_INDICADORES.lista : [];
       if (evaluaciones.length === 0) { alert('Este estudiante todavía no tiene evaluaciones registradas.'); return; }
 
       document.getElementById('comprobante-imprimir').innerHTML = generarHtmlInformeEvaluacion(alumno, evaluaciones);
@@ -6510,6 +6584,7 @@ function navegar() {
     })
     .then(function () { return refrescarCacheClases(); })
     .then(function () { return refrescarCacheAsistencias(); })
+    .then(function () { return refrescarCacheEvaluacionesMensuales(); })
     .then(function () { return refrescarCacheEventos(); })
     .then(function () { return refrescarCacheContabIngresos(); })
     .then(function () { return refrescarCacheContabGastos(); })
@@ -6556,7 +6631,13 @@ async function apiFetch(ruta, opciones) {
   var headers = Object.assign({ 'Content-Type': 'application/json' }, (opciones && opciones.headers) || {});
   var sesion = sesionActual();
   if (sesion && sesion.token) headers['Authorization'] = 'Bearer ' + sesion.token;
-  var respuesta = await fetch(API_BASE + ruta, Object.assign({}, opciones, { headers: headers }));
+  // cache: 'no-store' — sin esto, el navegador puede devolver un 304 con una
+  // respuesta vieja cacheada (ej. de la primera vez que se pidió, antes de
+  // que hubiera clases/estudiantes reales asignados) y quedarse sirviéndola
+  // para siempre, sin importar qué cambie después en la base de datos real.
+  // Esto explica por qué distintos navegadores/computadores podían mostrar
+  // "fotos" distintas y desactualizadas de los mismos datos.
+  var respuesta = await fetch(API_BASE + ruta, Object.assign({}, opciones, { headers: headers, cache: 'no-store' }));
   var cuerpo = await respuesta.json().catch(function () { return null; });
   if (!respuesta.ok) {
     var mensaje = (cuerpo && cuerpo.error && cuerpo.error.mensaje) || ('Error de conexión (' + respuesta.status + ')');
