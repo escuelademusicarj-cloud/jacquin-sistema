@@ -555,7 +555,7 @@ var VISIBILIDAD_ROL = {
   // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
   // el resumen financiero — eso queda reservado al Administrador).
   SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos'],
-  PROFESOR: ['dashboard','estudiantes','profesores','asistencia','evaluacion']
+  PROFESOR: ['dashboard','horarios','asistencia','evaluacion','eventos','comunicacion']
 };
 
 var ROLES_SISTEMA = ['ADMINISTRADOR', 'DIRECCION', 'SECRETARIA', 'PROFESOR'];
@@ -1158,10 +1158,21 @@ async function refrescarCachePermisos() {
   }
 }
 
+// TEMPORAL (2026-08-28): el guardado real vía "Usuarios y permisos" para
+// el rol Profesor no está tomando efecto todavía (se está diagnosticando
+// por qué), así que mientras tanto se fuerza acá su lista de módulos a
+// mano. Esto queda igual en CUALQUIER navegador porque vive en el propio
+// código (no depende de localStorage ni de lo que haya guardado el
+// backend para este rol) — sacar este bloque en cuanto se confirme que
+// el guardado real funciona, probado con un Profesor en más de un
+// navegador.
+var MODULOS_PROFESOR_FORZADOS = ['dashboard', 'horarios', 'asistencia', 'evaluacion', 'eventos', 'comunicacion'];
+
 // Si el backend ya trajo permisos guardados para ese rol, esos mandan; si
 // el rol todavía no tiene ninguna fila en la tabla (o no se pidió todavía),
 // se usa la visibilidad por defecto del sistema.
 function modulosVisibles(rol) {
+  if (rol === 'PROFESOR') return MODULOS_PROFESOR_FORZADOS;
   if (CACHE_PERMISOS && CACHE_PERMISOS.hasOwnProperty(rol)) return CACHE_PERMISOS[rol];
   return VISIBILIDAD_ROL[rol] || [];
 }
@@ -6153,7 +6164,8 @@ function renderUsuariosPermisos() {
       var visibles = modulosVisibles(rol);
       var marcado = visibles.indexOf(m.key) !== -1;
       var esAdmin = rol === 'ADMINISTRADOR'; // Administración siempre tiene todo, para que nadie se bloquee el propio acceso.
-      return '<td style="text-align:center;"><input type="checkbox" class="chk-permiso" data-rol="' + rol + '" data-modulo="' + m.key + '"' + (marcado ? ' checked' : '') + (esAdmin ? ' disabled' : '') + ' /></td>';
+      var esProfesorForzado = rol === 'PROFESOR'; // Ver nota de MODULOS_PROFESOR_FORZADOS más arriba — temporal.
+      return '<td style="text-align:center;"><input type="checkbox" class="chk-permiso" data-rol="' + rol + '" data-modulo="' + m.key + '"' + (marcado ? ' checked' : '') + ((esAdmin || esProfesorForzado) ? ' disabled' : '') + ' /></td>';
     }).join('');
     return '<tr><td style="font-weight:600; white-space:nowrap;">' + m.label + '</td>' + celdas + '</tr>';
   }).join('');
@@ -6162,6 +6174,7 @@ function renderUsuariosPermisos() {
     '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Usuarios y permisos</h1>' +
     '<div class="panel"><h2>Permisos por rol</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Marcá o desmarcá qué módulos puede ver cada rol y guardá los cambios. Administración siempre tiene acceso completo, para que nunca quede nadie bloqueado del todo.</p>' +
+    '<p style="font-size:12px; color:var(--naranja); margin-top:-6px;">Los permisos de Profesor están fijados manualmente mientras se corrige el guardado — no se pueden editar desde acá por ahora.</p>' +
     (cargandoPermisos ? '<p style="font-size:12px; color:var(--muted);">Cargando permisos guardados…</p>' : '') +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Módulo</th>' + encabezadoRoles + '</tr></thead><tbody>' + filasMatriz + '</tbody></table></div>' +
     '<button class="btn-primario" id="btn-guardar-permisos" style="max-width:220px; margin-top:14px;"' + (cargandoPermisos ? ' disabled' : '') + '>Guardar permisos</button>' +
