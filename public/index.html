@@ -656,6 +656,23 @@ async function refrescarCacheAlumnos() {
   }
 }
 
+// BUG real encontrado (2026-08-28): mapearAlumnoDesdeApi deja alumno.profesor
+// como el ID numérico crudo (profesor_id), pero en TODO el resto del archivo
+// (Estudiantes, Asistencia, Avances académicos, Eventos, "mis alumnos" de
+// Profesores) se compara alumno.profesor === sesion.email — un id numérico
+// nunca es igual a un email, así que esa comparación fallaba siempre, sin
+// importar qué estudiantes tuviera asignados el profesor de verdad. Esta
+// función resuelve el id a su email real (mismo patrón que ya usa
+// refrescarCacheClases con profesor_id de las clases) — hay que llamarla
+// después de que CACHE_PROFESORES ya esté cargado.
+function resolverProfesorDeAlumnos() {
+  CACHE_ALUMNOS.forEach(function (a) {
+    if (typeof a.profesor !== 'number') return; // ya resuelto a email, o vacío
+    var p = CACHE_PROFESORES.find(function (pp) { return pp.id === a.profesor; });
+    a.profesor = p ? p.email : '';
+  });
+}
+
 function cargarAlumnos() {
   return CACHE_ALUMNOS;
 }
@@ -2826,7 +2843,10 @@ function renderCalendarioMensual(sesion) {
   var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
   var clases = cargarClases();
   var esProfesor = sesion.rol === 'PROFESOR';
-  var clasesBase = esProfesor ? clases.filter(function (c) { return c.profesor === sesion.email; }) : clases;
+  // Decisión (2026-08-28): Profesor ve el mismo historial completo que
+  // Administración, sin recortar por "solo lo mío" — ya no se filtra por
+  // clase.profesor === sesion.email.
+  var clasesBase = clases;
 
   var anio = mesCalendario.anio, mes = mesCalendario.mes;
   var nombreMes = new Date(anio, mes, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
@@ -2924,7 +2944,7 @@ function renderHorariosSemana(sesion) {
       var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
       var fechaColumna = sumarDiasFecha(semanaHorarioSeleccionada, dia - 1);
       var ocupantes = clasesDeCelda(clases, dia, hora);
-      if (esProfesor) ocupantes = ocupantes.filter(function (o) { return o.c.profesor === sesion.email; });
+      // Decisión (2026-08-28): Profesor ve todas las clases, como Administración.
       if (filtroProgramaHorario !== 'General') ocupantes = ocupantes.filter(function (o) { return o.c.programa === filtroProgramaHorario; });
 
       var ocupantesConAlumnos = ocupantes.map(function (o) {
@@ -3065,10 +3085,10 @@ function renderHorariosSemana(sesion) {
 
   return '' +
     '<div class="panel"><div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">' +
-    '<h2 style="margin:0;">Calendario de reservas' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
+    '<h2 style="margin:0;">Calendario de reservas</h2>' +
     btnToggleEdicion +
     '</div>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:6px;">' + (esProfesor ? 'Se actualiza automáticamente cuando Secretaría o Administración agenda o matricula.' : (permiteEditarHorario ? 'Hacé clic en "+ Agendar" para reservar, en "+ agregar estudiante" para sumar a una clase, en ✎ para reemplazar, en ✕ para quitar, o arrastrá un estudiante a otra hora o día.' : 'Vista de solo lectura — tocá "Editar horario" arriba para poder agendar, quitar o mover estudiantes.')) + '</p>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:6px;">' + (esProfesor ? 'Vista de solo lectura de todo el horario de la academia.' : (permiteEditarHorario ? 'Hacé clic en "+ Agendar" para reservar, en "+ agregar estudiante" para sumar a una clase, en ✎ para reemplazar, en ✕ para quitar, o arrastrá un estudiante a otra hora o día.' : 'Vista de solo lectura — tocá "Editar horario" arriba para poder agendar, quitar o mover estudiantes.')) + '</p>' +
     grillaHtml +
     '</div>' +
     htmlModalAgendar + htmlModalAsignar + htmlModalEditarEstudianteHorario;
@@ -3408,7 +3428,7 @@ function renderAsistencia(sesion) {
       var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
       var fechaCelda = fechaColumnaSemana(semana, dia);
       var ocupantes = clasesDeCelda(clases, dia, hora);
-      if (esProfesor) ocupantes = ocupantes.filter(function (o) { return o.c.profesor === sesion.email; });
+      // Decisión (2026-08-28): Profesor ve todas las clases, como Administración.
       if (filtroProgramaAsistencia !== 'General') ocupantes = ocupantes.filter(function (o) { return o.c.programa === filtroProgramaAsistencia; });
 
       var esHoy = fechaCelda === hoyStr;
@@ -3483,10 +3503,9 @@ function renderAsistencia(sesion) {
     leyenda;
 
   // Historial completo (todas las fechas) — se conserva como consulta aparte de la grilla de la semana.
-  var clasesVisiblesHistorial = esProfesor ? clases.filter(function (c) { return c.profesor === sesion.email; }) : clases;
-  var asistenciasHistorial = esProfesor
-    ? asistencias.filter(function (a) { return clasesVisiblesHistorial.indexOf(clases[a.claseIdx]) !== -1; })
-    : asistencias;
+  // Decisión (2026-08-28): Profesor ve el mismo historial completo que Administración.
+  var clasesVisiblesHistorial = clases;
+  var asistenciasHistorial = asistencias;
   var filasHistorial = asistenciasHistorial.slice().reverse().map(function (a) {
     var alumno = alumnos[a.alumnoIdx];
     var clase = clases[a.claseIdx];
@@ -3499,9 +3518,7 @@ function renderAsistencia(sesion) {
   // Buscador de historial individual — filtra el listado de estudiantes por
   // nombre y muestra su histórico de asistencias en orden, con opción de
   // imprimir/descargar en PDF.
-  var alumnosParaSelector = esProfesor
-    ? alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return clasesVisiblesHistorial.some(function (c) { return (c.alumnos || []).indexOf(o.i) !== -1; }); })
-    : alumnos.map(function (a, i) { return { a: a, i: i }; });
+  var alumnosParaSelector = alumnos.map(function (a, i) { return { a: a, i: i }; });
 
   var terminoBusqueda = (busquedaHistorialAsistencia || '').trim().toLowerCase();
   var alumnosFiltrados = terminoBusqueda
@@ -3546,7 +3563,7 @@ function renderAsistencia(sesion) {
     '</div>';
 
   return '' +
-    '<div class="panel"><h2>Asistencia' + (esProfesor ? ' — tus clases' : '') + '</h2>' +
+    '<div class="panel"><h2>Asistencia</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la semana a registrar — cada columna usa su fecha real (lunes a sábado). El día de hoy queda resaltado en naranja. Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
     grillaHtml +
     '</div>' +
@@ -3966,13 +3983,11 @@ function cambiarTabEvaluacion(tab) {
 // modal con las 8 preguntas cualitativas para registrar o editar.
 function renderEvaluacionMensualPanel(sesion) {
   var alumnos = cargarAlumnos();
-  var esProfesor = sesion.rol === 'PROFESOR';
-  var visibles = esProfesor
-    ? alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return o.a.profesor === sesion.email; })
-    : alumnos.map(function (a, i) { return { a: a, i: i }; });
+  // Decisión (2026-08-28): Profesor ve todos los estudiantes, como Administración.
+  var visibles = alumnos.map(function (a, i) { return { a: a, i: i }; });
 
   if (visibles.length === 0) {
-    return '<div class="panel"><p style="font-size:13px; color:var(--muted);">' + (esProfesor ? 'No tenés estudiantes asignados todavía.' : 'Todavía no hay estudiantes registrados.') + '</p></div>';
+    return '<div class="panel"><p style="font-size:13px; color:var(--muted);">Todavía no hay estudiantes registrados.</p></div>';
   }
 
   var mesActual = mesActualStr();
@@ -4221,12 +4236,13 @@ function renderLineaTiempoEvaluacion(evaluaciones) {
 
 function renderEvaluacionLineaPanel(sesion) {
   var alumnos = cargarAlumnos();
-  var esProfesor = sesion.rol === 'PROFESOR';
-  var alumnosVisibles = esProfesor ? alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return o.a.profesor === sesion.email; }) : alumnos.map(function (a, i) { return { a: a, i: i }; });
+  var esProfesor = sesion.rol === 'PROFESOR'; // se usa más abajo solo para ocultar "Enviar informe al acudiente", no para filtrar datos.
+  // Decisión (2026-08-28): Profesor ve todos los estudiantes, como Administración.
+  var alumnosVisibles = alumnos.map(function (a, i) { return { a: a, i: i }; });
   var evaluaciones = cargarEvaluaciones();
 
   if (alumnosVisibles.length === 0) {
-    return '<div class="panel"><p style="font-size:13px; color:var(--muted);">' + (esProfesor ? 'No tenés estudiantes asignados todavía.' : 'Todavía no hay estudiantes registrados.') + '</p></div>';
+    return '<div class="panel"><p style="font-size:13px; color:var(--muted);">Todavía no hay estudiantes registrados.</p></div>';
   }
 
   var alumnoSeleccionadoIdx = alumnosVisibles[0].i;
@@ -6482,7 +6498,16 @@ function navegar() {
       });
     })
     .then(function () { return refrescarCacheSalas(); })
-    .then(function () { return refrescarCacheProfesores(); })
+    .then(function () {
+      return refrescarCacheProfesores().then(function () {
+        // Con CACHE_PROFESORES ya fresco, se puede resolver a email el
+        // alumno.profesor de cada estudiante (ver nota en
+        // resolverProfesorDeAlumnos) y repintar si un Profesor está
+        // mirando una pantalla que dependía de ese dato.
+        resolverProfesorDeAlumnos();
+        if ((location.hash.replace('#', '') || 'dashboard') === clave) renderContenido(clave);
+      });
+    })
     .then(function () { return refrescarCacheClases(); })
     .then(function () { return refrescarCacheAsistencias(); })
     .then(function () { return refrescarCacheEventos(); })
