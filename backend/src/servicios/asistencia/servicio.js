@@ -1,30 +1,17 @@
 import { crearAsistencia, necesitaAlerta } from "../../dominio/asistencia/entidades.js";
 import { insertarOActualizarAsistencia, asistenciasDeClaseYFecha, asistenciasDeAlumno, faltasRecientes } from "../../persistencia/asistencia/repositorio.js";
-import { buscarClasePorId, alumnoEsDelProfesor } from "../../persistencia/horarios/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
-function sinAccesoAClase() {
-  const err = new Error("Esa clase no te pertenece.");
-  err.codigoHttp = 403;
-  err.codigo = "sin_permiso";
-  return err;
-}
-
 /**
- * Filtrado por fila: si quien registra es PROFESOR, la clase tiene que
- * ser suya. No alcanza con el permiso "asistencia:crear" — ese permiso
- * dice que puede tomar asistencia en general, no que puede tomarla en
- * la clase de otro profesor.
+ * Decisión de negocio (2026-08-28): cualquier Profesor puede registrar y
+ * consultar asistencia de cualquier clase o estudiante, igual que
+ * Administración — ya no se restringe a "solo mis propias clases".
+ * Antes: verificarPropiedadClase() exigía que clase.profesor_id coincidiera
+ * con el usuario logueado (si no, 403 "Esa clase no te pertenece."), y
+ * obtenerAsistenciaDeAlumno() hacía lo mismo vía alumnoEsDelProfesor().
+ * Ambos chequeos se sacaron.
  */
-async function verificarPropiedadClase(claseId, contexto) {
-  if (contexto?.rol !== "PROFESOR") return;
-  const clase = await buscarClasePorId(claseId);
-  if (!clase || clase.profesor_id !== contexto.usuarioId) throw sinAccesoAClase();
-}
-
 export async function registrarAsistencia(datos, contextoAuditoria) {
-  await verificarPropiedadClase(datos.claseId, contextoAuditoria);
-
   const validado = crearAsistencia({ ...datos, registradoPor: contextoAuditoria?.usuarioId });
   const guardada = await insertarOActualizarAsistencia(validado);
 
@@ -47,14 +34,9 @@ export async function registrarAsistencia(datos, contextoAuditoria) {
 }
 
 export async function obtenerAsistenciaDeClase(claseId, fecha, contexto) {
-  await verificarPropiedadClase(claseId, contexto);
   return asistenciasDeClaseYFecha(claseId, fecha);
 }
 
 export async function obtenerAsistenciaDeAlumno(alumnoId, contexto) {
-  if (contexto?.rol === "PROFESOR") {
-    const esSuyo = await alumnoEsDelProfesor(alumnoId, contexto.usuarioId);
-    if (!esSuyo) throw sinAccesoAClase();
-  }
   return asistenciasDeAlumno(alumnoId);
 }
