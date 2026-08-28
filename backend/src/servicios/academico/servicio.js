@@ -44,28 +44,24 @@ export async function altaAlumno({ alumno, acudientes = [] }, contextoAuditoria)
   return { ...guardado, acudientes: await acudientesDeAlumno(guardado.id) };
 }
 
+// Decisión de negocio (2026-08-28): Profesor ve el mismo historial
+// completo que Administración — ya no se restringe por profesor_id.
+// Antes: si contexto.rol === "PROFESOR" y alumno.profesor_id no coincidía
+// con el usuario logueado, tiraba 403 "No tenés acceso a este estudiante."
 export async function obtenerAlumno(id, contexto) {
   const alumno = await buscarAlumnoPorId(id);
   if (!alumno) return null;
-  if (contexto?.rol === "PROFESOR" && alumno.profesor_id !== contexto.usuarioId) {
-    const err = new Error("No tenés acceso a este estudiante.");
-    err.codigoHttp = 403;
-    err.codigo = "sin_permiso";
-    throw err;
-  }
   return { ...alumno, acudientes: await acudientesDeAlumno(id) };
 }
 
 /**
- * Filtrado por fila: si quien pregunta es PROFESOR, solo ve sus propios
- * alumnos (profesor_id = su propio id), sin importar qué filtros pida
- * en la query — no es una preferencia, es una regla de seguridad que
- * no depende de lo que el frontend envíe.
+ * Decisión de negocio (2026-08-28): Profesor ve la misma lista completa
+ * de estudiantes que Administración — ya no se recorta por profesor_id.
+ * Antes filtraba automáticamente por profesorId = usuarioId cuando
+ * contexto.rol === "PROFESOR", devolviendo [] a cualquier profesor sin
+ * estudiantes asignados en la base de datos.
  */
 export async function obtenerListaAlumnos(filtros, contexto) {
-  if (contexto?.rol === "PROFESOR") {
-    return listarAlumnos({ ...filtros, profesorId: contexto.usuarioId });
-  }
   return listarAlumnos(filtros);
 }
 
