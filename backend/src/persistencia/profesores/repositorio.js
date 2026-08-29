@@ -11,13 +11,17 @@ export async function upsertPerfil(perfil) {
   return rows[0];
 }
 
+// Solo profesores activos — uno "eliminado" desde Admin (tenant) o desde
+// Profesores queda con usuarios.activo = false (ver eliminarUsuario en
+// identidad), no borrado de la base. Sin este filtro seguiría apareciendo
+// acá para siempre, aunque ya no pueda ni iniciar sesión.
 export async function listarProfesores() {
   const { rows } = await pool.query(
     `SELECT u.id, u.nombre, u.email, p.telefono, p.instrumentos, p.experiencia
      FROM usuarios u
      JOIN roles r ON r.id = u.rol_id
      LEFT JOIN perfiles_profesor p ON p.usuario_id = u.id
-     WHERE r.nombre = 'PROFESOR'
+     WHERE r.nombre = 'PROFESOR' AND u.activo = true
      ORDER BY u.nombre`
   );
   return rows;
