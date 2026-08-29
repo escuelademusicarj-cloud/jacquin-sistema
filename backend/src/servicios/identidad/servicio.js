@@ -77,13 +77,30 @@ export async function bootstrapAdmin() {
   return { email, mensaje: "Admin creado. Usá el email de arriba con la contraseña que hayas definido en ADMIN_SEED_PASSWORD (o la de por defecto si no la cambiaste)." };
 }
 
+// Si el email pertenece a un usuario ACTIVO, se bloquea (ya existe de
+// verdad). Si pertenece a uno DESACTIVADO (ver eliminarUsuario — es un
+// borrado lógico, no físico), se reactiva esa misma fila con los datos
+// nuevos en vez de bloquear o intentar un INSERT duplicado — la columna
+// email tiene una restricción UNIQUE real en la tabla, así que un INSERT
+// nuevo fallaría igual aunque el chequeo de acá lo dejara pasar.
 export async function altaUsuario({ nombre, email, password, rolId }, contextoAuditoria) {
   const existente = await buscarUsuarioPorEmail(email);
-  if (existente) {
+  if (existente && existente.activo) {
     throw new Error(`Ya existe un usuario con el email ${email}.`);
   }
 
   const passwordHash = await bcrypt.hash(password, RONDAS_HASH);
+
+  if (existente) {
+    const reactivado = await actualizarUsuario(existente.id, { nombre, email, rolId, activo: true });
+    await actualizarPasswordUsuario(existente.id, passwordHash);
+    await registrarAuditoria({
+      usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "reactivar", modulo: "identidad",
+      entidad: "usuario", entidadId: reactivado.id, resultado: "exito",
+    });
+    return reactivado;
+  }
+
   const usuario = crearUsuario({ nombre, email, passwordHash, rolId });
   const guardado = await insertarUsuario(usuario);
 
@@ -95,13 +112,13 @@ export async function altaUsuario({ nombre, email, password, rolId }, contextoAu
   return guardado;
 }
 
-// NUEVO: lista completa — antes no existía ninguna forma de traerla.
+// Lista completa — antes no existía ninguna forma de traerla.
 export async function obtenerUsuarios() {
   return listarUsuarios();
 }
 
-// NUEVO: edita nombre/email/rol (y opcionalmente activo). Si viene
-// "password" en el body, también la cambia (con su propio hash).
+// Edita nombre/email/rol (y opcionalmente activo). Si viene "password" en
+// el body, también la cambia (con su propio hash).
 export async function editarUsuario(id, { nombre, email, rolId, activo, password }, contextoAuditoria) {
   const actualizado = await actualizarUsuario(id, { nombre, email, rolId, activo });
   if (!actualizado) {
@@ -120,8 +137,8 @@ export async function editarUsuario(id, { nombre, email, rolId, activo, password
   return actualizado;
 }
 
-// NUEVO: elimina un usuario. No deja borrarse a sí mismo (evita que un
-// Administrador se quede afuera del sistema sin querer).
+// Elimina (desactiva) un usuario. No deja borrarse a sí mismo (evita que
+// un Administrador se quede afuera del sistema sin querer).
 export async function borrarUsuario(id, contextoAuditoria) {
   if (contextoAuditoria?.usuarioId && Number(contextoAuditoria.usuarioId) === Number(id)) {
     const err = new Error("No podés eliminar tu propio usuario mientras tenés la sesión abierta.");
