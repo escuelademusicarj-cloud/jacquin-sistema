@@ -1053,6 +1053,19 @@ async function refrescarCacheRoles() {
     console.error('No se pudo cargar Roles desde el backend:', err.message);
   }
 }
+// Lista real de usuarios (login) — Admin (tenant) la usaba como un espejo
+// local en localStorage porque hasta ahora el backend no tenía forma de
+// traer la lista completa; ya existe (GET /api/identidad/usuarios), así
+// que esta caché refleja de verdad lo que hay en la base de datos, sin
+// importar desde qué pantalla o navegador se haya creado cada usuario.
+var CACHE_USUARIOS = [];
+async function refrescarCacheUsuarios() {
+  try {
+    CACHE_USUARIOS = await apiFetch('/api/identidad/usuarios', { method: 'GET' }) || [];
+  } catch (err) {
+    console.error('No se pudo cargar Usuarios desde el backend:', err.message);
+  }
+}
 async function refrescarCacheClases() {
   try {
     var lista = await apiFetch('/api/horarios/clases', { method: 'GET' });
@@ -3469,7 +3482,13 @@ function renderAsistencia(sesion) {
 
       var esHoy = fechaCelda === hoyStr;
 
-      var contenidoOcupantes = ocupantes.map(function (o) {
+      // Una clase sin ningún estudiante visible en esta fecha (porque se
+      // quitó, se movió a otra celda, o todavía no se le asignó nadie) NO
+      // se muestra — mismo criterio que ya usa Horarios, para que la celda
+      // quede igual de vacía que si nunca hubiera existido esa clase, en
+      // vez de dejar colgado el rótulo del instrumento con "sin
+      // estudiantes todavía" sin nadie adentro.
+      var ocupantesConAlumnos = ocupantes.map(function (o) {
         // Un estudiante solo debe salir para tomar asistencia desde el día
         // de su matrícula en adelante — nunca en fechas anteriores.
         var listaAlumnos = (o.c.alumnos || []).filter(function (idxAlumno) {
@@ -3478,6 +3497,11 @@ function renderAsistencia(sesion) {
           var fechaAlta = al.fechaMatricula || respaldoFechaAsistencia;
           return fechaAlta <= fechaCelda;
         });
+        return { o: o, listaAlumnos: listaAlumnos };
+      }).filter(function (x) { return x.listaAlumnos.length > 0; });
+
+      var contenidoOcupantes = ocupantesConAlumnos.map(function (x) {
+        var o = x.o, listaAlumnos = x.listaAlumnos;
         var filasEstudiantes = listaAlumnos.map(function (idxAlumno) {
           var alumno = alumnos[idxAlumno];
           if (!alumno) return '';
@@ -3496,7 +3520,7 @@ function renderAsistencia(sesion) {
 
         return '<div class="celda-clase-asistencia" style="font-size:11px; text-align:left; background:#fff; border-radius:5px; padding:5px 6px; margin-bottom:4px;">' +
           '<div style="font-weight:600; margin-bottom:3px;">' + chipPrograma(o.c.programa) + '</div>' +
-          (filasEstudiantes || '<div style="color:var(--muted); font-style:italic; font-size:10.5px;">sin estudiantes todavía</div>') +
+          filasEstudiantes +
           '</div>';
       }).join('');
 
@@ -3794,8 +3818,26 @@ function renderProfesores(sesion) {
   }).join('');
 
   var filasPerfil = CACHE_PROFESORES.map(function (p) {
-    return '<tr><td>' + p.nombre + '</td><td>' + p.email + '</td><td>' + (p.instrumentos || '—') + '</td><td>' + (p.telefono || '—') + '</td></tr>';
+    return '<tr><td>' + p.nombre + '</td><td>' + p.email + '</td><td>' + (p.instrumentos || '—') + '</td><td>' + (p.telefono || '—') + '</td>' +
+      '<td style="white-space:nowrap;">' +
+      '<button class="btn-editar-perfil-profesor" data-id="' + p.id + '" style="font-size:11px; padding:5px 10px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui);">Editar</button>' +
+      ' <button class="btn-eliminar-profesor" data-id="' + p.id + '" style="font-size:11px; padding:5px 10px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer; font-family:var(--font-ui); margin-left:6px;">Eliminar</button>' +
+      '</td></tr>';
   }).join('');
+
+  var htmlModalEditarPerfilProfesor =
+    '<div id="modal-editar-perfil-profesor" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:420px; max-height:88vh; overflow-y:auto;">' +
+    '<h2 style="margin-top:0;" id="modal-editar-perfil-profesor-titulo">Editar profesor</h2>' +
+    '<div class="campo"><label>Instrumento que enseña</label><select id="epp-instrumentos">' +
+    PROGRAMAS.map(function (pr) { return '<option value="' + pr + '">' + pr + '</option>'; }).join('') +
+    '</select></div>' +
+    '<div class="campo"><label>Teléfono</label><input id="epp-telefono" type="text" /></div>' +
+    '<div class="campo"><label>Experiencia</label><input id="epp-experiencia" type="text" /></div>' +
+    '<button class="btn-primario" id="btn-guardar-editar-perfil-profesor">Guardar cambios</button>' +
+    '<button id="btn-cancelar-editar-perfil-profesor" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '<p id="msj-editar-perfil-profesor-error" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
+    '</div></div>';
 
   return '' +
     '<div class="panel"><h2>Profesores, estudiantes y horarios (' + CACHE_PROFESORES.length + ')</h2>' +
@@ -3822,8 +3864,9 @@ function renderProfesores(sesion) {
 
     '<div class="panel"><h2>Perfiles</h2>' +
     (CACHE_PROFESORES.length === 0 ? '<p style="font-size:13px; color:var(--muted);">—</p>' :
-     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Instrumento</th><th>Teléfono</th></tr></thead><tbody>' + filasPerfil + '</tbody></table></div>') +
-    '</div>';
+     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Instrumento</th><th>Teléfono</th><th></th></tr></thead><tbody>' + filasPerfil + '</tbody></table></div>') +
+    '</div>' +
+    htmlModalEditarPerfilProfesor;
 }
 
 function activarLogicaProfesores() {
@@ -3865,13 +3908,15 @@ function activarLogicaProfesores() {
             guardarPerfilesProfesor(perfilesLocales);
           }
           // El usuario de login ya se creó de verdad en el backend (arriba).
-          // Falta reflejarlo en el mismo espejo local que usa "Admin
-          // (tenant)" para su tabla "Usuarios" — si no, el profesor nuevo
-          // no aparece ahí hasta que alguien lo vuelva a crear desde esa
-          // pantalla (mismo patrón que ya usa Admin (tenant) consigo mismo).
+          // El mirror local sigue existiendo porque otras pantallas
+          // (Comunicación, etc.) todavía lo usan — se actualiza en paralelo
+          // a refrescar la lista REAL que ahora también usa Admin (tenant).
           var usuariosMirror = cargarUsuarios();
           usuariosMirror.push({ nombre: nombre, email: email, rol: 'PROFESOR', nacimiento: nacimiento });
           guardarUsuarios(usuariosMirror);
+          return refrescarCacheUsuarios();
+        })
+        .then(function () {
           document.getElementById('msj-profesor-nuevo').style.display = 'block';
           setTimeout(function () { renderContenido('profesores'); }, 700);
         })
@@ -3881,6 +3926,70 @@ function activarLogicaProfesores() {
         });
     });
   }
+
+  document.querySelectorAll('.btn-editar-perfil-profesor').forEach(function (btnEditar) {
+    btnEditar.addEventListener('click', function () {
+      var id = btnEditar.getAttribute('data-id');
+      var p = CACHE_PROFESORES.find(function (x) { return String(x.id) === String(id); });
+      if (!p) return;
+      var modal = document.getElementById('modal-editar-perfil-profesor');
+      modal.setAttribute('data-id', id);
+      document.getElementById('modal-editar-perfil-profesor-titulo').textContent = 'Editar profesor — ' + p.nombre;
+      document.getElementById('epp-instrumentos').value = Array.isArray(p.instrumentos) ? (p.instrumentos[0] || '') : (p.instrumentos || '');
+      document.getElementById('epp-telefono').value = p.telefono || '';
+      document.getElementById('epp-experiencia').value = p.experiencia || '';
+      document.getElementById('msj-editar-perfil-profesor-error').style.display = 'none';
+      modal.style.display = 'flex';
+    });
+  });
+
+  var modalEditarPerfilProfesor = document.getElementById('modal-editar-perfil-profesor');
+  var btnCancelarEditarPerfilProfesor = document.getElementById('btn-cancelar-editar-perfil-profesor');
+  if (btnCancelarEditarPerfilProfesor) btnCancelarEditarPerfilProfesor.addEventListener('click', function () { modalEditarPerfilProfesor.style.display = 'none'; });
+
+  var btnGuardarEditarPerfilProfesor = document.getElementById('btn-guardar-editar-perfil-profesor');
+  if (btnGuardarEditarPerfilProfesor) {
+    btnGuardarEditarPerfilProfesor.addEventListener('click', function () {
+      var id = modalEditarPerfilProfesor.getAttribute('data-id');
+      var instrumento = document.getElementById('epp-instrumentos').value;
+      var telefono = document.getElementById('epp-telefono').value.trim();
+      var experiencia = document.getElementById('epp-experiencia').value.trim();
+      var msjError = document.getElementById('msj-editar-perfil-profesor-error');
+      msjError.style.display = 'none';
+
+      btnGuardarEditarPerfilProfesor.disabled = true;
+      apiFetch('/api/profesores/' + id + '/perfil', {
+        method: 'PUT',
+        body: JSON.stringify({ telefono: telefono || null, instrumentos: instrumento ? [instrumento] : [], experiencia: experiencia || null })
+      })
+        .then(function () { return refrescarCacheProfesores(); })
+        .then(function () {
+          btnGuardarEditarPerfilProfesor.disabled = false;
+          modalEditarPerfilProfesor.style.display = 'none';
+          renderContenido('profesores');
+        })
+        .catch(function (err) {
+          btnGuardarEditarPerfilProfesor.disabled = false;
+          msjError.textContent = 'No se pudo guardar: ' + (err.message || 'error de conexión.');
+          msjError.style.display = 'block';
+        });
+    });
+  }
+
+  document.querySelectorAll('.btn-eliminar-profesor').forEach(function (btnEliminar) {
+    btnEliminar.addEventListener('click', function () {
+      var id = btnEliminar.getAttribute('data-id');
+      if (!confirm('¿Eliminar este profesor? Ya no va a poder iniciar sesión, y deja de aparecer para agendar clases nuevas. Esta acción no se puede deshacer.')) return;
+      btnEliminar.disabled = true;
+      apiFetch('/api/identidad/usuarios/' + id, { method: 'DELETE' })
+        .then(function () { return Promise.all([refrescarCacheProfesores(), refrescarCacheUsuarios()]); })
+        .then(function () { renderContenido('profesores'); })
+        .catch(function (err) {
+          btnEliminar.disabled = false;
+          alert('No se pudo eliminar: ' + (err.message || 'error de conexión.'));
+        });
+    });
+  });
 }
 
 function renderCursos() {
@@ -6360,10 +6469,32 @@ function activarLogicaUsuariosPermisos() {
 // ==================== FIN USUARIOS Y PERMISOS ====================
 
 function renderAdmin() {
-  var usuarios = cargarUsuarios();
-  var filas = usuarios.map(function (u) {
-    return '<tr><td>' + u.nombre + '</td><td>' + u.email + '</td><td><span class="chip-rol">' + u.rol + '</span></td></tr>';
+  var sesion = sesionActual();
+  var filas = CACHE_USUARIOS.map(function (u) {
+    var esYoMismo = sesion && u.email === sesion.email;
+    return '<tr><td>' + (u.nombre || '—') + '</td><td>' + (u.email || '—') + '</td><td><span class="chip-rol">' + (u.rol || '—') + '</span></td>' +
+      '<td style="white-space:nowrap;">' +
+      '<button class="btn-editar-usuario" data-id="' + u.id + '" style="font-size:11px; padding:5px 10px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui);">Editar</button>' +
+      (esYoMismo ? '' : ' <button class="btn-eliminar-usuario" data-id="' + u.id + '" style="font-size:11px; padding:5px 10px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer; font-family:var(--font-ui); margin-left:6px;">Eliminar</button>') +
+      '</td></tr>';
   }).join('');
+
+  var htmlModalEditarUsuario =
+    '<div id="modal-editar-usuario" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:420px; max-height:88vh; overflow-y:auto;">' +
+    '<h2 style="margin-top:0;">Editar usuario</h2>' +
+    '<div class="campo"><label>Nombre</label><input id="eu-nombre" type="text" /></div>' +
+    '<div class="campo"><label>Email</label><input id="eu-email" type="email" /></div>' +
+    '<div class="campo"><label>Rol</label><select id="eu-rol">' +
+    '<option value="ADMINISTRADOR">Administrador</option>' +
+    '<option value="SECRETARIA">Secretaría</option>' +
+    '<option value="PROFESOR">Profesor</option>' +
+    '<option value="DIRECCION">Dirección</option>' +
+    '</select></div>' +
+    '<button class="btn-primario" id="btn-guardar-editar-usuario">Guardar cambios</button>' +
+    '<button id="btn-cancelar-editar-usuario" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '<p id="msj-editar-usuario-error" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
+    '</div></div>';
 
   return '' +
     '<div class="panel"><h2>Políticas de contraseña activas</h2>' +
@@ -6393,14 +6524,15 @@ function renderAdmin() {
     '</div>' +
 
     '<div class="panel"><h2>Usuarios</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Esta lista es un espejo de lo creado desde esta pantalla en este navegador — el backend todavía no tiene forma de traer la lista completa de usuarios reales, así que puede no coincidir 100% con lo que hay en Supabase.</p>' +
-    '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th></tr></thead><tbody id="tbody-usuarios">' + filas + '</tbody></table></div>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Lista real de usuarios del sistema, sin importar desde qué pantalla o navegador se hayan creado.</p>' +
+    '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th></th></tr></thead><tbody id="tbody-usuarios">' + filas + '</tbody></table></div>' +
     '</div>' +
 
     '<div class="panel"><h2>Vista previa de menú por rol</h2>' +
     '<select id="previa-rol"><option value="ADMINISTRADOR">Administrador</option><option value="DIRECCION">Dirección</option><option value="SECRETARIA">Secretaría</option><option value="PROFESOR">Profesor</option></select>' +
     '<div class="lista-previa" id="lista-previa"></div>' +
-    '</div>';
+    '</div>' +
+    htmlModalEditarUsuario;
 }
 
 function activarLogicaAdmin() {
@@ -6443,16 +6575,17 @@ function activarLogicaAdmin() {
       body: JSON.stringify({ nombre: nombre, email: email, password: password, rolId: rolReal.id })
     })
       .then(function () {
-        // El backend no tiene un "traer todos los usuarios" — esta tabla de
-        // acá abajo sigue siendo un espejo local (no un reflejo 100% fiel de
-        // lo que hay en Supabase), solo para no perder de vista lo creado
-        // desde esta pantalla en esta sesión.
+        // El comentario/mirror en localStorage sigue existiendo porque otras
+        // pantallas (Comunicación, etc.) todavía lo usan para armar sus
+        // propias listas — se mantiene en paralelo a la lista real de abajo.
         var usuarios = cargarUsuarios();
         usuarios.push({ nombre: nombre, email: email, rol: rol, nacimiento: nacimiento });
         guardarUsuarios(usuarios);
-        // Si es profesor, además refresca la lista real que usan Horarios/
-        // Eventos, para que aparezca ahí sin tener que ir a "Profesores".
-        return rol === 'PROFESOR' ? refrescarCacheProfesores() : Promise.resolve();
+        // Refresca la lista REAL de "Usuarios" de acá abajo (ya no depende
+        // solo del espejo local) y, si es profesor, además la lista real
+        // que usan Horarios/Eventos, para que aparezca ahí sin tener que ir
+        // a "Profesores".
+        return Promise.all([refrescarCacheUsuarios(), rol === 'PROFESOR' ? refrescarCacheProfesores() : Promise.resolve()]);
       })
       .then(function () {
         document.getElementById('msj-creado').style.display = 'block';
@@ -6462,6 +6595,72 @@ function activarLogicaAdmin() {
         alert('No se pudo crear el usuario: ' + err.message);
         btn.disabled = false;
       });
+  });
+
+  document.querySelectorAll('.btn-editar-usuario').forEach(function (btnEditar) {
+    btnEditar.addEventListener('click', function () {
+      var id = btnEditar.getAttribute('data-id');
+      var u = CACHE_USUARIOS.find(function (x) { return String(x.id) === String(id); });
+      if (!u) return;
+      var modal = document.getElementById('modal-editar-usuario');
+      modal.setAttribute('data-id', id);
+      document.getElementById('eu-nombre').value = u.nombre || '';
+      document.getElementById('eu-email').value = u.email || '';
+      document.getElementById('eu-rol').value = u.rol || 'PROFESOR';
+      document.getElementById('msj-editar-usuario-error').style.display = 'none';
+      modal.style.display = 'flex';
+    });
+  });
+
+  var modalEditarUsuario = document.getElementById('modal-editar-usuario');
+  var btnCancelarEditarUsuario = document.getElementById('btn-cancelar-editar-usuario');
+  if (btnCancelarEditarUsuario) btnCancelarEditarUsuario.addEventListener('click', function () { modalEditarUsuario.style.display = 'none'; });
+
+  var btnGuardarEditarUsuario = document.getElementById('btn-guardar-editar-usuario');
+  if (btnGuardarEditarUsuario) {
+    btnGuardarEditarUsuario.addEventListener('click', function () {
+      var id = modalEditarUsuario.getAttribute('data-id');
+      var nombre = document.getElementById('eu-nombre').value.trim();
+      var email = document.getElementById('eu-email').value.trim();
+      var rol = document.getElementById('eu-rol').value;
+      var msjError = document.getElementById('msj-editar-usuario-error');
+      msjError.style.display = 'none';
+      if (!nombre || !email) { msjError.textContent = 'Nombre y email son obligatorios.'; msjError.style.display = 'block'; return; }
+      var rolReal = CACHE_ROLES.find(function (r) { return r.nombre === rol; });
+      if (!rolReal) { msjError.textContent = 'No se encontró el rol "' + rol + '".'; msjError.style.display = 'block'; return; }
+
+      btnGuardarEditarUsuario.disabled = true;
+      apiFetch('/api/identidad/usuarios/' + id, {
+        method: 'PUT',
+        body: JSON.stringify({ nombre: nombre, email: email, rolId: rolReal.id })
+      })
+        .then(function () { return Promise.all([refrescarCacheUsuarios(), refrescarCacheProfesores()]); })
+        .then(function () {
+          btnGuardarEditarUsuario.disabled = false;
+          modalEditarUsuario.style.display = 'none';
+          renderContenido('admin');
+        })
+        .catch(function (err) {
+          btnGuardarEditarUsuario.disabled = false;
+          msjError.textContent = 'No se pudo guardar: ' + (err.message || 'error de conexión.');
+          msjError.style.display = 'block';
+        });
+    });
+  }
+
+  document.querySelectorAll('.btn-eliminar-usuario').forEach(function (btnEliminar) {
+    btnEliminar.addEventListener('click', function () {
+      var id = btnEliminar.getAttribute('data-id');
+      if (!confirm('¿Eliminar este usuario? Ya no va a poder iniciar sesión. Esta acción no se puede deshacer.')) return;
+      btnEliminar.disabled = true;
+      apiFetch('/api/identidad/usuarios/' + id, { method: 'DELETE' })
+        .then(function () { return Promise.all([refrescarCacheUsuarios(), refrescarCacheProfesores()]); })
+        .then(function () { renderContenido('admin'); })
+        .catch(function (err) {
+          btnEliminar.disabled = false;
+          alert('No se pudo eliminar: ' + (err.message || 'error de conexión.'));
+        });
+    });
   });
 
   function pintarPrevia() {
@@ -6570,6 +6769,7 @@ function navegar() {
     .then(function () { return refrescarCacheConceptos(); })
     .then(function () { return refrescarCacheCargos(); })
     .then(function () { return refrescarCacheRoles(); })
+    .then(function () { return refrescarCacheUsuarios(); })
     .then(function () {
       // Los permisos por rol pueden cambiar qué módulos ve el usuario
       // logueado (ej. un Profesor) — por eso se repinta el nav apenas
