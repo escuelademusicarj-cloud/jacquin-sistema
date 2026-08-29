@@ -1,102 +1,40 @@
 import { pool } from "../../config/db.js";
 
-export async function insertarUsuario({ nombre, email, passwordHash, rolId }) {
+export async function upsertPerfil(perfil) {
   const { rows } = await pool.query(
-    `INSERT INTO usuarios (nombre, email, password_hash, rol_id, activo)
-     VALUES ($1, $2, $3, $4, true)
-     RETURNING id, nombre, email, rol_id, activo, creado_en`,
-    [nombre, email, passwordHash, rolId]
+    `INSERT INTO perfiles_profesor (usuario_id, telefono, instrumentos, experiencia)
+     VALUES ($1,$2,$3,$4)
+     ON CONFLICT (usuario_id) DO UPDATE SET telefono = EXCLUDED.telefono, instrumentos = EXCLUDED.instrumentos, experiencia = EXCLUDED.experiencia
+     RETURNING *`,
+    [perfil.usuarioId, perfil.telefono, perfil.instrumentos, perfil.experiencia]
   );
   return rows[0];
 }
 
-export async function buscarUsuarioPorEmail(email) {
+export async function listarProfesores() {
   const { rows } = await pool.query(
-    `SELECT id, nombre, email, password_hash, rol_id, activo FROM usuarios WHERE email = $1`,
-    [email]
-  );
-  return rows[0] ?? null;
-}
-
-export async function buscarUsuarioPorId(id) {
-  const { rows } = await pool.query(
-    `SELECT id, nombre, email, rol_id, activo, creado_en FROM usuarios WHERE id = $1`,
-    [id]
-  );
-  return rows[0] ?? null;
-}
-
-export async function contarUsuarios() {
-  const { rows } = await pool.query(`SELECT COUNT(*)::int AS total FROM usuarios`);
-  return rows[0].total;
-}
-
-// NUEVO: lista completa de usuarios con el nombre de su rol resuelto.
-export async function listarUsuarios() {
-  const { rows } = await pool.query(
-    `SELECT u.id, u.nombre, u.email, u.rol_id, r.nombre AS rol, u.activo, u.creado_en
-     FROM usuarios u LEFT JOIN roles r ON r.id = u.rol_id
+    `SELECT u.id, u.nombre, u.email, p.telefono, p.instrumentos, p.experiencia
+     FROM usuarios u
+     JOIN roles r ON r.id = u.rol_id
+     LEFT JOIN perfiles_profesor p ON p.usuario_id = u.id
+     WHERE r.nombre = 'PROFESOR'
      ORDER BY u.nombre`
   );
   return rows;
 }
 
-// NUEVO: edición parcial — solo pisa los campos que vengan definidos.
-export async function actualizarUsuario(id, { nombre, email, rolId, activo }) {
-  const actual = await buscarUsuarioPorId(id);
-  if (!actual) return null;
-  const nuevo = {
-    nombre: nombre !== undefined ? nombre : actual.nombre,
-    email: email !== undefined ? email : actual.email,
-    rolId: rolId !== undefined ? rolId : actual.rol_id,
-    activo: activo !== undefined ? activo : actual.activo,
-  };
+export async function insertarDisponibilidad(d) {
   const { rows } = await pool.query(
-    `UPDATE usuarios SET nombre=$1, email=$2, rol_id=$3, activo=$4 WHERE id=$5
-     RETURNING id, nombre, email, rol_id, activo, creado_en`,
-    [nuevo.nombre, nuevo.email, nuevo.rolId, nuevo.activo, id]
+    `INSERT INTO disponibilidad_profesor (usuario_id, dia_semana, hora_inicio, hora_fin) VALUES ($1,$2,$3,$4) RETURNING *`,
+    [d.usuarioId, d.diaSemana, d.horaInicio, d.horaFin]
   );
   return rows[0];
 }
 
-export async function actualizarPasswordUsuario(id, passwordHash) {
-  await pool.query(`UPDATE usuarios SET password_hash=$1 WHERE id=$2`, [passwordHash, id]);
-}
-
-export async function eliminarUsuario(id) {
-  await pool.query(`DELETE FROM usuarios WHERE id=$1`, [id]);
-}
-
-export async function listarRoles() {
-  const { rows } = await pool.query(`SELECT id, nombre, descripcion FROM roles ORDER BY nombre`);
+export async function disponibilidadDeProfesor(usuarioId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM disponibilidad_profesor WHERE usuario_id = $1 ORDER BY dia_semana, hora_inicio`,
+    [usuarioId]
+  );
   return rows;
-}
-
-export async function buscarRolPorNombre(nombre) {
-  const { rows } = await pool.query(`SELECT id, nombre FROM roles WHERE nombre = $1`, [nombre]);
-  return rows[0] ?? null;
-}
-
-export async function buscarRolPorId(id) {
-  const { rows } = await pool.query(`SELECT id, nombre FROM roles WHERE id = $1`, [id]);
-  return rows[0] ?? null;
-}
-
-export async function insertarRol({ nombre, descripcion }) {
-  const { rows } = await pool.query(
-    `INSERT INTO roles (nombre, descripcion) VALUES ($1, $2) RETURNING id, nombre, descripcion`,
-    [nombre, descripcion]
-  );
-  return rows[0];
-}
-
-export async function permisosDeRol(rolId) {
-  const { rows } = await pool.query(
-    `SELECT p.clave
-     FROM permisos p
-     JOIN rol_permisos rp ON rp.permiso_id = p.id
-     WHERE rp.rol_id = $1`,
-    [rolId]
-  );
-  return rows.map((r) => r.clave);
 }
