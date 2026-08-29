@@ -113,11 +113,12 @@
   a { color: inherit; text-decoration: none; }
 
   /* ---------- Hero / login ---------- */
-  #vista-login {
+  #vista-login, #vista-cambiar-password {
     min-height: 100vh; position: relative; overflow: hidden;
     background: linear-gradient(180deg, var(--azul-noche) 0%, var(--azul-oscuro) 100%);
     display: flex; align-items: center; justify-content: center;
   }
+  #vista-cambiar-password { display: none; }
   #ecualizador {
     position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: space-between;
     padding: 0 2%; opacity: 0.55;
@@ -131,7 +132,7 @@
     0%, 100% { transform: scaleY(0.25); }
     50% { transform: scaleY(1); }
   }
-  #vista-login::before {
+  #vista-login::before, #vista-cambiar-password::before {
     content: ''; position: absolute; inset: 0;
     background: linear-gradient(180deg, rgba(21,42,68,0.15) 0%, rgba(21,42,68,0.85) 78%, var(--azul-noche) 100%);
   }
@@ -474,6 +475,19 @@
       <input id="in-pass" type="password" placeholder="Contraseña" autocomplete="current-password" />
       <button type="submit">Entrar</button>
       <p id="msj-error">Email o contraseña incorrectos.</p>
+    </form>
+  </div>
+</div>
+
+<div id="vista-cambiar-password">
+  <div class="tarjeta-login">
+    <img src="logo-jacquin-vertical-negro.png" alt="Jacquin Academia Musical" class="logo-login" />
+    <p class="tagline">Por seguridad, elegí una contraseña nueva antes de continuar</p>
+    <form id="form-cambiar-password">
+      <input id="cp-nueva" type="password" placeholder="Contraseña nueva (mínimo 8 caracteres)" autocomplete="new-password" />
+      <input id="cp-confirmar" type="password" placeholder="Confirmar contraseña nueva" autocomplete="new-password" />
+      <button type="submit">Guardar y entrar</button>
+      <p id="msj-error-cambiar-password" style="font-size:12px; color:var(--rojo); text-align:center; margin:2px 0 0; display:none;"></p>
     </form>
   </div>
 </div>
@@ -3892,11 +3906,13 @@ function activarLogicaProfesores() {
       if (!rolProfesor) { alert('No se encontró el rol PROFESOR en el sistema — no se puede crear el profesor.'); return; }
 
       btnNuevo.disabled = true;
+      var correoEnviadoOk = false;
       apiFetch('/api/identidad/usuarios', {
         method: 'POST',
         body: JSON.stringify({ nombre: nombre, email: email, password: password, rolId: rolProfesor.id })
       })
         .then(function (usuarioCreado) {
+          correoEnviadoOk = !!usuarioCreado.correoEnviado;
           return apiFetch('/api/profesores/' + usuarioCreado.id + '/perfil', {
             method: 'PUT',
             body: JSON.stringify({ telefono: telefono || null, instrumentos: instrumento ? [instrumento] : [], experiencia: experiencia || null })
@@ -3924,6 +3940,9 @@ function activarLogicaProfesores() {
           return refrescarCacheUsuarios();
         })
         .then(function () {
+          document.getElementById('msj-profesor-nuevo').textContent = correoEnviadoOk
+            ? 'Profesor agregado — le mandamos un correo con su contraseña temporal y el link para entrar.'
+            : 'Profesor agregado, pero no se pudo mandar el correo automático — pasale vos la contraseña temporal por otro medio.';
           document.getElementById('msj-profesor-nuevo').style.display = 'block';
           setTimeout(function () { renderContenido('profesores'); }, 700);
         })
@@ -6577,11 +6596,13 @@ function activarLogicaAdmin() {
     if (!rolReal) { alert('No se encontró el rol "' + rol + '" en el sistema — no se puede crear el usuario.'); return; }
 
     btn.disabled = true;
+    var correoEnviadoOkAdmin = false;
     apiFetch('/api/identidad/usuarios', {
       method: 'POST',
       body: JSON.stringify({ nombre: nombre, email: email, password: password, rolId: rolReal.id })
     })
-      .then(function () {
+      .then(function (usuarioCreado) {
+        correoEnviadoOkAdmin = !!usuarioCreado.correoEnviado;
         // El comentario/mirror en localStorage sigue existiendo porque otras
         // pantallas (Comunicación, etc.) todavía lo usan para armar sus
         // propias listas — se mantiene en paralelo a la lista real de abajo.
@@ -6595,6 +6616,9 @@ function activarLogicaAdmin() {
         return Promise.all([refrescarCacheUsuarios(), rol === 'PROFESOR' ? refrescarCacheProfesores() : Promise.resolve()]);
       })
       .then(function () {
+        document.getElementById('msj-creado').textContent = correoEnviadoOkAdmin
+          ? 'Usuario creado en el sistema real — le mandamos un correo con su contraseña temporal y el link para entrar.'
+          : 'Usuario creado, pero no se pudo mandar el correo automático — pasale vos la contraseña temporal por otro medio.';
         document.getElementById('msj-creado').style.display = 'block';
         setTimeout(function () { renderContenido('admin'); }, 600);
       })
@@ -6823,6 +6847,7 @@ function navegar() {
 function mostrarApp() {
   var sesion = sesionActual();
   document.getElementById('vista-login').style.display = 'none';
+  document.getElementById('vista-cambiar-password').style.display = 'none';
   document.getElementById('vista-app').style.display = 'block';
   document.getElementById('quien-soy').textContent = sesion.email + ' · ' + sesion.rol;
   if (!location.hash) location.hash = '#dashboard';
@@ -6831,6 +6856,7 @@ function mostrarApp() {
 
 function mostrarLogin() {
   document.getElementById('vista-app').style.display = 'none';
+  document.getElementById('vista-cambiar-password').style.display = 'none';
   document.getElementById('vista-login').style.display = 'flex';
   document.getElementById('in-email').value = '';
   document.getElementById('in-pass').value = '';
@@ -6876,10 +6902,57 @@ document.getElementById('form-login').addEventListener('submit', function (e) {
       sessionStorage.setItem('jacquin_demo_sesion', JSON.stringify({
         email: data.usuario.email, rol: data.usuario.rol, token: data.token, usuarioId: data.usuario.id
       }));
-      mostrarApp();
+      if (data.usuario.debeCambiarPassword) {
+        mostrarCambiarPassword(pass);
+      } else {
+        mostrarApp();
+      }
     })
     .catch(function (err) {
       msjError.textContent = err.message || 'Email o contraseña incorrectos.';
+      msjError.style.display = 'block';
+    });
+});
+
+// La contraseña con la que acaba de entrar (temporal) se guarda solo en
+// memoria de esta pestaña — hace falta para el PUT de cambio de
+// contraseña (el backend valida la actual antes de aceptar la nueva),
+// pero así el usuario no tiene que volver a escribirla.
+var passwordTemporalPendiente = null;
+function mostrarCambiarPassword(passwordActual) {
+  passwordTemporalPendiente = passwordActual;
+  document.getElementById('vista-login').style.display = 'none';
+  document.getElementById('vista-app').style.display = 'none';
+  document.getElementById('vista-cambiar-password').style.display = 'flex';
+  document.getElementById('cp-nueva').value = '';
+  document.getElementById('cp-confirmar').value = '';
+  document.getElementById('msj-error-cambiar-password').style.display = 'none';
+}
+
+document.getElementById('form-cambiar-password').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var nueva = document.getElementById('cp-nueva').value;
+  var confirmar = document.getElementById('cp-confirmar').value;
+  var msjError = document.getElementById('msj-error-cambiar-password');
+  msjError.style.display = 'none';
+
+  if (nueva.length < 8) { msjError.textContent = 'La contraseña nueva debe tener al menos 8 caracteres.'; msjError.style.display = 'block'; return; }
+  if (nueva !== confirmar) { msjError.textContent = 'Las dos contraseñas no coinciden.'; msjError.style.display = 'block'; return; }
+
+  var btn = this.querySelector('button');
+  btn.disabled = true;
+  apiFetch('/api/identidad/mi-password', {
+    method: 'POST',
+    body: JSON.stringify({ passwordActual: passwordTemporalPendiente, passwordNueva: nueva })
+  })
+    .then(function () {
+      passwordTemporalPendiente = null;
+      btn.disabled = false;
+      mostrarApp();
+    })
+    .catch(function (err) {
+      btn.disabled = false;
+      msjError.textContent = err.message || 'No se pudo cambiar la contraseña.';
       msjError.style.display = 'block';
     });
 });
