@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { crearUsuario } from "../../dominio/identidad/entidades.js";
 import {
   insertarUsuario, buscarUsuarioPorEmail, buscarRolPorNombre, buscarRolPorId, contarUsuarios,
-  listarUsuarios, buscarUsuarioPorId, actualizarUsuario, actualizarPasswordUsuario, eliminarUsuario,
+  listarUsuarios, buscarUsuarioPorId, buscarUsuarioPorIdConHash, actualizarUsuario, actualizarPasswordUsuario, eliminarUsuario,
 } from "../../persistencia/identidad/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
@@ -45,7 +45,10 @@ export async function login({ email, password }) {
 
   return {
     token,
-    usuario: { id: usuario.id, nombre: usuario.nombre, email: usuario.email, rolId: usuario.rol_id, rol: rol?.nombre ?? null },
+    usuario: {
+      id: usuario.id, nombre: usuario.nombre, email: usuario.email, rolId: usuario.rol_id, rol: rol?.nombre ?? null,
+      debeCambiarPassword: usuario.debe_cambiar_password,
+    },
   };
 }
 
@@ -83,6 +86,8 @@ export async function bootstrapAdmin() {
 // nuevos en vez de bloquear o intentar un INSERT duplicado — la columna
 // email tiene una restricción UNIQUE real en la tabla, así que un INSERT
 // nuevo fallaría igual aunque el chequeo de acá lo dejara pasar.
+// En los dos casos (alta nueva o reactivación), debe_cambiar_password
+// queda en true — la contraseña que se le puso es temporal.
 export async function altaUsuario({ nombre, email, password, rolId }, contextoAuditoria) {
   const existente = await buscarUsuarioPorEmail(email);
   if (existente && existente.activo) {
@@ -93,12 +98,12 @@ export async function altaUsuario({ nombre, email, password, rolId }, contextoAu
 
   if (existente) {
     const reactivado = await actualizarUsuario(existente.id, { nombre, email, rolId, activo: true });
-    await actualizarPasswordUsuario(existente.id, passwordHash);
+    await actualizarPasswordUsuario(existente.id, passwordHash, true);
     await registrarAuditoria({
       usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "reactivar", modulo: "identidad",
       entidad: "usuario", entidadId: reactivado.id, resultado: "exito",
     });
-    return reactivado;
+    return { ...reactivado, debe_cambiar_password: true };
   }
 
   const usuario = crearUsuario({ nombre, email, passwordHash, rolId });
@@ -118,7 +123,9 @@ export async function obtenerUsuarios() {
 }
 
 // Edita nombre/email/rol (y opcionalmente activo). Si viene "password" en
-// el body, también la cambia (con su propio hash).
+// el body (un Administrador resetea la contraseña de otro usuario), la
+// cambia Y fuerza a que la tenga que volver a cambiar en su próximo login
+// (esa contraseña puesta por otra persona es, por definición, temporal).
 export async function editarUsuario(id, { nombre, email, rolId, activo, password }, contextoAuditoria) {
   const actualizado = await actualizarUsuario(id, { nombre, email, rolId, activo });
   if (!actualizado) {
@@ -128,7 +135,7 @@ export async function editarUsuario(id, { nombre, email, rolId, activo, password
   }
   if (password) {
     const passwordHash = await bcrypt.hash(password, RONDAS_HASH);
-    await actualizarPasswordUsuario(id, passwordHash);
+    await actualizarPasswordUsuario(id, passwordHash, true);
   }
   await registrarAuditoria({
     usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "editar", modulo: "identidad",
@@ -151,4 +158,36 @@ export async function borrarUsuario(id, contextoAuditoria) {
     entidad: "usuario", entidadId: id, resultado: "exito",
   });
   return { eliminado: true };
+}
+
+// NUEVO: un usuario cambia su propia contraseña (ej. tras el primer
+// ingreso con contraseña temporal). Valida la actual antes de aceptar la
+// nueva — no alcanza con estar logueado, tiene que demostrar que la sabe.
+export async function cambiarMiPassword({ usuarioId, passwordActual, passwordNueva }) {
+  const usuario = await buscarUsuarioPorIdConHash(usuarioId);
+  if (!usuario) {
+    const err = new Error("Usuario no encontrado.");
+    err.codigoHttp = 404;
+    throw err;
+  }
+  const coincide = await bcrypt.compare(passwordActual || "", usuario.password_hash);
+  if (!coincide) {
+    const err = new Error("La contraseña actual no es correcta.");
+    err.codigoHttp = 401;
+    err.codigo = "credenciales_invalidas";
+    throw err;
+  }
+  if (!passwordNueva || passwordNueva.length < 8) {
+    throw new Error("La contraseña nueva debe tener al menos 8 caracteres.");
+  }
+
+  const passwordHash = await bcrypt.hash(passwordNueva, RONDAS_HASH);
+  await actualizarPasswordUsuario(usuarioId, passwordHash, false);
+
+  await registrarAuditoria({
+    usuarioId, accion: "cambiar_password_propia", modulo: "identidad",
+    entidad: "usuario", entidadId: usuarioId, resultado: "exito",
+  });
+
+  return { actualizado: true };
 }
