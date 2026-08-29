@@ -3864,6 +3864,14 @@ function activarLogicaProfesores() {
             perfilesLocales[email] = { nacimiento: nacimiento };
             guardarPerfilesProfesor(perfilesLocales);
           }
+          // El usuario de login ya se creó de verdad en el backend (arriba).
+          // Falta reflejarlo en el mismo espejo local que usa "Admin
+          // (tenant)" para su tabla "Usuarios" — si no, el profesor nuevo
+          // no aparece ahí hasta que alguien lo vuelva a crear desde esa
+          // pantalla (mismo patrón que ya usa Admin (tenant) consigo mismo).
+          var usuariosMirror = cargarUsuarios();
+          usuariosMirror.push({ nombre: nombre, email: email, rol: 'PROFESOR', nacimiento: nacimiento });
+          guardarUsuarios(usuariosMirror);
           document.getElementById('msj-profesor-nuevo').style.display = 'block';
           setTimeout(function () { renderContenido('profesores'); }, 700);
         })
