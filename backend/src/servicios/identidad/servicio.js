@@ -9,6 +9,7 @@ import {
   listarUsuarios, buscarUsuarioPorId, buscarUsuarioPorIdConHash, actualizarUsuario, actualizarPasswordUsuario, eliminarUsuario,
 } from "../../persistencia/identidad/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
+import { enviarCorreoBienvenida } from "../notificaciones/servicio.js";
 
 const RONDAS_HASH = 10;
 const DURACION_TOKEN = "8h";
@@ -87,7 +88,11 @@ export async function bootstrapAdmin() {
 // email tiene una restricción UNIQUE real en la tabla, así que un INSERT
 // nuevo fallaría igual aunque el chequeo de acá lo dejara pasar.
 // En los dos casos (alta nueva o reactivación), debe_cambiar_password
-// queda en true — la contraseña que se le puso es temporal.
+// queda en true — la contraseña que se le puso es temporal — y se le
+// manda un correo de bienvenida con esos datos. Si el correo falla, el
+// alta del usuario NO se deshace (ya quedó guardada en la base de datos);
+// se devuelve correoEnviado:false para que quien creó al usuario sepa
+// que tiene que avisarle los datos por otro medio.
 export async function altaUsuario({ nombre, email, password, rolId }, contextoAuditoria) {
   const existente = await buscarUsuarioPorEmail(email);
   if (existente && existente.activo) {
@@ -95,6 +100,7 @@ export async function altaUsuario({ nombre, email, password, rolId }, contextoAu
   }
 
   const passwordHash = await bcrypt.hash(password, RONDAS_HASH);
+  let guardado;
 
   if (existente) {
     const reactivado = await actualizarUsuario(existente.id, { nombre, email, rolId, activo: true });
@@ -103,18 +109,18 @@ export async function altaUsuario({ nombre, email, password, rolId }, contextoAu
       usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "reactivar", modulo: "identidad",
       entidad: "usuario", entidadId: reactivado.id, resultado: "exito",
     });
-    return { ...reactivado, debe_cambiar_password: true };
+    guardado = { ...reactivado, debe_cambiar_password: true };
+  } else {
+    const usuario = crearUsuario({ nombre, email, passwordHash, rolId });
+    guardado = await insertarUsuario(usuario);
+    await registrarAuditoria({
+      usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "crear", modulo: "identidad",
+      entidad: "usuario", entidadId: guardado.id, resultado: "exito",
+    });
   }
 
-  const usuario = crearUsuario({ nombre, email, passwordHash, rolId });
-  const guardado = await insertarUsuario(usuario);
-
-  await registrarAuditoria({
-    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "crear", modulo: "identidad",
-    entidad: "usuario", entidadId: guardado.id, resultado: "exito",
-  });
-
-  return guardado;
+  const correo = await enviarCorreoBienvenida({ nombre, email, passwordTemporal: password });
+  return { ...guardado, correoEnviado: correo.enviado };
 }
 
 // Lista completa — antes no existía ninguna forma de traerla.
