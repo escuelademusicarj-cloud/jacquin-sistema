@@ -1172,7 +1172,14 @@ async function refrescarCacheAsistencias() {
       var propias = await apiFetch('/api/asistencia/alumno/' + alumno.id, { method: 'GET' });
       return (propias || []).map(function (a) {
         var claseIdx = CACHE_CLASES.findIndex(function (c) { return c.id === a.clase_id; });
-        return { alumnoIdx: i, claseIdx: claseIdx, fecha: a.fecha, estado: a.estado };
+        // El backend devuelve la fecha como timestamp completo
+        // ("2026-08-28T00:00:00.000Z"), pero el resto del archivo compara
+        // fechas como texto plano "AAAA-MM-DD" (fechaCelda, hoyStr, etc.) —
+        // sin este recorte, la comparación de texto nunca coincidía y la
+        // grilla de la semana quedaba en "—" aunque el registro ya
+        // existiera de verdad (se veía bien en el Historial de abajo,
+        // porque ahí no se compara, solo se muestra).
+        return { alumnoIdx: i, claseIdx: claseIdx, fecha: (a.fecha || '').slice(0, 10), estado: a.estado };
       });
     });
     CACHE_ASISTENCIAS = [].concat.apply([], resultados);
