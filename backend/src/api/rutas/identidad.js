@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { altaUsuario, login, bootstrapAdmin, obtenerUsuarios, editarUsuario, borrarUsuario } from "../../servicios/identidad/servicio.js";
+import { altaUsuario, login, bootstrapAdmin, obtenerUsuarios, editarUsuario, borrarUsuario, cambiarMiPassword } from "../../servicios/identidad/servicio.js";
 import { listarRoles } from "../../persistencia/identidad/repositorio.js";
 import { respuestaExitosa } from "../middlewares/manejoErrores.js";
 import { requiereAutenticacion } from "../middlewares/autenticacion.js";
@@ -58,6 +58,21 @@ rutasIdentidad.put("/usuarios/:id", requiereAutenticacion, requierePermiso("iden
 rutasIdentidad.delete("/usuarios/:id", requiereAutenticacion, requierePermiso("identidad:crear"), async (req, res, next) => {
   try {
     const resultado = await borrarUsuario(req.params.id, { usuarioId: req.usuario?.id ?? null });
+    respuestaExitosa(res, resultado);
+  } catch (err) { next(err); }
+});
+
+// NUEVO: cualquier usuario logueado cambia SU PROPIA contraseña (por
+// ejemplo, tras entrar con la contraseña temporal que le dieron al
+// crearlo) — no exige ningún permiso especial más allá de estar
+// autenticado, porque no es una acción de administración de otros.
+rutasIdentidad.post("/mi-password", requiereAutenticacion, async (req, res, next) => {
+  try {
+    const resultado = await cambiarMiPassword({
+      usuarioId: req.usuario.id,
+      passwordActual: req.body.passwordActual,
+      passwordNueva: req.body.passwordNueva,
+    });
     respuestaExitosa(res, resultado);
   } catch (err) { next(err); }
 });
