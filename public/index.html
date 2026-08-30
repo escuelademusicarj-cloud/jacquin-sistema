@@ -593,12 +593,13 @@ var MODULOS = [
   { key: 'reportes', label: 'Reportes', grupo: 'seguimiento' },
   { key: 'contabilidad', label: 'Contabilidad', grupo: 'admin' },
   { key: 'admin', label: 'Admin (tenant)', grupo: 'admin' },
-  { key: 'usuarios-permisos', label: 'Usuarios y permisos', grupo: 'admin' }
+  { key: 'usuarios-permisos', label: 'Usuarios y permisos', grupo: 'admin' },
+  { key: 'auditoria', label: 'Auditoría', grupo: 'admin' }
 ];
 
 var VISIBILIDAD_ROL = {
   ADMINISTRADOR: MODULOS.map(function (m) { return m.key; }),
-  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes'],
+  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes','auditoria'],
   // Secretaría ve Contabilidad, pero con visibilidad restringida (renderContabilidad
   // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
   // el resumen financiero — eso queda reservado al Administrador).
@@ -6208,6 +6209,103 @@ var REPORTES_DISPONIBLES = [
     } }
 ];
 
+// ==================== AUDITORÍA ====================
+// Quién entró al sistema y qué hizo — lee la tabla auditoria_log real
+// (viene registrándose desde el principio en cada módulo, ver
+// registrarAuditoria en cada servicio de backend). Solo Administración y
+// Dirección (permiso auditoria:ver). No entra en la cadena de navegar()
+// porque es de uso ocasional — se trae bajo demanda al abrir el módulo o
+// al cambiar los filtros.
+var CACHE_AUDITORIA = [];
+var filtrosAuditoria = { rol: '', accion: '', desde: '', hasta: '' };
+var auditoriaCargadaAlMenosUnaVez = false;
+
+var ETIQUETA_ACCION_AUDITORIA = {
+  login: 'Inicio de sesión', login_fallido: 'Intento de login fallido', crear: 'Creó',
+  editar: 'Editó', eliminar: 'Eliminó', reactivar: 'Reactivó', cambiar_estado: 'Cambió estado',
+  cambiar_password_propia: 'Cambió su contraseña', registrar: 'Registró',
+  agregar_alumno: 'Agregó estudiante', quitar_alumno: 'Quitó estudiante', actualizar: 'Actualizó', bootstrap: 'Creación inicial del sistema'
+};
+
+async function refrescarCacheAuditoria() {
+  try {
+    var params = [];
+    if (filtrosAuditoria.rol) params.push('rol=' + encodeURIComponent(filtrosAuditoria.rol));
+    if (filtrosAuditoria.accion) params.push('accion=' + encodeURIComponent(filtrosAuditoria.accion));
+    if (filtrosAuditoria.desde) params.push('desde=' + encodeURIComponent(filtrosAuditoria.desde));
+    if (filtrosAuditoria.hasta) params.push('hasta=' + encodeURIComponent(filtrosAuditoria.hasta));
+    var qs = params.length ? ('?' + params.join('&')) : '';
+    CACHE_AUDITORIA = await apiFetch('/api/auditoria' + qs, { method: 'GET' }) || [];
+  } catch (err) {
+    console.error('No se pudo cargar Auditoría desde el backend:', err.message);
+    CACHE_AUDITORIA = [];
+  }
+}
+
+function filasTablaAuditoria() {
+  if (CACHE_AUDITORIA.length === 0) return '<tr><td colspan="6" style="text-align:center; color:var(--muted); padding:16px;">Sin registros con estos filtros.</td></tr>';
+  return CACHE_AUDITORIA.map(function (a) {
+    var fecha = new Date(a.fecha_hora);
+    var fechaTxt = isNaN(fecha.getTime()) ? a.fecha_hora : fecha.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+    var accionTxt = ETIQUETA_ACCION_AUDITORIA[a.accion] || a.accion;
+    var esExito = a.resultado === 'exito';
+    return '<tr><td style="white-space:nowrap;">' + fechaTxt + '</td>' +
+      '<td>' + (a.usuario_nombre || '—') + (a.usuario_email ? '<br><span style="color:var(--muted); font-size:11px;">' + a.usuario_email + '</span>' : '') + '</td>' +
+      '<td>' + (a.usuario_rol || '—') + '</td>' +
+      '<td>' + accionTxt + '</td>' +
+      '<td>' + a.modulo + '</td>' +
+      '<td><span style="color:' + (esExito ? 'var(--verde)' : 'var(--rojo)') + '; font-weight:600;">' + (esExito ? 'Éxito' : 'Error') + '</span></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function renderAuditoria() {
+  return '' +
+    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Auditoría</h1>' +
+    '<div class="panel">' +
+    '<p style="font-size:13px; color:var(--muted); margin-top:-4px;">Quién entró al sistema y qué hizo. Se muestran los últimos 300 registros que calcen con los filtros.</p>' +
+    '<div class="grilla-2col" style="margin-top:10px;">' +
+    '<div class="campo"><label>Rol</label><select id="aud-filtro-rol">' +
+    ['', 'ADMINISTRADOR', 'DIRECCION', 'SECRETARIA', 'PROFESOR'].map(function (r) {
+      return '<option value="' + r + '"' + (filtrosAuditoria.rol === r ? ' selected' : '') + '>' + (r || 'Todos') + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="campo"><label>Acción</label><select id="aud-filtro-accion">' +
+    [['', 'Todas'], ['login', 'Inicio de sesión'], ['login_fallido', 'Login fallido'], ['crear', 'Creó'], ['editar', 'Editó'], ['eliminar', 'Eliminó']].map(function (o) {
+      return '<option value="' + o[0] + '"' + (filtrosAuditoria.accion === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="campo"><label>Desde</label><input id="aud-filtro-desde" type="date" value="' + filtrosAuditoria.desde + '" /></div>' +
+    '<div class="campo"><label>Hasta</label><input id="aud-filtro-hasta" type="date" value="' + filtrosAuditoria.hasta + '" /></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-filtrar-auditoria" style="max-width:160px; margin-top:10px;">Filtrar</button>' +
+    '<div id="tabla-auditoria-contenedor" style="margin-top:16px;">' +
+    '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Usuario</th><th>Rol</th><th>Acción</th><th>Módulo</th><th>Resultado</th></tr></thead><tbody>' +
+    filasTablaAuditoria() + '</tbody></table></div>' +
+    '</div>' +
+    '</div>';
+}
+
+function activarLogicaAuditoria() {
+  if (!auditoriaCargadaAlMenosUnaVez) {
+    document.getElementById('tabla-auditoria-contenedor').innerHTML = '<p style="font-size:13px; color:var(--muted);">Cargando…</p>';
+    refrescarCacheAuditoria().then(function () {
+      auditoriaCargadaAlMenosUnaVez = true;
+      if ((location.hash.replace('#', '') || 'dashboard') === 'auditoria') renderContenido('auditoria');
+    });
+  }
+
+  var btnFiltrar = document.getElementById('btn-filtrar-auditoria');
+  if (btnFiltrar) {
+    btnFiltrar.addEventListener('click', function () {
+      filtrosAuditoria.rol = document.getElementById('aud-filtro-rol').value;
+      filtrosAuditoria.accion = document.getElementById('aud-filtro-accion').value;
+      filtrosAuditoria.desde = document.getElementById('aud-filtro-desde').value;
+      filtrosAuditoria.hasta = document.getElementById('aud-filtro-hasta').value;
+      document.getElementById('tabla-auditoria-contenedor').innerHTML = '<p style="font-size:13px; color:var(--muted);">Cargando…</p>';
+      refrescarCacheAuditoria().then(function () { renderContenido('auditoria'); });
+    });
+  }
+}
+
 function renderReportes() {
   var porModulo = {};
   REPORTES_DISPONIBLES.forEach(function (r) { (porModulo[r.modulo] = porModulo[r.modulo] || []).push(r); });
@@ -6976,6 +7074,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'reportes') {
     document.getElementById('contenido').innerHTML = renderReportes();
     activarLogicaReportes();
+  } else if (mod.key === 'auditoria') {
+    document.getElementById('contenido').innerHTML = renderAuditoria();
+    activarLogicaAuditoria();
   } else if (mod.key === 'comunicacion') {
     document.getElementById('contenido').innerHTML = renderComunicacion(sesion);
     activarLogicaComunicacion();
