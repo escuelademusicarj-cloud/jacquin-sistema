@@ -461,6 +461,37 @@
     .malla { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
     .panel { padding: 16px; }
   }
+
+  /* ---- Pensum académico ---- */
+  .tarjeta-curso-pensum {
+    display: flex; align-items: center; gap: 12px;
+    border: none; border-radius: 14px; padding: 16px 18px;
+    cursor: pointer; text-align: left; font-family: var(--font-ui);
+    transition: transform .12s ease, box-shadow .12s ease;
+    box-shadow: 0 1px 3px rgba(21,42,68,0.10);
+  }
+  .tarjeta-curso-pensum:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(21,42,68,0.16); }
+  .tarjeta-curso-pensum.activa { box-shadow: 0 0 0 2px var(--azul-oscuro), 0 6px 16px rgba(21,42,68,0.16); }
+  .icono-curso-pensum {
+    width: 42px; height: 42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .texto-curso-pensum { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  .titulo-curso-pensum { font-weight: 600; color: var(--azul-oscuro); font-size: 13.5px; line-height: 1.25; }
+  .subtitulo-curso-pensum { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .flecha-curso-pensum { font-size: 20px; color: var(--muted); flex-shrink: 0; line-height: 1; }
+
+  .seccion-pensum { border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(21,42,68,0.10); margin-bottom: 16px; background: #fff; }
+  .seccion-pensum-header { background: var(--azul-oscuro); color: #fff; padding: 11px 16px; font-size: 13.5px; font-weight: 600; font-family: var(--font-ui); }
+  .tema-pensum-fila { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 16px; border-top: 1px solid #eef0f3; flex-wrap: wrap; }
+  .tema-pensum-fila:first-of-type { border-top: none; }
+  .resumen-pensum {
+    background: var(--beige); border-left: 3px solid var(--naranja); border-radius: 0 8px 8px 0;
+    padding: 12px 16px; font-size: 13px; color: var(--azul-oscuro); font-style: italic; margin-bottom: 18px;
+  }
+  .btn-nivel-pensum { font-size:13px; padding:7px 18px; border-radius:20px; border:1px solid var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui); margin-right:8px; font-weight:600; }
+  .btn-volver-pensum { background:transparent; border:none; color:var(--azul-oscuro); font-size:13px; font-weight:600; cursor:pointer; font-family:var(--font-ui); padding:0; margin-bottom:14px; display:inline-flex; align-items:center; gap:4px; }
+  .btn-volver-pensum:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -5076,6 +5107,16 @@ function activarLogicaEventos() {
 var pensumProgramaAbierto = null;
 var pensumNivelSeleccionado = 1;
 
+// Paleta corporativa (variaciones de los colores de marca — nada de
+// arcoíris genérico) que se repite cíclicamente entre las tarjetas.
+var PALETA_PENSUM = [
+  { fondo: '#EAF1FB', icono: '#223F61' }, // azul oscuro sobre celeste
+  { fondo: '#FDEEE0', icono: '#E78C3B' }, // naranja sobre durazno suave
+  { fondo: '#E9EDF3', icono: '#4A6FA5' }, // azul acero sobre gris azulado
+  { fondo: '#F5EFE3', icono: '#A67C43' }  // bronce sobre beige
+];
+var ICONO_NOTA_PENSUM = '<svg viewBox="0 0 24 24" width="19" height="19" fill="#fff"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>';
+
 function renderPensum(sesion) {
   var puedeEditar = sesion.rol === 'ADMINISTRADOR' || sesion.rol === 'DIRECCION';
   var porPrograma = {};
@@ -5084,57 +5125,67 @@ function renderPensum(sesion) {
     porPrograma[n.programa].push(n);
   });
 
-  var tarjetas = PROGRAMAS.map(function (programa) {
+  if (pensumProgramaAbierto) {
+    var niveles = (porPrograma[pensumProgramaAbierto] || []).slice().sort(function (a, b) { return a.nivel - b.nivel; });
+    return '' +
+      '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 14px;">Pensum académico</h1>' +
+      renderDetallePensum(pensumProgramaAbierto, niveles, puedeEditar);
+  }
+
+  var tarjetas = PROGRAMAS.map(function (programa, i) {
     var niveles = (porPrograma[programa] || []).slice().sort(function (a, b) { return a.nivel - b.nivel; });
-    var activa = pensumProgramaAbierto === programa;
-    return '<button class="tarjeta-curso-pensum" data-programa="' + programa + '" style="text-align:left; cursor:pointer; border:1px solid ' + (activa ? 'var(--azul-oscuro)' : '#dde1e7') + '; background:' + (activa ? 'var(--azul-tint)' : '#fff') + '; border-radius:10px; padding:16px 18px; font-family:var(--font-ui);">' +
-      '<div style="font-weight:600; color:var(--azul-oscuro); font-size:14px;">' + programa + '</div>' +
-      '<div style="font-size:12px; color:var(--muted); margin-top:3px;">' + (niveles.length === 0 ? 'Sin contenido todavía' : (niveles.length > 1 ? 'Nivel 1 y Nivel 2' : 'Nivel único')) + '</div>' +
+    var colores = PALETA_PENSUM[i % PALETA_PENSUM.length];
+    return '<button class="tarjeta-curso-pensum" data-programa="' + programa + '" style="background:' + colores.fondo + ';">' +
+      '<span class="icono-curso-pensum" style="background:' + colores.icono + ';">' + ICONO_NOTA_PENSUM + '</span>' +
+      '<span class="texto-curso-pensum">' +
+      '<span class="titulo-curso-pensum">' + programa + '</span>' +
+      '<span class="subtitulo-curso-pensum">' + (niveles.length === 0 ? 'Sin contenido todavía' : (niveles.length > 1 ? 'Nivel 1 y Nivel 2' : 'Nivel único')) + '</span>' +
+      '</span>' +
+      '<span class="flecha-curso-pensum">›</span>' +
       '</button>';
   }).join('');
-
-  var detalle = pensumProgramaAbierto ? renderDetallePensum(porPrograma[pensumProgramaAbierto] || [], puedeEditar) : '';
 
   return '' +
     '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Pensum académico</h1>' +
     '<div class="panel">' +
     '<p style="font-size:13px; color:var(--muted); margin-top:-4px;">Elegí un curso para ver su contenido temático.' + (puedeEditar ? ' Podés agregar o cambiar el enlace de material (Drive u otro) de cada tema.' : '') + '</p>' +
-    '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; margin-top:12px;">' + tarjetas + '</div>' +
-    '</div>' +
-    detalle;
+    '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; margin-top:14px;">' + tarjetas + '</div>' +
+    '</div>';
 }
 
-function renderDetallePensum(niveles, puedeEditar) {
+function renderDetallePensum(programa, niveles, puedeEditar) {
+  var volver = '<button class="btn-volver-pensum" id="btn-volver-pensum">‹ Volver a los cursos</button>';
+
   if (niveles.length === 0) {
-    return '<div class="panel"><p style="font-size:13px; color:var(--muted);">Todavía no hay contenido cargado para este curso.</p></div>';
+    return volver + '<div class="panel"><p style="font-size:13px; color:var(--muted);">Todavía no hay contenido cargado para "' + programa + '".</p></div>';
   }
   var tieneDosNiveles = niveles.length > 1;
   var nivelActivo = niveles.find(function (n) { return n.nivel === pensumNivelSeleccionado; }) || niveles[0];
 
-  var selectorNivel = tieneDosNiveles ? '<div style="margin-bottom:14px;">' +
+  var selectorNivel = tieneDosNiveles ? '<div style="margin-bottom:16px;">' +
     niveles.map(function (n) {
       var activo = n.id === nivelActivo.id;
-      return '<button class="btn-nivel-pensum" data-nivel-id="' + n.id + '" style="font-size:13px; padding:7px 16px; border-radius:8px; border:1px solid var(--azul-oscuro); background:' + (activo ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activo ? '#fff' : 'var(--azul-oscuro)') + '; cursor:pointer; font-family:var(--font-ui); margin-right:8px;">Nivel ' + n.nivel + '</button>';
+      return '<button class="btn-nivel-pensum" data-nivel-id="' + n.id + '" style="background:' + (activo ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activo ? '#fff' : 'var(--azul-oscuro)') + ';">Nivel ' + n.nivel + '</button>';
     }).join('') + '</div>' : '';
 
   var secciones = (nivelActivo.secciones || []).map(function (s) {
     var temas = (s.temas || []).map(function (t) {
       var tieneEnlace = !!t.enlace_drive;
-      return '<li style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">' +
+      return '<div class="tema-pensum-fila">' +
         '<span style="font-size:13.5px; color:var(--texto);">' + t.titulo + '</span>' +
         '<span style="display:flex; align-items:center; gap:8px;">' +
-        (tieneEnlace ? '<a href="' + t.enlace_drive + '" target="_blank" rel="noopener" style="font-size:12px; color:var(--azul-oscuro); text-decoration:underline;">Ver material</a>' : '<span style="font-size:12px; color:var(--muted); font-style:italic;">Sin material todavía</span>') +
+        (tieneEnlace ? '<a href="' + t.enlace_drive + '" target="_blank" rel="noopener" style="font-size:12px; color:var(--azul-oscuro); text-decoration:underline; font-weight:600;">Ver material</a>' : '<span style="font-size:12px; color:var(--muted); font-style:italic;">Sin material todavía</span>') +
         (puedeEditar ? '<button class="btn-editar-enlace-pensum" data-id="' + t.id + '" data-titulo="' + t.titulo.replace(/"/g, '&quot;') + '" data-enlace="' + (t.enlace_drive || '') + '" style="font-size:11px; padding:4px 10px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui);">' + (tieneEnlace ? 'Editar enlace' : 'Agregar enlace') + '</button>' : '') +
-        '</span></li>';
+        '</span></div>';
     }).join('');
-    return '<div style="margin-bottom:18px;"><h3 style="font-size:14px; color:var(--azul-oscuro); margin:0 0 8px;">' + s.titulo + '</h3>' +
-      '<ul style="list-style:none; padding:0; margin:0;">' + temas + '</ul></div>';
+    return '<div class="seccion-pensum"><div class="seccion-pensum-header">' + s.titulo + '</div>' + temas + '</div>';
   }).join('');
 
-  return '<div class="panel">' +
-    '<h2>' + nivelActivo.programa + (tieneDosNiveles ? ' — Nivel ' + nivelActivo.nivel : '') + '</h2>' +
+  return volver +
+    '<div class="panel">' +
+    '<h2 style="margin-top:0;">' + nivelActivo.programa + (tieneDosNiveles ? ' — Nivel ' + nivelActivo.nivel : '') + '</h2>' +
     selectorNivel +
-    (nivelActivo.resumen ? '<p style="font-size:13px; color:var(--muted); font-style:italic; margin-bottom:16px;">' + nivelActivo.resumen + '</p>' : '') +
+    (nivelActivo.resumen ? '<div class="resumen-pensum">' + nivelActivo.resumen + '</div>' : '') +
     secciones +
     '</div>' +
     '<div id="modal-editar-enlace-pensum" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
@@ -5150,12 +5201,19 @@ function renderDetallePensum(niveles, puedeEditar) {
 function activarLogicaPensum() {
   document.querySelectorAll('.tarjeta-curso-pensum').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var programa = btn.getAttribute('data-programa');
-      pensumProgramaAbierto = (pensumProgramaAbierto === programa) ? null : programa;
+      pensumProgramaAbierto = btn.getAttribute('data-programa');
       pensumNivelSeleccionado = 1;
       renderContenido('pensum');
     });
   });
+
+  var btnVolverPensum = document.getElementById('btn-volver-pensum');
+  if (btnVolverPensum) {
+    btnVolverPensum.addEventListener('click', function () {
+      pensumProgramaAbierto = null;
+      renderContenido('pensum');
+    });
+  }
 
   document.querySelectorAll('.btn-nivel-pensum').forEach(function (btn) {
     btn.addEventListener('click', function () {
