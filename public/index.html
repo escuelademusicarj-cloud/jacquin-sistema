@@ -551,6 +551,7 @@ var MODULOS = [
   { key: 'horarios', label: 'Horarios', grupo: 'matricula' },
   { key: 'profesores', label: 'Profesores', grupo: 'academia' },
   { key: 'cursos', label: 'Cursos y programas', grupo: 'academia' },
+  { key: 'pensum', label: 'Pensum académico', grupo: 'academia' },
   { key: 'asistencia', label: 'Asistencia', grupo: 'academia' },
   { key: 'evaluacion', label: 'Avances académicos', grupo: 'seguimiento' },
   { key: 'eventos', label: 'Eventos', grupo: 'seguimiento' },
@@ -564,12 +565,12 @@ var MODULOS = [
 
 var VISIBILIDAD_ROL = {
   ADMINISTRADOR: MODULOS.map(function (m) { return m.key; }),
-  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes'],
+  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes'],
   // Secretaría ve Contabilidad, pero con visibilidad restringida (renderContabilidad
   // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
   // el resumen financiero — eso queda reservado al Administrador).
-  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos'],
-  PROFESOR: ['dashboard','horarios','asistencia','evaluacion','eventos','comunicacion']
+  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','pensum','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos'],
+  PROFESOR: ['dashboard','horarios','asistencia','evaluacion','eventos','comunicacion','pensum']
 };
 
 var ROLES_SISTEMA = ['ADMINISTRADOR', 'DIRECCION', 'SECRETARIA', 'PROFESOR'];
@@ -1253,7 +1254,7 @@ async function refrescarCachePermisos() {
 // backend para este rol) — sacar este bloque en cuanto se confirme que
 // el guardado real funciona, probado con un Profesor en más de un
 // navegador.
-var MODULOS_PROFESOR_FORZADOS = ['dashboard', 'horarios', 'asistencia', 'evaluacion', 'eventos', 'comunicacion'];
+var MODULOS_PROFESOR_FORZADOS = ['dashboard', 'horarios', 'asistencia', 'evaluacion', 'eventos', 'comunicacion', 'pensum'];
 
 // Si el backend ya trajo permisos guardados para ese rol, esos mandan; si
 // el rol todavía no tiene ninguna fila en la tabla (o no se pidió todavía),
@@ -4622,6 +4623,15 @@ var COLOR_ESTADO_EVENTO = { programado: 'var(--azul-oscuro)', realizado: 'var(--
 // sigue usando para ubicarlo en pantalla, pero ahora además guarda el id
 // real del invitado (CACHE_INVITADOS_EVENTO_POR_CLAVE) para poder marcar
 // "enviado"/"confirmado" contra el backend.
+var CACHE_PENSUM = [];
+async function refrescarCachePensum() {
+  try {
+    CACHE_PENSUM = await apiFetch('/api/pensum', { method: 'GET' }) || [];
+  } catch (err) {
+    console.error('No se pudo cargar el Pensum académico desde el backend:', err.message);
+  }
+}
+
 var CACHE_EVENTOS = [];
 var CACHE_INVITADOS_EVENTO_POR_CLAVE = {}; // clave -> id real de evento_invitados
 
@@ -5052,6 +5062,145 @@ function activarLogicaEventos() {
         });
     });
   });
+}
+
+// ==================== PENSUM ACADÉMICO ====================
+// Módulo nuevo (2026-08-29): cada curso es una tarjeta; al abrirla se ve
+// su contenido temático (secciones -> temas), con selector de Nivel 1/2
+// para los cursos que lo tienen (Piano, Guitarra, Bajo, Violín). Cada
+// tema puede tener un enlace (Drive u otro) — editable solo por
+// Administración/Dirección (permiso pensum:crear); cualquier rol logueado
+// puede verlo (permiso pensum:ver). Conectado al backend real desde el
+// arranque (CACHE_PENSUM), no local — para que se vea igual en cualquier
+// navegador sin el bug clásico de este proyecto.
+var pensumProgramaAbierto = null;
+var pensumNivelSeleccionado = 1;
+
+function renderPensum(sesion) {
+  var puedeEditar = sesion.rol === 'ADMINISTRADOR' || sesion.rol === 'DIRECCION';
+  var porPrograma = {};
+  CACHE_PENSUM.forEach(function (n) {
+    if (!porPrograma[n.programa]) porPrograma[n.programa] = [];
+    porPrograma[n.programa].push(n);
+  });
+
+  var tarjetas = PROGRAMAS.map(function (programa) {
+    var niveles = (porPrograma[programa] || []).slice().sort(function (a, b) { return a.nivel - b.nivel; });
+    var activa = pensumProgramaAbierto === programa;
+    return '<button class="tarjeta-curso-pensum" data-programa="' + programa + '" style="text-align:left; cursor:pointer; border:1px solid ' + (activa ? 'var(--azul-oscuro)' : '#dde1e7') + '; background:' + (activa ? 'var(--azul-tint)' : '#fff') + '; border-radius:10px; padding:16px 18px; font-family:var(--font-ui);">' +
+      '<div style="font-weight:600; color:var(--azul-oscuro); font-size:14px;">' + programa + '</div>' +
+      '<div style="font-size:12px; color:var(--muted); margin-top:3px;">' + (niveles.length === 0 ? 'Sin contenido todavía' : (niveles.length > 1 ? 'Nivel 1 y Nivel 2' : 'Nivel único')) + '</div>' +
+      '</button>';
+  }).join('');
+
+  var detalle = pensumProgramaAbierto ? renderDetallePensum(porPrograma[pensumProgramaAbierto] || [], puedeEditar) : '';
+
+  return '' +
+    '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Pensum académico</h1>' +
+    '<div class="panel">' +
+    '<p style="font-size:13px; color:var(--muted); margin-top:-4px;">Elegí un curso para ver su contenido temático.' + (puedeEditar ? ' Podés agregar o cambiar el enlace de material (Drive u otro) de cada tema.' : '') + '</p>' +
+    '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:10px; margin-top:12px;">' + tarjetas + '</div>' +
+    '</div>' +
+    detalle;
+}
+
+function renderDetallePensum(niveles, puedeEditar) {
+  if (niveles.length === 0) {
+    return '<div class="panel"><p style="font-size:13px; color:var(--muted);">Todavía no hay contenido cargado para este curso.</p></div>';
+  }
+  var tieneDosNiveles = niveles.length > 1;
+  var nivelActivo = niveles.find(function (n) { return n.nivel === pensumNivelSeleccionado; }) || niveles[0];
+
+  var selectorNivel = tieneDosNiveles ? '<div style="margin-bottom:14px;">' +
+    niveles.map(function (n) {
+      var activo = n.id === nivelActivo.id;
+      return '<button class="btn-nivel-pensum" data-nivel-id="' + n.id + '" style="font-size:13px; padding:7px 16px; border-radius:8px; border:1px solid var(--azul-oscuro); background:' + (activo ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activo ? '#fff' : 'var(--azul-oscuro)') + '; cursor:pointer; font-family:var(--font-ui); margin-right:8px;">Nivel ' + n.nivel + '</button>';
+    }).join('') + '</div>' : '';
+
+  var secciones = (nivelActivo.secciones || []).map(function (s) {
+    var temas = (s.temas || []).map(function (t) {
+      var tieneEnlace = !!t.enlace_drive;
+      return '<li style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">' +
+        '<span style="font-size:13.5px; color:var(--texto);">' + t.titulo + '</span>' +
+        '<span style="display:flex; align-items:center; gap:8px;">' +
+        (tieneEnlace ? '<a href="' + t.enlace_drive + '" target="_blank" rel="noopener" style="font-size:12px; color:var(--azul-oscuro); text-decoration:underline;">Ver material</a>' : '<span style="font-size:12px; color:var(--muted); font-style:italic;">Sin material todavía</span>') +
+        (puedeEditar ? '<button class="btn-editar-enlace-pensum" data-id="' + t.id + '" data-titulo="' + t.titulo.replace(/"/g, '&quot;') + '" data-enlace="' + (t.enlace_drive || '') + '" style="font-size:11px; padding:4px 10px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui);">' + (tieneEnlace ? 'Editar enlace' : 'Agregar enlace') + '</button>' : '') +
+        '</span></li>';
+    }).join('');
+    return '<div style="margin-bottom:18px;"><h3 style="font-size:14px; color:var(--azul-oscuro); margin:0 0 8px;">' + s.titulo + '</h3>' +
+      '<ul style="list-style:none; padding:0; margin:0;">' + temas + '</ul></div>';
+  }).join('');
+
+  return '<div class="panel">' +
+    '<h2>' + nivelActivo.programa + (tieneDosNiveles ? ' — Nivel ' + nivelActivo.nivel : '') + '</h2>' +
+    selectorNivel +
+    (nivelActivo.resumen ? '<p style="font-size:13px; color:var(--muted); font-style:italic; margin-bottom:16px;">' + nivelActivo.resumen + '</p>' : '') +
+    secciones +
+    '</div>' +
+    '<div id="modal-editar-enlace-pensum" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:420px;">' +
+    '<h2 style="margin-top:0;" id="titulo-modal-enlace-pensum">Enlace del tema</h2>' +
+    '<div class="campo"><label>Enlace (Drive u otro)</label><input id="input-enlace-pensum" type="url" placeholder="https://drive.google.com/..." /></div>' +
+    '<button class="btn-primario" id="btn-guardar-enlace-pensum">Guardar</button>' +
+    '<button id="btn-cancelar-enlace-pensum" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '<p id="msj-error-enlace-pensum" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
+    '</div></div>';
+}
+
+function activarLogicaPensum() {
+  document.querySelectorAll('.tarjeta-curso-pensum').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var programa = btn.getAttribute('data-programa');
+      pensumProgramaAbierto = (pensumProgramaAbierto === programa) ? null : programa;
+      pensumNivelSeleccionado = 1;
+      renderContenido('pensum');
+    });
+  });
+
+  document.querySelectorAll('.btn-nivel-pensum').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var nivel = CACHE_PENSUM.find(function (n) { return n.id === btn.getAttribute('data-nivel-id'); });
+      if (nivel) { pensumNivelSeleccionado = nivel.nivel; renderContenido('pensum'); }
+    });
+  });
+
+  document.querySelectorAll('.btn-editar-enlace-pensum').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.getElementById('titulo-modal-enlace-pensum').textContent = btn.getAttribute('data-titulo');
+      document.getElementById('input-enlace-pensum').value = btn.getAttribute('data-enlace') || '';
+      document.getElementById('modal-editar-enlace-pensum').setAttribute('data-tema-id', btn.getAttribute('data-id'));
+      document.getElementById('msj-error-enlace-pensum').style.display = 'none';
+      document.getElementById('modal-editar-enlace-pensum').style.display = 'flex';
+    });
+  });
+
+  var modalPensum = document.getElementById('modal-editar-enlace-pensum');
+  var btnCancelarEnlacePensum = document.getElementById('btn-cancelar-enlace-pensum');
+  if (btnCancelarEnlacePensum) btnCancelarEnlacePensum.addEventListener('click', function () { modalPensum.style.display = 'none'; });
+
+  var btnGuardarEnlacePensum = document.getElementById('btn-guardar-enlace-pensum');
+  if (btnGuardarEnlacePensum) {
+    btnGuardarEnlacePensum.addEventListener('click', function () {
+      var id = modalPensum.getAttribute('data-tema-id');
+      var enlace = document.getElementById('input-enlace-pensum').value.trim();
+      var msjError = document.getElementById('msj-error-enlace-pensum');
+      msjError.style.display = 'none';
+
+      btnGuardarEnlacePensum.disabled = true;
+      apiFetch('/api/pensum/temas/' + id, { method: 'PUT', body: JSON.stringify({ enlaceDrive: enlace || null }) })
+        .then(function () { return refrescarCachePensum(); })
+        .then(function () {
+          btnGuardarEnlacePensum.disabled = false;
+          modalPensum.style.display = 'none';
+          renderContenido('pensum');
+        })
+        .catch(function (err) {
+          btnGuardarEnlacePensum.disabled = false;
+          msjError.textContent = err.message || 'No se pudo guardar el enlace.';
+          msjError.style.display = 'block';
+        });
+    });
+  }
 }
 
 // ==================== CONTABILIDAD ====================
@@ -6755,6 +6904,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'eventos') {
     document.getElementById('contenido').innerHTML = renderEventos(sesion);
     activarLogicaEventos();
+  } else if (mod.key === 'pensum') {
+    document.getElementById('contenido').innerHTML = renderPensum(sesion);
+    activarLogicaPensum();
   } else if (mod.key === 'contabilidad') {
     document.getElementById('contenido').innerHTML = renderContabilidad(sesion);
     activarLogicaContabilidad();
@@ -6825,6 +6977,7 @@ function navegar() {
     .then(function () { return refrescarCacheAsistencias(); })
     .then(function () { return refrescarCacheEvaluacionesMensuales(); })
     .then(function () { return refrescarCacheEventos(); })
+    .then(function () { return refrescarCachePensum(); })
     .then(function () { return refrescarCacheContabIngresos(); })
     .then(function () { return refrescarCacheContabGastos(); })
     .then(function () { return refrescarCacheContabCompras(); })
