@@ -16,6 +16,7 @@ import { rutasInventario } from "./api/rutas/inventario.js";
 import { rutasPermisos } from "./api/rutas/permisos.js";
 import { rutasReportes } from "./api/rutas/reportes.js";
 import { rutasPensum } from "./api/rutas/pensum.js";
+import { rutasAuditoria } from "./api/rutas/auditoria.js";
 import { manejoErrores, respuestaExitosa } from "./api/middlewares/manejoErrores.js";
 const app = express();
 app.use(cors());
@@ -36,6 +37,7 @@ app.use("/api/inventario", rutasInventario);
 app.use("/api/permisos", rutasPermisos);
 app.use("/api/reportes", rutasReportes);
 app.use("/api/pensum", rutasPensum);
+app.use("/api/auditoria", rutasAuditoria);
 app.use(manejoErrores);
 if (process.env.VERCEL !== "1") {
   const PUERTO = process.env.PUERTO || 3001;
