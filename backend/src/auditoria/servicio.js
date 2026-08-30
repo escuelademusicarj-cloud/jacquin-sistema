@@ -12,3 +12,33 @@ export async function registrarAuditoria({ usuarioId, accion, modulo, entidad, e
     [usuarioId, accion, modulo, entidad, entidadId, resultado]
   );
 }
+
+// NUEVO: consulta de auditoría para la pantalla "Auditoría" — quién hizo
+// qué en el sistema. Filtros opcionales por rol, acción y rango de
+// fechas (todos combinables). Trae los 300 registros más recientes que
+// calcen — no hay paginación todavía, no hace falta con este volumen.
+export async function listarAuditoria({ rol, accion, desde, hasta } = {}) {
+  const condiciones = [];
+  const valores = [];
+  let i = 1;
+
+  if (rol) { condiciones.push(`r.nombre = $${i++}`); valores.push(rol); }
+  if (accion) { condiciones.push(`a.accion = $${i++}`); valores.push(accion); }
+  if (desde) { condiciones.push(`a.fecha_hora >= $${i++}`); valores.push(desde); }
+  if (hasta) { condiciones.push(`a.fecha_hora <= $${i++}::date + interval '1 day'`); valores.push(hasta); }
+
+  const where = condiciones.length ? `WHERE ${condiciones.join(" AND ")}` : "";
+
+  const { rows } = await pool.query(
+    `SELECT a.id, a.fecha_hora, a.accion, a.modulo, a.entidad, a.entidad_id, a.resultado,
+            u.nombre AS usuario_nombre, u.email AS usuario_email, r.nombre AS usuario_rol
+     FROM auditoria_log a
+     LEFT JOIN usuarios u ON u.id = a.usuario_id
+     LEFT JOIN roles r ON r.id = u.rol_id
+     ${where}
+     ORDER BY a.fecha_hora DESC
+     LIMIT 300`,
+    valores
+  );
+  return rows;
+}
