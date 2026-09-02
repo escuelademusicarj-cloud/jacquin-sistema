@@ -2177,6 +2177,10 @@ function activarLogicaEstudiantes(volverA) {
           // saldo pendiente al retirarlo).
           bloqueMatricula.style.display = '';
           function formatearCOP(numero) { return '$ ' + Number(numero).toLocaleString('es-CO'); }
+          function valorConDescuentoEditor(valorBase) {
+            var pct = Number(document.getElementById('ed-descuento').value || 0);
+            return Math.round(valorBase * (1 - pct / 100));
+          }
           function repoblarTiposPlan() {
             var selectTipo = document.getElementById('ed-tipo-plan');
             var tipos = tiposPlanParaPrograma(alumno.programa);
@@ -2189,11 +2193,15 @@ function activarLogicaEstudiantes(volverA) {
             var tipo = TIPOS_PLAN.find(function (t) { return t.nombre === document.getElementById('ed-tipo-plan').value; });
             if (!tipo) return;
             document.getElementById('ed-horas').value = tipo.horasSemana + ' h/semana';
-            document.getElementById('ed-valor').value = formatearCOP(tipo.valor);
+            document.getElementById('ed-valor').value = formatearCOP(valorConDescuentoEditor(tipo.valor));
           }
+          // El descuento tiene que estar cargado ANTES de mostrar el valor
+          // por primera vez, si no la primera vista siempre sale sin
+          // descontar (era justo el bug reportado).
+          document.getElementById('ed-descuento').value = ins.descuentoPorcentaje || 0;
           repoblarTiposPlan();
           document.getElementById('ed-tipo-plan').onchange = aplicarTipoEdicion;
-          document.getElementById('ed-descuento').value = ins.descuentoPorcentaje || 0;
+          document.getElementById('ed-descuento').oninput = aplicarTipoEdicion;
           document.getElementById('ed-fecha-inicio').value = ins.fechaInicio || '';
           document.getElementById('ed-estado-txt').value = ETIQUETA_ESTADO[alumno.estado] || alumno.estado;
 
@@ -2605,7 +2613,8 @@ async function generarCargosMensualesFaltantes() {
     var yaTieneEsteMes = cargos.some(function (c) { return c.alumnoIdx === i && c.concepto === 'Mensualidad' && c.vencimiento && c.vencimiento.slice(0, 7) === ymActual; });
     if (yaTieneEsteMes) return;
 
-    creaciones.push({ alumnoId: a.id, conceptoId: conceptoMensualidad.id, valor: inscripcion.valor, descuento: 0, fechaVencimiento: vencimientoDelMes });
+    var montoDescuento = Math.round(Number(inscripcion.valor) * (Number(inscripcion.descuentoPorcentaje || 0) / 100));
+    creaciones.push({ alumnoId: a.id, conceptoId: conceptoMensualidad.id, valor: inscripcion.valor, descuento: montoDescuento, fechaVencimiento: vencimientoDelMes });
   });
 
   if (creaciones.length === 0) return;
@@ -2651,7 +2660,7 @@ function renderHistorialMensualidades(alumnos, cargos) {
     var celdas = mesesOrdenados.map(function (ym) {
       var cargo = cargos.find(function (c) { return c.alumnoIdx === o.i && c.concepto === 'Mensualidad' && c.vencimiento && c.vencimiento.slice(0, 7) === ym; });
       if (!cargo) return '<td style="text-align:center; color:var(--muted);">—</td>';
-      var valorTxt = '<div style="font-size:10.5px; color:var(--muted);">' + formatearCOPContable(cargo.valor) + '</div>';
+      var valorTxt = '<div style="font-size:10.5px; color:var(--muted);">' + formatearCOPContable(cargo.valor - (cargo.descuento || 0)) + '</div>';
       if (cargo.saldo <= 0) return '<td style="text-align:center; white-space:nowrap;">' + valorTxt + '<span style="color:var(--verde); font-weight:600; font-size:11.5px;">Pagado</span></td>';
       var etiqueta = cargo.vencimiento <= hoyStr2
         ? '<span style="color:#fff; background:var(--rojo); padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600;" title="Vence ' + cargo.vencimiento + '">Debe pagar</span>'
@@ -2673,7 +2682,7 @@ function renderHistorialMensualidades(alumnos, cargos) {
         var mensajeCobro = encodeURIComponent(
           'Hola! Te escribimos de Academia Musical Jacquin para recordarte amablemente que la mensualidad de ' +
           o.a.nombres + ' ' + o.a.apellidos + ' correspondiente a ' + nombreMesCorto(mesCobroWhatsapp) +
-          ' está pendiente (' + formatearCOPContable(cargoDelMesCobro.valor) + '). Cualquier novedad con gusto te ayudamos. ¡Gracias!'
+          ' está pendiente (' + formatearCOPContable(cargoDelMesCobro.valor - (cargoDelMesCobro.descuento || 0)) + '). Cualquier novedad con gusto te ayudamos. ¡Gracias!'
         );
         celdaCobro = '<td style="text-align:center;"><a href="https://wa.me/' + telefonoContacto + '?text=' + mensajeCobro + '" target="_blank" rel="noopener" style="font-size:11px; background:#25D366; color:#fff; padding:5px 10px; border-radius:6px; text-decoration:none; white-space:nowrap;">📲 Cobro por WhatsApp</a></td>';
       }
@@ -2682,7 +2691,7 @@ function renderHistorialMensualidades(alumnos, cargos) {
     return '<tr><td style="font-weight:600; white-space:nowrap;">' + o.a.nombres + ' ' + o.a.apellidos + '</td>' + celdas + celdaCobro + '</tr>';
   }).join('');
 
-  return '<div class="panel"><h2>Historial de mensualidades</h2>' +
+  return '<div class="panel"><h2>Sistema de cartera</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Todos los matriculados pagan dentro de los primeros 5 días del mes — el cargo se genera solo, mismo día para todos. El 🗑 elimina un cargo (usalo solo si el estudiante no asistió ese mes).</p>' +
     selectorMesCobro +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr>' + encabezado + '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
@@ -2704,12 +2713,12 @@ function renderCartera(alumnos, cargos) {
   }).join('');
 
   return '' +
+    renderHistorialMensualidades(alumnos, cargos) +
     '<div class="panel" style="border:2px solid #fbe2dd; background:#fffaf9;"><h2 style="color:var(--rojo);">Cartera pendiente</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Quién debe, cuánto — la prioridad #1 que pidió Sergio.</p>' +
     (filasCartera ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Total pendiente</th><th></th></tr></thead><tbody>' + filasCartera + '</tbody></table></div>'
       : '<p style="font-size:13px; color:var(--verde);">Nadie tiene saldo pendiente.</p>') +
-    '</div>' +
-    renderHistorialMensualidades(alumnos, cargos);
+    '</div>';
 }
 
 function renderPagosTab(alumnos, cargos) {
