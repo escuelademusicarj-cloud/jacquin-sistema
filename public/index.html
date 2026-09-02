@@ -1494,10 +1494,7 @@ var ILUSTRACION_MATRICULA =
 function renderDashboard(sesion) {
   var visibles = modulosVisibles(sesion.rol);
   var modulos = MODULOS.filter(function (m) { return m.key !== 'dashboard' && visibles.indexOf(m.key) !== -1; });
-  // La sesión real hoy guarda email/rol, no un nombre — se usa el
-  // usuario del email como saludo hasta que el backend devuelva el
-  // nombre real (pendiente, no inventado acá).
-  var primerNombre = sesion.email ? sesion.email.split('@')[0] : '';
+  var primerNombre = sesion.nombre || (sesion.email ? sesion.email.split('@')[0] : '');
 
   var htmlModulos = modulos.map(function (m, i) {
     var oscura = i % 2 === 1 ? ' oscura' : '';
@@ -2042,18 +2039,6 @@ function activarLogicaEstudiantes(volverA) {
                     });
                   })
                   .then(function () {
-                    return crearIngresoBackend({
-                      fecha: fechaPagoTxt,
-                      concepto: 'Matrícula — ' + nombres + ' ' + apellidos,
-                      programa: programaFinal,
-                      categoria: 'Matrícula',
-                      cliente: nombres + ' ' + apellidos,
-                      metodo: medioPagoFinal,
-                      estado: 'pagado',
-                      valor: valorMensualidad
-                    }).catch(function () { /* si falla el ingreso, la matrícula ya quedó hecha — no bloquea la fila */ });
-                  })
-                  .then(function () {
                     matriculados++;
                     procesarFilaExcel(indice + 1);
                   })
@@ -2507,22 +2492,6 @@ function activarLogicaMatricula() {
           return Promise.all([refrescarCacheAlumnos(), refrescarCachePlanes()]).then(refrescarCacheInscripciones);
         })
         .then(function () {
-          // Conecta con Contabilidad real: todo pago registrado acá crea
-          // un Ingreso de verdad en el backend (antes solo quedaba local).
-          if (pagado) {
-            return crearIngresoBackend({
-              fecha: fechaPago,
-              concepto: 'Matrícula — ' + alumno.nombres + ' ' + alumno.apellidos,
-              programa: programaElegido,
-              categoria: 'Matrícula',
-              cliente: alumno.nombres + ' ' + alumno.apellidos,
-              metodo: medioPagoInscripcion,
-              estado: 'pagado',
-              valor: valorConDescuento
-            }).then(function () { return refrescarCacheContabIngresos(); });
-          }
-        })
-        .then(function () {
           document.getElementById('msj-inscripcion').textContent = pagado
             ? 'Inscripción creada y pago registrado — el estudiante ya quedó "Activo", y el cargo aparece saldado en Pagos y cartera (visible ahí cuando ese módulo también esté conectado).'
             : 'Inscripción creada — el estudiante queda "Pendiente de matrícula" y el cargo aparece pendiente hasta que se registre el pago.';
@@ -2828,20 +2797,6 @@ function activarLogicaPagos() {
           var pagos = cargarPagosRegistrados();
           pagos.push({ alumnoIdx: cargo.alumnoIdx, concepto: cargo.concepto, valor: valor, fecha: fechaPagoCargo, medioPago: medioPago });
           guardarPagosRegistrados(pagos);
-
-          // Misma conexión que en Matrícula: todo pago que se registra acá
-          // crea un Ingreso de verdad en Contabilidad (backend real).
-          var alumnoDelCargo = cargarAlumnos()[cargo.alumnoIdx];
-          return crearIngresoBackend({
-            fecha: fechaPagoCargo,
-            concepto: cargo.concepto + (alumnoDelCargo ? ' — ' + alumnoDelCargo.nombres + ' ' + alumnoDelCargo.apellidos : ''),
-            programa: alumnoDelCargo ? alumnoDelCargo.programa : '',
-            categoria: CATEGORIAS_INGRESO.indexOf(cargo.concepto) !== -1 ? cargo.concepto : 'Otro',
-            cliente: alumnoDelCargo ? alumnoDelCargo.nombres + ' ' + alumnoDelCargo.apellidos : '',
-            metodo: medioPago,
-            estado: 'pagado',
-            valor: valor
-          }).then(function () { return refrescarCacheContabIngresos(); });
         })
         .then(function () {
           document.getElementById('msj-pago').style.display = 'block';
@@ -5871,10 +5826,12 @@ function panelBalanceMensual() {
 
 function renderContabilidad(sesion) {
   var esAdmin = sesion.rol === 'ADMINISTRADOR';
-  var pestañas = ['ingresos', 'gastos', 'compras', 'nomina'];
-  if (esAdmin) pestañas.push('resumen', 'balance');
+  // Decisión de negocio (2026-09-02): Secretaría solo registra Ingresos y
+  // Compras — ni Gastos/Nómina ni el resumen financiero quedan a su
+  // alcance (antes veía también Gastos y Nómina).
+  var pestañas = esAdmin ? ['ingresos', 'gastos', 'compras', 'nomina', 'resumen', 'balance'] : ['ingresos', 'compras'];
   var etiquetaPestaña = { ingresos: 'Ingresos', gastos: 'Gastos', compras: 'Compras', nomina: 'Nómina', resumen: 'Resumen general', balance: 'Balance mensual' };
-  if (!esAdmin && (tabContabilidadActiva === 'resumen' || tabContabilidadActiva === 'balance')) tabContabilidadActiva = 'ingresos';
+  if (pestañas.indexOf(tabContabilidadActiva) === -1) tabContabilidadActiva = 'ingresos';
 
   var botonesPestañas = pestañas.map(function (p) {
     var activa = p === tabContabilidadActiva;
@@ -5884,15 +5841,15 @@ function renderContabilidad(sesion) {
 
   var contenido = '';
   if (tabContabilidadActiva === 'ingresos') contenido = panelIngresos(esAdmin);
-  else if (tabContabilidadActiva === 'gastos') contenido = panelGastos(esAdmin);
+  else if (tabContabilidadActiva === 'gastos' && esAdmin) contenido = panelGastos(esAdmin);
   else if (tabContabilidadActiva === 'compras') contenido = panelCompras(esAdmin);
-  else if (tabContabilidadActiva === 'nomina') contenido = panelNomina(esAdmin);
+  else if (tabContabilidadActiva === 'nomina' && esAdmin) contenido = panelNomina(esAdmin);
   else if (tabContabilidadActiva === 'resumen' && esAdmin) contenido = panelResumenGeneral();
   else if (tabContabilidadActiva === 'balance' && esAdmin) contenido = panelBalanceMensual();
 
   return '' +
     heroContabilidad() +
-    (esAdmin ? '' : '<p style="font-size:12px; color:var(--muted); margin:0 0 16px;">Podés registrar ingresos, gastos, compras y nómina. El resumen financiero completo lo ve solo Administración.</p>') +
+    (esAdmin ? '' : '<p style="font-size:12px; color:var(--muted); margin:0 0 16px;">Podés registrar ingresos y compras. El resto de Contabilidad (gastos, nómina y el resumen financiero) lo ve solo Administración.</p>') +
     '<div class="contab-tabs">' + botonesPestañas + '</div>' +
     contenido;
 }
@@ -7214,7 +7171,7 @@ document.getElementById('form-login').addEventListener('submit', function (e) {
   apiFetch('/api/identidad/login', { method: 'POST', body: JSON.stringify({ email: email, password: pass }) })
     .then(function (data) {
       sessionStorage.setItem('jacquin_demo_sesion', JSON.stringify({
-        email: data.usuario.email, rol: data.usuario.rol, token: data.token, usuarioId: data.usuario.id
+        email: data.usuario.email, nombre: data.usuario.nombre, rol: data.usuario.rol, token: data.token, usuarioId: data.usuario.id
       }));
       if (data.usuario.debeCambiarPassword) {
         mostrarCambiarPassword(pass);
