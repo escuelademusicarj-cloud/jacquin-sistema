@@ -1397,44 +1397,75 @@ function calcularEdadDesdeFecha(fechaStr) {
   return edad;
 }
 
-function esCumpleañosHoy(fechaStr) {
-  if (!fechaStr) return false;
-  var nacimiento = new Date(fechaStr);
-  var hoy = new Date();
-  return nacimiento.getMonth() === hoy.getMonth() && nacimiento.getDate() === hoy.getDate();
+// Cumpleaños de la semana (lunes a domingo), con los días ya pasados
+// quitándose solos a medida que avanza la semana — un cumpleañero del
+// lunes deja de aparecer a partir del martes, sin tocar nada a mano.
+function nombreDiaCorto(fecha) {
+  var dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  return dias[fecha.getDay()];
 }
 
-// Recorre estudiantes y personal (usuarios + perfiles de profesor) y arma la
-// lista de quienes cumplen años hoy. Solo se muestra el día exacto.
-function cumpleañosDeHoy() {
-  var resultado = [];
+function diasRestantesDeLaSemana() {
+  var hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  var diaSemana = hoy.getDay(); // 0=domingo … 6=sábado
+  var offsetLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
+  var dias = [];
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(hoy);
+    d.setDate(hoy.getDate() + offsetLunes + i);
+    if (d >= hoy) dias.push(d);
+  }
+  return dias;
+}
+
+// Recorre estudiantes y personal (usuarios + perfiles de profesor) y arma
+// la lista de quienes cumplen años en lo que queda de esta semana (hoy
+// incluido), cada uno con el día exacto en que le toca.
+function cumpleañosDeLaSemana() {
+  var hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  var diasRestantes = diasRestantesDeLaSemana();
+
+  var personas = [];
   cargarAlumnos().forEach(function (a) {
-    if (esCumpleañosHoy(a.nacimiento)) {
-      resultado.push({ nombre: a.nombres + ' ' + a.apellidos, tipo: 'Estudiante', edad: calcularEdadDesdeFecha(a.nacimiento) });
-    }
+    if (a.nacimiento) personas.push({ nombre: a.nombres + ' ' + a.apellidos, tipo: 'Estudiante', nacimiento: a.nacimiento });
   });
   var perfiles = cargarPerfilesProfesor();
   cargarUsuarios().forEach(function (u) {
     var fechaNacimiento = u.nacimiento || (perfiles[u.email] && perfiles[u.email].nacimiento);
-    if (esCumpleañosHoy(fechaNacimiento)) {
-      resultado.push({ nombre: u.nombre, tipo: 'Personal', edad: calcularEdadDesdeFecha(fechaNacimiento) });
-    }
+    if (fechaNacimiento) personas.push({ nombre: u.nombre, tipo: 'Personal', nacimiento: fechaNacimiento });
+  });
+
+  var resultado = [];
+  diasRestantes.forEach(function (dia) {
+    personas.forEach(function (p) {
+      var nacimiento = new Date(p.nacimiento);
+      if (nacimiento.getMonth() === dia.getMonth() && nacimiento.getDate() === dia.getDate()) {
+        resultado.push({
+          nombre: p.nombre, tipo: p.tipo, edad: calcularEdadDesdeFecha(p.nacimiento),
+          esHoy: dia.getTime() === hoy.getTime(), etiquetaDia: dia.getTime() === hoy.getTime() ? 'Hoy' : nombreDiaCorto(dia)
+        });
+      }
+    });
   });
   return resultado;
 }
 
 function renderBannerCumpleaños() {
-  var cumples = cumpleañosDeHoy();
+  var cumples = cumpleañosDeLaSemana();
   if (cumples.length === 0) return '';
-  var nombres = cumples.map(function (c) {
-    return '<strong>' + c.nombre + '</strong> (' + c.tipo + ', ' + c.edad + ' años)';
-  }).join(' · ');
+  var soloHoy = cumples.every(function (c) { return c.esHoy; });
+  var titulo = soloHoy ? (cumples.length === 1 ? '¡Hoy cumple años!' : '¡Hoy cumplen años!') : 'Cumpleaños de esta semana';
+  var lineas = cumples.map(function (c) {
+    return '<strong>' + c.nombre + '</strong> (' + c.tipo + ', ' + c.edad + ' años)' + (soloHoy ? '' : ' — ' + c.etiquetaDia);
+  }).join('<br>');
   return '' +
     '<div class="banner-cumpleaños" style="background:linear-gradient(120deg, var(--naranja), var(--azul-claro)); color:#fff; border-radius:18px; padding:20px 26px; margin-bottom:22px; box-shadow:0 10px 24px rgba(0,0,0,0.18); display:flex; align-items:center; gap:14px;">' +
       '<span style="font-size:34px; line-height:1;">🎂</span>' +
       '<div>' +
-        '<p style="margin:0 0 4px; font-family:var(--font-wordmark); font-weight:600; font-size:19px;">¡Hoy cumple años!</p>' +
-        '<p style="margin:0; font-size:13.5px;">' + nombres + '</p>' +
+        '<p style="margin:0 0 4px; font-family:var(--font-wordmark); font-weight:600; font-size:19px;">' + titulo + '</p>' +
+        '<p style="margin:0; font-size:13.5px; line-height:1.6;">' + lineas + '</p>' +
       '</div>' +
     '</div>';
 }
