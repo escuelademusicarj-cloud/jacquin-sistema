@@ -1175,6 +1175,9 @@ var UMBRAL_ALERTA_FALTAS = 3;
 // su propia fecha real dentro de la semana elegida — y filtro por programa/"General".
 var semanaAsistenciaSeleccionada = semanaActualStr();
 var filtroProgramaAsistencia = 'General';
+// Qué celda (día-hora) tiene abierto el mini-formulario de "+ Asistencia
+// manual" — null si ninguna. Solo una a la vez.
+var celdaManualAbierta = null;
 var alumnoHistorialAsistenciaIdx = null; // estudiante elegido en el recuadro de historial individual
 var busquedaHistorialAsistencia = ''; // texto del buscador de estudiante en el historial de asistencia
 var busquedaAvanceMensual = ''; // texto del buscador de estudiante en Avances académicos
@@ -3591,7 +3594,33 @@ function renderAsistencia(sesion) {
 
       var etiquetaHoraCelda = '<div style="font-size:10px; font-weight:700; color:' + (esHoy ? 'var(--azul-oscuro)' : 'var(--muted)') + '; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.02em;">' + (esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie) + '</div>';
 
-      return '<td style="border-left:3px solid ' + (esHoy ? 'var(--naranja)' : '#ddd') + '; background:#fff; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + '</td>';
+      // "+ Asistencia manual" — anota a alguien que vino a un horario que
+      // no le corresponde, sin tocar nada de Horarios: solo se guarda una
+      // asistencia (mismo endpoint de siempre), atada a una de las clases
+      // reales que sí existen en esta hora puntual. Si en esta hora no hay
+      // ninguna clase para ningún curso, no tiene sentido ofrecerlo.
+      var claveCelda = dia + '-' + hora;
+      var todasClasesCelda = clasesDeCelda(clases, dia, hora);
+      var botonManual = todasClasesCelda.length > 0
+        ? '<button type="button" class="btn-abrir-asis-manual" data-clave="' + claveCelda + '" style="font-size:10px; color:var(--azul-oscuro); background:none; border:none; cursor:pointer; padding:2px 0; text-decoration:underline; display:block; margin-top:2px;">+ Asistencia manual</button>'
+        : '';
+      var formularioManual = celdaManualAbierta === claveCelda
+        ? '<div style="margin-top:4px; padding:5px; background:#FDF1D6; border:1px solid #E9C46A; border-radius:5px;">' +
+          '<select id="sel-manual-alumno" style="width:100%; font-size:10px; margin-bottom:3px; padding:2px;"><option value="">Estudiante…</option>' +
+          alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
+          '</select>' +
+          '<select id="sel-manual-clase" style="width:100%; font-size:10px; margin-bottom:3px; padding:2px;"><option value="">Curso…</option>' +
+          todasClasesCelda.map(function (o) { return '<option value="' + o.i + '">' + o.c.programa + '</option>'; }).join('') +
+          '</select>' +
+          '<div style="display:flex; gap:4px;">' +
+          '<button type="button" id="btn-guardar-asis-manual" data-fecha="' + fechaCelda + '" style="flex:1; font-size:10px; background:var(--azul-oscuro); color:#fff; border:none; border-radius:3px; padding:3px; cursor:pointer;">Guardar</button>' +
+          '<button type="button" id="btn-cancelar-asis-manual" style="font-size:10px; background:#fff; border:1px solid #ccc; border-radius:3px; padding:3px 6px; cursor:pointer;">✕</button>' +
+          '</div>' +
+          '<p id="msj-error-asis-manual" style="font-size:9.5px; color:#c0392b; display:none; margin:3px 0 0;"></p>' +
+          '</div>'
+        : '';
+
+      return '<td style="border-left:3px solid ' + (esHoy ? 'var(--naranja)' : '#ddd') + '; background:#fff; padding:6px; vertical-align:top; min-width:130px;">' + etiquetaHoraCelda + (contenidoOcupantes || '<p style="font-size:10.5px; color:var(--muted); margin:0;">Sin clases</p>') + botonManual + formularioManual + '</td>';
     }).join('');
 
     var filaFranja = '<tr><td style="font-size:11px; color:var(--muted); font-weight:600; padding:6px; white-space:nowrap; vertical-align:top;">' + franja.etiquetaLunVie + '</td>' + celdas + '</tr>';
@@ -3758,6 +3787,7 @@ function activarLogicaAsistencia() {
   if (campoSemana) {
     campoSemana.addEventListener('change', function () {
       if (this.value) semanaAsistenciaSeleccionada = this.value;
+      celdaManualAbierta = null;
       renderContenido('asistencia');
     });
   }
@@ -3765,9 +3795,77 @@ function activarLogicaAsistencia() {
   document.querySelectorAll('.btn-filtro-programa-asistencia').forEach(function (btn) {
     btn.addEventListener('click', function () {
       filtroProgramaAsistencia = btn.getAttribute('data-programa');
+      celdaManualAbierta = null;
       renderContenido('asistencia');
     });
   });
+
+  document.querySelectorAll('.btn-abrir-asis-manual').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      celdaManualAbierta = btn.getAttribute('data-clave');
+      renderContenido('asistencia');
+    });
+  });
+
+  var btnCancelarManual = document.getElementById('btn-cancelar-asis-manual');
+  if (btnCancelarManual) {
+    btnCancelarManual.addEventListener('click', function () {
+      celdaManualAbierta = null;
+      renderContenido('asistencia');
+    });
+  }
+
+  var btnGuardarManual = document.getElementById('btn-guardar-asis-manual');
+  if (btnGuardarManual) {
+    btnGuardarManual.addEventListener('click', function () {
+      var msjError = document.getElementById('msj-error-asis-manual');
+      msjError.style.display = 'none';
+
+      var alumnoIdxStr = document.getElementById('sel-manual-alumno').value;
+      var claseIdxStr = document.getElementById('sel-manual-clase').value;
+      var fecha = btnGuardarManual.getAttribute('data-fecha');
+
+      if (alumnoIdxStr === '' || claseIdxStr === '') {
+        msjError.textContent = 'Elegí estudiante y curso.';
+        msjError.style.display = 'block';
+        return;
+      }
+
+      var alumnoIdx = Number(alumnoIdxStr);
+      var claseIdx = Number(claseIdxStr);
+      var alumno = cargarAlumnos()[alumnoIdx];
+      var clase = cargarClases()[claseIdx];
+      if (!alumno || !alumno.id || !clase || !clase.id) {
+        msjError.textContent = 'No se pudo identificar al estudiante o el curso.';
+        msjError.style.display = 'block';
+        return;
+      }
+
+      btnGuardarManual.disabled = true;
+      // Se anota directo como "Asistió" — si acá se está registrando a
+      // mano es justamente porque sí vino; si hace falta otro estado, se
+      // cambia después con el mismo desplegable de siempre, una vez que
+      // ya aparece resaltado en la celda.
+      apiFetch('/api/asistencia', {
+        method: 'POST',
+        body: JSON.stringify({ claseId: clase.id, alumnoId: alumno.id, fecha: fecha, estado: 'asistio' })
+      })
+        .then(function () {
+          var asistencias = cargarAsistencias();
+          var existenteIdx = asistencias.findIndex(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fecha; });
+          if (existenteIdx !== -1) asistencias[existenteIdx].estado = 'asistio';
+          else asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fecha, estado: 'asistio' });
+          guardarAsistencias(asistencias);
+          celdaManualAbierta = null;
+          renderContenido('asistencia');
+        })
+        .catch(function (err) {
+          btnGuardarManual.disabled = false;
+          msjError.textContent = 'No se pudo registrar: ' + (err.message || 'error de conexión.');
+          msjError.style.display = 'block';
+        });
+    });
+  }
 
   var btnRegistrarExtra = document.getElementById('btn-registrar-asis-extra');
   if (btnRegistrarExtra) {
