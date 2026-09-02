@@ -26,6 +26,22 @@ export async function buscarAlumnoPorId(id) {
   return rows[0] ?? null;
 }
 
+// NUEVO: edita los datos propios de un alumno ya existente (no su estado
+// — eso sigue siendo cambiarEstado/PATCH .../estado, un flujo aparte con
+// su propio historial). Reemplaza estos 9 campos tal cual vienen —
+// coincide exactamente con lo que ya manda el editor de estudiantes del
+// frontend, así que no hace falta una fusión parcial campo por campo.
+export async function actualizarAlumno(id, alumno) {
+  const { rows } = await pool.query(
+    `UPDATE alumnos SET nombres=$1, apellidos=$2, documento=$3, fecha_nacimiento=$4, telefono_contacto=$5,
+            email_contacto=$6, programa_principal=$7, profesor_id=$8, observaciones=$9, actualizado_en = now()
+     WHERE id = $10 RETURNING *`,
+    [alumno.nombres, alumno.apellidos, alumno.documento, alumno.fechaNacimiento, alumno.telefonoContacto,
+     alumno.emailContacto, alumno.programaPrincipal, alumno.profesorId, alumno.observaciones, id]
+  );
+  return rows[0];
+}
+
 export async function actualizarEstadoAlumno(id, estadoNuevo) {
   const { rows } = await pool.query(
     `UPDATE alumnos SET estado = $1, actualizado_en = now() WHERE id = $2 RETURNING *`,
