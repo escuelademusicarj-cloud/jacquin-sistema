@@ -5417,7 +5417,11 @@ function panelIngresos(esAdmin) {
     PROGRAMAS.map(function (p) { return '<option value="' + p + '"' + (r && r.programa === p ? ' selected' : '') + '>' + p + '</option>'; }).join('') + '</select></div>' +
     '<div class="campo"><label>Categoría</label><select id="ing-categoria">' +
     CATEGORIAS_INGRESO.map(function (c) { return '<option value="' + c + '"' + (r && r.categoria === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Estudiante / cliente (opcional)</label><input id="ing-cliente" type="text" value="' + (r ? r.cliente || '' : '') + '" /></div>' +
+    '<div class="campo"><label>Estudiante / cliente (opcional)</label><select id="ing-cliente"><option value="">Ninguno(a)</option>' +
+    cargarAlumnos().map(function (a) {
+      var nombreCompleto = (a.nombres + ' ' + a.apellidos).trim();
+      return '<option value="' + nombreCompleto.replace(/"/g, '&quot;') + '"' + (r && r.cliente === nombreCompleto ? ' selected' : '') + '>' + nombreCompleto + '</option>';
+    }).join('') + '</select></div>' +
     '<div class="campo"><label>Método de pago</label><select id="ing-metodo">' +
     METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '"' + (r && r.metodo === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>' +
     '<div class="campo"><label>Estado</label><select id="ing-estado"><option value="pagado"' + (r && r.estado === 'pagado' ? ' selected' : '') + '>Pagado</option><option value="pendiente"' + (r && r.estado === 'pendiente' ? ' selected' : '') + '>Pendiente</option></select></div>' +
@@ -5900,10 +5904,16 @@ function cambiarMesBalanceContable(valor) {
 }
 
 function panelBalanceMensual() {
+  var añoBalance = new Date().getFullYear();
+  var nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  var botonesMeses = nombresMeses.map(function (nombre, i) {
+    var ymBoton = añoBalance + '-' + String(i + 1).padStart(2, '0');
+    var activo = ymBoton === mesBalanceContable;
+    return '<button type="button" onclick="cambiarMesBalanceContable(\'' + ymBoton + '\')" style="font-size:12.5px; padding:8px 14px; border-radius:20px; border:1px solid var(--azul-oscuro); background:' + (activo ? 'var(--azul-oscuro)' : '#fff') + '; color:' + (activo ? '#fff' : 'var(--azul-oscuro)') + '; cursor:pointer; font-family:var(--font-ui); margin:0 6px 6px 0;">' + nombre + '</button>';
+  }).join('');
   var selector =
-    '<div class="panel"><h2>Balance mensual</h2>' +
-    '<div class="campo" style="max-width:220px;"><label>Selecciona un mes</label>' +
-    '<input type="month" id="bal-mes" value="' + mesBalanceContable + '" onchange="cambiarMesBalanceContable(this.value)" /></div>' +
+    '<div class="panel"><h2>Balance mensual — ' + añoBalance + '</h2>' +
+    '<div style="display:flex; flex-wrap:wrap;">' + botonesMeses + '</div>' +
     '</div>';
 
   if (!mesBalanceContable) {
