@@ -860,18 +860,25 @@ var CACHE_CONTAB_COMPRAS = [];
 var CACHE_CONTAB_NOMINA = [];
 
 async function refrescarCacheContabIngresos() {
-  try { CACHE_CONTAB_INGRESOS = await apiFetch('/api/contabilidad/ingresos', { method: 'GET' }) || []; }
-  catch (err) { console.error('No se pudo cargar Ingresos (Contabilidad) desde el backend:', err.message); }
+  try {
+    var filas = await apiFetch('/api/contabilidad/ingresos', { method: 'GET' }) || [];
+    // El backend devuelve la fecha con hora incluida ("2026-09-02T00:00:00.000Z") —
+    // se recorta a AAAA-MM-DD, mismo criterio que ya se usa en Asistencia.
+    CACHE_CONTAB_INGRESOS = filas.map(function (r) { return Object.assign({}, r, { fecha: (r.fecha || '').slice(0, 10) }); });
+  } catch (err) { console.error('No se pudo cargar Ingresos (Contabilidad) desde el backend:', err.message); }
 }
 async function refrescarCacheContabGastos() {
-  try { CACHE_CONTAB_GASTOS = await apiFetch('/api/contabilidad/gastos', { method: 'GET' }) || []; }
-  catch (err) { console.error('No se pudo cargar Gastos (Contabilidad) desde el backend:', err.message); }
+  try {
+    var filas = await apiFetch('/api/contabilidad/gastos', { method: 'GET' }) || [];
+    CACHE_CONTAB_GASTOS = filas.map(function (r) { return Object.assign({}, r, { fecha: (r.fecha || '').slice(0, 10) }); });
+  } catch (err) { console.error('No se pudo cargar Gastos (Contabilidad) desde el backend:', err.message); }
 }
 async function refrescarCacheContabCompras() {
   try {
     var compras = await apiFetch('/api/contabilidad/compras', { method: 'GET' }) || [];
     CACHE_CONTAB_COMPRAS = compras.map(function (c) {
       return Object.assign({}, c, {
+        fecha: (c.fecha || '').slice(0, 10),
         valorUnit: c.valorUnit != null ? c.valorUnit : c.valor_unitario,
         valorTotal: c.valorTotal != null ? c.valorTotal : c.valor_total
       });
@@ -2565,6 +2572,104 @@ function renderPagos() {
   return heroPagos() + toggleHtml + (vistaPagos === 'cartera' ? renderCartera(alumnos, cargos) : renderPagosTab(alumnos, cargos));
 }
 
+// ---- Cartera: cargo mensual automático por fecha ancla ----
+// Suma exactamente un mes a una fecha "AAAA-MM-DD", respetando el día del
+// mes (si ese día no existe en el mes siguiente, cae en el último día de
+// ese mes — ej. 31 de enero -> 28/29 de febrero).
+function sumarUnMes(fechaStr) {
+  var partes = fechaStr.split('-');
+  var d = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+  var diaOriginal = d.getDate();
+  d.setMonth(d.getMonth() + 1);
+  if (d.getDate() !== diaOriginal) d.setDate(0);
+  return d.toISOString().slice(0, 10);
+}
+
+// Genera el/los cargo(s) de "Mensualidad" que ya le tocan a cada estudiante
+// activo, según SU PROPIA fecha ancla (el día del mes en que se matriculó,
+// o el día del último cargo de mensualidad ya generado) — nunca según
+// cuándo pagó el mes anterior. Si un estudiante quedó atrasado varios
+// meses sin que nadie abriera el sistema, genera uno por cada mes ya
+// cumplido (no solo el más reciente), para que el historial no tenga
+// huecos. Usa el mismo POST /api/pagos/cargos que ya usa "Registrar
+// cargo" a mano — no hizo falta ningún endpoint nuevo para esta parte.
+var cargosMensualesYaRevisados = false;
+async function generarCargosMensualesFaltantes() {
+  var alumnos = cargarAlumnos();
+  var cargos = cargarCargos();
+  var inscripciones = cargarInscripciones();
+  var conceptoMensualidad = CACHE_CONCEPTOS.find(function (c) { return c.nombre === 'Mensualidad'; });
+  if (!conceptoMensualidad) return;
+
+  var hoyStr2 = new Date().toISOString().slice(0, 10);
+  var creaciones = [];
+
+  alumnos.forEach(function (a, i) {
+    if (a.estado !== 'activo' || !a.fechaMatricula) return;
+    var inscripcion = inscripciones.find(function (ins) { return ins.alumnoIdx === i; });
+    if (!inscripcion || !inscripcion.valor) return;
+
+    var cargosMensualidad = cargos.filter(function (c) { return c.alumnoIdx === i && c.concepto === 'Mensualidad'; });
+    var ultimoVencimiento = cargosMensualidad.reduce(function (max, c) { return (!max || c.vencimiento > max) ? c.vencimiento : max; }, null);
+    var proximoVencimiento = ultimoVencimiento ? sumarUnMes(ultimoVencimiento) : a.fechaMatricula;
+
+    var tope = 0;
+    while (proximoVencimiento <= hoyStr2 && tope < 24) {
+      creaciones.push({ alumnoId: a.id, conceptoId: conceptoMensualidad.id, valor: inscripcion.valor, descuento: 0, fechaVencimiento: proximoVencimiento });
+      proximoVencimiento = sumarUnMes(proximoVencimiento);
+      tope++;
+    }
+  });
+
+  if (creaciones.length === 0) return;
+
+  await mapearEnParalelo(creaciones, 5, function (c) {
+    return apiFetch('/api/pagos/cargos', { method: 'POST', body: JSON.stringify(c) })
+      .catch(function (err) { console.error('No se pudo generar un cargo mensual automático:', err.message); });
+  });
+  await refrescarCacheCargos();
+}
+
+function nombreMesCorto(ym) {
+  var nombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  var partes = ym.split('-');
+  return nombres[Number(partes[1]) - 1] + ' ' + partes[0];
+}
+
+function renderHistorialMensualidades(alumnos, cargos) {
+  var meses = {};
+  cargos.forEach(function (c) { if (c.concepto === 'Mensualidad' && c.vencimiento) meses[c.vencimiento.slice(0, 7)] = true; });
+  var mesesOrdenados = Object.keys(meses).sort();
+
+  if (mesesOrdenados.length === 0) {
+    return '<div class="panel"><h2>Historial de mensualidades</h2><p style="font-size:13px; color:var(--muted);">Todavía no hay cargos de mensualidad generados.</p></div>';
+  }
+
+  var hoyStr2 = new Date().toISOString().slice(0, 10);
+  var alumnosActivos = alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return o.a.estado === 'activo'; });
+
+  var encabezado = '<th>Estudiante</th>' + mesesOrdenados.map(function (ym) { return '<th style="text-align:center; white-space:nowrap;">' + nombreMesCorto(ym) + '</th>'; }).join('');
+
+  var filas = alumnosActivos.map(function (o) {
+    var celdas = mesesOrdenados.map(function (ym) {
+      var cargo = cargos.find(function (c) { return c.alumnoIdx === o.i && c.concepto === 'Mensualidad' && c.vencimiento && c.vencimiento.slice(0, 7) === ym; });
+      if (!cargo) return '<td style="text-align:center; color:var(--muted);">—</td>';
+      if (cargo.saldo <= 0) return '<td style="text-align:center;"><span style="color:var(--verde); font-weight:600; font-size:11.5px;">Pagado</span></td>';
+      var etiqueta = cargo.vencimiento <= hoyStr2
+        ? '<span style="color:#fff; background:var(--rojo); padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600;" title="Vence ' + cargo.vencimiento + '">Debe pagar</span>'
+        : '<span style="color:var(--naranja); font-size:11.5px;">Pendiente</span>';
+      return '<td style="text-align:center; white-space:nowrap;">' + etiqueta +
+        ' <button class="btn-eliminar-cargo-mensual" data-id="' + cargo.id + '" title="Eliminar este cargo — usalo solo si el estudiante no asistió ese mes" style="font-size:10px; background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0 0 2px;">🗑</button></td>';
+    }).join('');
+    return '<tr><td style="font-weight:600; white-space:nowrap;">' + o.a.nombres + ' ' + o.a.apellidos + '</td>' + celdas + '</tr>';
+  }).join('');
+
+  return '<div class="panel"><h2>Historial de mensualidades</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Un cargo por mes, generado solo cuando ya toca según la fecha de matrícula de cada estudiante — no según cuándo pagó el mes anterior. El 🗑 al lado de un cargo lo elimina (usalo solo si el estudiante no asistió ese mes).</p>' +
+    '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr>' + encabezado + '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
+    '</div>';
+}
+
 function renderCartera(alumnos, cargos) {
   var cartera = {};
   cargos.forEach(function (c) {
@@ -2584,7 +2689,8 @@ function renderCartera(alumnos, cargos) {
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Quién debe, cuánto — la prioridad #1 que pidió Sergio.</p>' +
     (filasCartera ? '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Estudiante</th><th>Total pendiente</th><th></th></tr></thead><tbody>' + filasCartera + '</tbody></table></div>'
       : '<p style="font-size:13px; color:var(--verde);">Nadie tiene saldo pendiente.</p>') +
-    '</div>';
+    '</div>' +
+    renderHistorialMensualidades(alumnos, cargos);
 }
 
 function renderPagosTab(alumnos, cargos) {
@@ -2766,10 +2872,32 @@ function generarHtmlComprobante(pago, alumno) {
 }
 
 function activarLogicaPagos() {
+  if (!cargosMensualesYaRevisados) {
+    cargosMensualesYaRevisados = true;
+    generarCargosMensualesFaltantes().then(function () {
+      if ((location.hash.replace('#', '') || 'dashboard') === 'pagos') renderContenido('pagos');
+    });
+  }
+
   var btnTabCartera = document.getElementById('btn-tab-cartera');
   var btnTabPagos = document.getElementById('btn-tab-pagos');
   if (btnTabCartera) btnTabCartera.addEventListener('click', function () { vistaPagos = 'cartera'; renderContenido('pagos'); });
   if (btnTabPagos) btnTabPagos.addEventListener('click', function () { vistaPagos = 'pagos'; renderContenido('pagos'); });
+
+  document.querySelectorAll('.btn-eliminar-cargo-mensual').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (!confirm('¿Eliminar este cargo? Usalo solo si el estudiante no asistió ese mes y no corresponde cobrarle — no se puede deshacer.')) return;
+      var id = btn.getAttribute('data-id');
+      btn.disabled = true;
+      apiFetch('/api/pagos/cargos/' + id, { method: 'DELETE' })
+        .then(function () { return refrescarCacheCargos(); })
+        .then(function () { renderContenido('pagos'); })
+        .catch(function (err) {
+          btn.disabled = false;
+          alert('No se pudo eliminar: ' + (err.message || 'error de conexión.'));
+        });
+    });
+  });
 
   var btnCargo = document.getElementById('btn-crear-cargo');
   if (btnCargo) {
@@ -5432,19 +5560,19 @@ function panelIngresos(esAdmin) {
     '<p id="msj-ingreso-creado" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Ingreso registrado.</p>' +
     '</div>';
 
-  if (!esAdmin) return form;
-
   var total = ingresos.reduce(function (s, x) { return s + Number(x.valor || 0); }, 0);
   var filas = ingresos.map(function (x, i) {
-    var botones = '<button class="btn-editar-contable" data-tipo="ingreso" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; margin-right:4px;">Editar</button>' +
-      '<button class="btn-eliminar-contable" data-tipo="ingreso" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Eliminar</button>';
+    var botones = esAdmin
+      ? '<button class="btn-editar-contable" data-tipo="ingreso" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; margin-right:4px;">Editar</button>' +
+        '<button class="btn-eliminar-contable" data-tipo="ingreso" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Eliminar</button>'
+      : '';
     return filaTablaContable([x.fecha || '—', x.concepto, x.programa || '—', x.categoria, x.cliente || '—', x.metodo,
       '<span class="chip-rol">' + (x.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
       '<strong>' + formatearCOPContable(x.valor) + '</strong>', botones]);
   }).join('');
 
   return form +
-    '<div class="panel"><h2>Ingresos registrados (' + ingresos.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
+    '<div class="panel"><h2>Ingresos registrados (' + ingresos.length + ')' + (esAdmin ? ' · Total: ' + formatearCOPContable(total) : '') + '</h2>' +
     (ingresos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay ingresos registrados.</p>' :
      '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Concepto</th><th>Programa</th><th>Categoría</th><th>Cliente</th><th>Método</th><th>Estado</th><th>Valor</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>';
@@ -5513,12 +5641,12 @@ function panelCompras(esAdmin) {
     '<p id="msj-compra-creada" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Compra registrada.</p>' +
     '</div>';
 
-  if (!esAdmin) return form;
-
   var total = compras.reduce(function (s, x) { return s + Number(x.valorTotal || 0); }, 0);
   var filas = compras.map(function (x, i) {
-    var botones = '<button class="btn-editar-contable" data-tipo="compra" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; margin-right:4px;">Editar</button>' +
-      '<button class="btn-eliminar-contable" data-tipo="compra" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Eliminar</button>';
+    var botones = esAdmin
+      ? '<button class="btn-editar-contable" data-tipo="compra" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer; margin-right:4px;">Editar</button>' +
+        '<button class="btn-eliminar-contable" data-tipo="compra" data-idx="' + i + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Eliminar</button>'
+      : '';
     return filaTablaContable([x.fecha || '—', x.articulo, x.categoria, x.proveedor || '—', x.cantidad,
       formatearCOPContable(x.valorUnit), x.metodo,
       '<span class="chip-rol">' + (x.estado === 'pagado' ? 'Pagado' : 'Pendiente') + '</span>',
@@ -5526,7 +5654,7 @@ function panelCompras(esAdmin) {
   }).join('');
 
   return form +
-    '<div class="panel"><h2>Compras registradas (' + compras.length + ') · Total: ' + formatearCOPContable(total) + '</h2>' +
+    '<div class="panel"><h2>Compras registradas (' + compras.length + ')' + (esAdmin ? ' · Total: ' + formatearCOPContable(total) : '') + '</h2>' +
     (compras.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay compras registradas.</p>' :
      '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Fecha</th><th>Artículo</th><th>Categoría</th><th>Proveedor</th><th>Cant.</th><th>V. unitario</th><th>Método</th><th>Estado</th><th>Total</th><th></th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
     '</div>';
