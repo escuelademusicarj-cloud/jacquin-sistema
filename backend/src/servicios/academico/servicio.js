@@ -1,7 +1,7 @@
 import { crearAlumno, crearAcudiente, cambiarEstadoAlumno, esMenorDeEdad } from "../../dominio/academico/entidades.js";
 import {
   insertarAlumno, insertarAcudiente, vincularAcudiente, acudientesDeAlumno,
-  listarAlumnos, buscarAlumnoPorId, actualizarEstadoAlumno, insertarHistorialEstado,
+  listarAlumnos, buscarAlumnoPorId, actualizarAlumno, actualizarEstadoAlumno, insertarHistorialEstado,
 } from "../../persistencia/academico/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
@@ -46,8 +46,6 @@ export async function altaAlumno({ alumno, acudientes = [] }, contextoAuditoria)
 
 // Decisión de negocio (2026-08-28): Profesor ve el mismo historial
 // completo que Administración — ya no se restringe por profesor_id.
-// Antes: si contexto.rol === "PROFESOR" y alumno.profesor_id no coincidía
-// con el usuario logueado, tiraba 403 "No tenés acceso a este estudiante."
 export async function obtenerAlumno(id, contexto) {
   const alumno = await buscarAlumnoPorId(id);
   if (!alumno) return null;
@@ -57,12 +55,41 @@ export async function obtenerAlumno(id, contexto) {
 /**
  * Decisión de negocio (2026-08-28): Profesor ve la misma lista completa
  * de estudiantes que Administración — ya no se recorta por profesor_id.
- * Antes filtraba automáticamente por profesorId = usuarioId cuando
- * contexto.rol === "PROFESOR", devolviendo [] a cualquier profesor sin
- * estudiantes asignados en la base de datos.
  */
 export async function obtenerListaAlumnos(filtros, contexto) {
   return listarAlumnos(filtros);
+}
+
+// NUEVO: edita los datos propios de un alumno ya existente (nombres,
+// apellidos, documento, fecha de nacimiento, contacto, programa,
+// profesor asignado, observaciones) — no su estado, eso sigue siendo
+// cambiarEstado() más abajo, con su propio historial aparte.
+export async function editarAlumno(id, datos, contextoAuditoria) {
+  const existente = await buscarAlumnoPorId(id);
+  if (!existente) {
+    const err = new Error("Alumno no encontrado.");
+    err.codigoHttp = 404;
+    throw err;
+  }
+
+  const actualizado = await actualizarAlumno(id, {
+    nombres: datos.nombres,
+    apellidos: datos.apellidos,
+    documento: datos.documento ?? null,
+    fechaNacimiento: datos.fechaNacimiento ?? null,
+    telefonoContacto: datos.telefonoContacto ?? null,
+    emailContacto: datos.emailContacto ?? null,
+    programaPrincipal: datos.programaPrincipal ?? null,
+    profesorId: datos.profesorId ?? null,
+    observaciones: datos.observaciones ?? null,
+  });
+
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "editar", modulo: "academico",
+    entidad: "alumno", entidadId: id, resultado: "exito",
+  });
+
+  return { ...actualizado, acudientes: await acudientesDeAlumno(id) };
 }
 
 /**
