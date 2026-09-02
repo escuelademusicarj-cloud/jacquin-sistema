@@ -2635,6 +2635,9 @@ function nombreMesCorto(ym) {
 // Mes que la Secretaría tiene elegido para el botón de "Cobro por
 // WhatsApp" — cambia el mensaje sin tocar nada más de la tabla.
 var mesCobroWhatsapp = '';
+// Id del cargo cuyo mini-modal (editar valor, abono, deshacer pago,
+// eliminar) está abierto — null si ninguno.
+var cargoModalAbierto = null;
 
 function renderHistorialMensualidades(alumnos, cargos) {
   var meses = {};
@@ -2661,13 +2664,13 @@ function renderHistorialMensualidades(alumnos, cargos) {
       var cargo = cargos.find(function (c) { return c.alumnoIdx === o.i && c.concepto === 'Mensualidad' && c.vencimiento && c.vencimiento.slice(0, 7) === ym; });
       if (!cargo) return '<td style="text-align:center; color:var(--muted);">—</td>';
       var valorTxt = '<div style="font-size:10.5px; color:var(--muted);">' + formatearCOPContable(cargo.valor - (cargo.descuento || 0)) + '</div>';
-      if (cargo.saldo <= 0) return '<td style="text-align:center; white-space:nowrap;">' + valorTxt + '<span style="color:var(--verde); font-weight:600; font-size:11.5px;">Pagado</span></td>';
-      var etiqueta = cargo.vencimiento <= hoyStr2
-        ? '<span style="color:#fff; background:var(--rojo); padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600;" title="Vence ' + cargo.vencimiento + '">Debe pagar</span>'
-        : '<span style="color:var(--naranja); font-size:11.5px;">Pendiente</span>';
-      return '<td style="text-align:center; white-space:nowrap;">' + valorTxt + etiqueta + '<br>' +
-        '<button class="btn-marcar-pagado-cargo" data-id="' + cargo.id + '" data-saldo="' + cargo.saldo + '" style="font-size:10px; margin-top:3px; padding:2px 8px; border-radius:5px; border:1px solid var(--verde); background:#fff; color:var(--verde); cursor:pointer;">Ya pagó</button>' +
-        ' <button class="btn-eliminar-cargo-mensual" data-id="' + cargo.id + '" title="Eliminar este cargo — usalo solo si el estudiante no asistió ese mes" style="font-size:10px; background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0 0 2px;">🗑</button></td>';
+      var etiquetaHtml = cargo.saldo <= 0
+        ? '<span style="color:var(--verde); font-weight:600; font-size:11.5px;">Pagado</span>'
+        : (cargo.vencimiento <= hoyStr2
+          ? '<span style="color:#fff; background:var(--rojo); padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600;" title="Vence ' + cargo.vencimiento + '">Debe pagar</span>'
+          : '<span style="color:var(--naranja); font-size:11.5px;">Pendiente</span>');
+      return '<td style="text-align:center; white-space:nowrap;">' + valorTxt +
+        '<button type="button" class="btn-abrir-cargo-modal" data-id="' + cargo.id + '" style="background:none; border:none; padding:0; cursor:pointer;" title="Editar valor, registrar abono, deshacer pago o eliminar">' + etiquetaHtml + '</button></td>';
     }).join('');
 
     var cargoDelMesCobro = cargos.find(function (c) { return c.alumnoIdx === o.i && c.concepto === 'Mensualidad' && c.vencimiento && c.vencimiento.slice(0, 7) === mesCobroWhatsapp; });
@@ -2691,11 +2694,38 @@ function renderHistorialMensualidades(alumnos, cargos) {
     return '<tr><td style="font-weight:600; white-space:nowrap;">' + o.a.nombres + ' ' + o.a.apellidos + '</td>' + celdas + celdaCobro + '</tr>';
   }).join('');
 
+  var modalCargo = '';
+  if (cargoModalAbierto) {
+    var cargoSel = cargos.find(function (c) { return c.id === cargoModalAbierto; });
+    if (cargoSel) {
+      var alumnoSel = alumnos[cargoSel.alumnoIdx];
+      modalCargo = '<div id="modal-editar-cargo" style="display:flex; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
+        '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:420px; max-height:88vh; overflow-y:auto;">' +
+        '<h2 style="margin-top:0; margin-bottom:2px;">' + (alumnoSel ? alumnoSel.nombres + ' ' + alumnoSel.apellidos : 'Cargo') + '</h2>' +
+        '<p style="font-size:12px; color:var(--muted); margin:0 0 14px;">' + nombreMesCorto(cargoSel.vencimiento.slice(0, 7)) + ' — saldo pendiente actual: <strong>' + formatearCOPContable(cargoSel.saldo) + '</strong></p>' +
+        '<div class="grilla-2col">' +
+        '<div class="campo"><label>Valor</label><input id="mc-valor" type="number" min="0" value="' + cargoSel.valor + '" /></div>' +
+        '<div class="campo"><label>Descuento ($)</label><input id="mc-descuento" type="number" min="0" value="' + (cargoSel.descuento || 0) + '" /></div>' +
+        '</div>' +
+        '<button class="btn-primario" id="btn-guardar-valor-cargo" style="max-width:240px; margin-top:4px;">Guardar valor/descuento</button>' +
+        '<hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />' +
+        '<div class="campo"><label>Registrar abono</label><input id="mc-abono" type="number" min="1" placeholder="Ej: 150000" /></div>' +
+        '<button class="btn-primario" id="btn-registrar-abono-cargo" style="max-width:220px;">Registrar abono</button>' +
+        '<hr style="margin:16px 0; border:none; border-top:1px solid #eee;" />' +
+        '<button id="btn-deshacer-pago-cargo" style="width:100%; background:transparent; border:1px solid var(--rojo); color:var(--rojo); border-radius:8px; padding:8px; font-size:13px; cursor:pointer; font-family:var(--font-ui);">Deshacer último pago</button>' +
+        '<button id="btn-eliminar-cargo-modal" style="width:100%; margin-top:10px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer; text-decoration:underline;">Eliminar este cargo</button>' +
+        '<button id="btn-cerrar-modal-cargo" style="width:100%; margin-top:10px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cerrar</button>' +
+        '<p id="msj-error-modal-cargo" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
+        '</div></div>';
+    }
+  }
+
   return '<div class="panel"><h2>Sistema de cartera</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Todos los matriculados pagan dentro de los primeros 5 días del mes — el cargo se genera solo, mismo día para todos. El 🗑 elimina un cargo (usalo solo si el estudiante no asistió ese mes).</p>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Todos los matriculados pagan dentro de los primeros 5 días del mes — el cargo se genera solo, mismo día para todos. Hacé clic en el estado de cada cargo (Pagado/Debe pagar/Pendiente) para editarlo, registrar un abono, deshacer un pago o eliminarlo.</p>' +
     selectorMesCobro +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr>' + encabezado + '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
-    '</div>';
+    '</div>' +
+    modalCargo;
 }
 
 function renderCartera(alumnos, cargos) {
@@ -2912,39 +2942,99 @@ function activarLogicaPagos() {
   if (btnTabCartera) btnTabCartera.addEventListener('click', function () { vistaPagos = 'cartera'; renderContenido('pagos'); });
   if (btnTabPagos) btnTabPagos.addEventListener('click', function () { vistaPagos = 'pagos'; renderContenido('pagos'); });
 
-  document.querySelectorAll('.btn-eliminar-cargo-mensual').forEach(function (btn) {
+  document.querySelectorAll('.btn-abrir-cargo-modal').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      if (!confirm('¿Eliminar este cargo? Usalo solo si el estudiante no asistió ese mes y no corresponde cobrarle — no se puede deshacer.')) return;
-      var id = btn.getAttribute('data-id');
-      btn.disabled = true;
-      apiFetch('/api/pagos/cargos/' + id, { method: 'DELETE' })
-        .then(function () { return refrescarCacheCargos(); })
-        .then(function () { renderContenido('pagos'); })
-        .catch(function (err) {
-          btn.disabled = false;
-          alert('No se pudo eliminar: ' + (err.message || 'error de conexión.'));
-        });
+      cargoModalAbierto = Number(btn.getAttribute('data-id'));
+      renderContenido('pagos');
     });
   });
 
-  document.querySelectorAll('.btn-marcar-pagado-cargo').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var id = btn.getAttribute('data-id');
-      var saldo = Number(btn.getAttribute('data-saldo'));
-      if (!confirm('¿Confirmar que este cargo ya fue pagado, por ' + formatearCOPContable(saldo) + '?')) return;
-      btn.disabled = true;
+  var btnCerrarModalCargo = document.getElementById('btn-cerrar-modal-cargo');
+  if (btnCerrarModalCargo) {
+    btnCerrarModalCargo.addEventListener('click', function () {
+      cargoModalAbierto = null;
+      renderContenido('pagos');
+    });
+  }
+
+  var btnGuardarValorCargo = document.getElementById('btn-guardar-valor-cargo');
+  if (btnGuardarValorCargo) {
+    btnGuardarValorCargo.addEventListener('click', function () {
+      var msjError = document.getElementById('msj-error-modal-cargo');
+      msjError.style.display = 'none';
+      var valor = Number(document.getElementById('mc-valor').value);
+      var descuento = Number(document.getElementById('mc-descuento').value || 0);
+      if (!valor || valor <= 0) { msjError.textContent = 'El valor debe ser mayor a cero.'; msjError.style.display = 'block'; return; }
+      if (descuento > valor) { msjError.textContent = 'El descuento no puede ser mayor al valor.'; msjError.style.display = 'block'; return; }
+      btnGuardarValorCargo.disabled = true;
+      apiFetch('/api/pagos/cargos/' + cargoModalAbierto, { method: 'PUT', body: JSON.stringify({ valor: valor, descuento: descuento }) })
+        .then(function () { return refrescarCacheCargos(); })
+        .then(function () { renderContenido('pagos'); })
+        .catch(function (err) {
+          btnGuardarValorCargo.disabled = false;
+          msjError.textContent = err.message || 'No se pudo guardar.';
+          msjError.style.display = 'block';
+        });
+    });
+  }
+
+  var btnRegistrarAbonoCargo = document.getElementById('btn-registrar-abono-cargo');
+  if (btnRegistrarAbonoCargo) {
+    btnRegistrarAbonoCargo.addEventListener('click', function () {
+      var msjError = document.getElementById('msj-error-modal-cargo');
+      msjError.style.display = 'none';
+      var abono = Number(document.getElementById('mc-abono').value);
+      if (!abono || abono <= 0) { msjError.textContent = 'El abono debe ser mayor a cero.'; msjError.style.display = 'block'; return; }
+      btnRegistrarAbonoCargo.disabled = true;
       apiFetch('/api/pagos/pagos', {
         method: 'POST',
-        body: JSON.stringify({ cargoId: id, valor: saldo, fechaPago: new Date().toISOString().slice(0, 10), medioPago: 'Efectivo' })
+        body: JSON.stringify({ cargoId: cargoModalAbierto, valor: abono, fechaPago: new Date().toISOString().slice(0, 10), medioPago: 'Efectivo' })
       })
         .then(function () { return Promise.all([refrescarCacheAlumnos(), refrescarCacheCargos()]); })
         .then(function () { renderContenido('pagos'); })
         .catch(function (err) {
-          btn.disabled = false;
-          alert('No se pudo registrar el pago: ' + (err.message || 'error de conexión.'));
+          btnRegistrarAbonoCargo.disabled = false;
+          msjError.textContent = err.message || 'No se pudo registrar el abono.';
+          msjError.style.display = 'block';
         });
     });
-  });
+  }
+
+  var btnDeshacerPagoCargo = document.getElementById('btn-deshacer-pago-cargo');
+  if (btnDeshacerPagoCargo) {
+    btnDeshacerPagoCargo.addEventListener('click', function () {
+      if (!confirm('¿Deshacer el último pago registrado de este cargo?')) return;
+      var msjError = document.getElementById('msj-error-modal-cargo');
+      msjError.style.display = 'none';
+      btnDeshacerPagoCargo.disabled = true;
+      apiFetch('/api/pagos/cargos/' + cargoModalAbierto + '/ultimo-pago', { method: 'DELETE' })
+        .then(function () { return Promise.all([refrescarCacheAlumnos(), refrescarCacheCargos()]); })
+        .then(function () { renderContenido('pagos'); })
+        .catch(function (err) {
+          btnDeshacerPagoCargo.disabled = false;
+          msjError.textContent = err.message || 'No se pudo deshacer el pago.';
+          msjError.style.display = 'block';
+        });
+    });
+  }
+
+  var btnEliminarCargoModal = document.getElementById('btn-eliminar-cargo-modal');
+  if (btnEliminarCargoModal) {
+    btnEliminarCargoModal.addEventListener('click', function () {
+      if (!confirm('¿Eliminar este cargo? Usalo solo si el estudiante no asistió ese mes y no corresponde cobrarle — no se puede deshacer.')) return;
+      var msjError = document.getElementById('msj-error-modal-cargo');
+      msjError.style.display = 'none';
+      btnEliminarCargoModal.disabled = true;
+      apiFetch('/api/pagos/cargos/' + cargoModalAbierto, { method: 'DELETE' })
+        .then(function () { cargoModalAbierto = null; return refrescarCacheCargos(); })
+        .then(function () { renderContenido('pagos'); })
+        .catch(function (err) {
+          btnEliminarCargoModal.disabled = false;
+          msjError.textContent = err.message || 'No se pudo eliminar.';
+          msjError.style.display = 'block';
+        });
+    });
+  }
 
   var selMesCobro = document.getElementById('sel-mes-cobro-whatsapp');
   if (selMesCobro) {
