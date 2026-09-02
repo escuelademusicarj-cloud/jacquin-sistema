@@ -3596,24 +3596,23 @@ function renderAsistencia(sesion) {
 
       // "+ Asistencia manual" — anota a alguien que vino a un horario que
       // no le corresponde, sin tocar nada de Horarios: solo se guarda una
-      // asistencia (mismo endpoint de siempre), atada a una de las clases
-      // reales que sí existen en esta hora puntual. Si en esta hora no hay
-      // ninguna clase para ningún curso, no tiene sentido ofrecerlo.
+      // asistencia (mismo endpoint de siempre). El curso se elige entre
+      // los 9 programas oficiales (no solo los que ya tienen clase creada
+      // justo en esta hora) — al guardar se busca una clase real de ese
+      // programa, dando prioridad a una que sea de este mismo día/hora, y
+      // si no hay ninguna ahí, cualquier otra clase real de ese programa.
       var claveCelda = dia + '-' + hora;
-      var todasClasesCelda = clasesDeCelda(clases, dia, hora);
-      var botonManual = todasClasesCelda.length > 0
-        ? '<button type="button" class="btn-abrir-asis-manual" data-clave="' + claveCelda + '" style="font-size:10px; color:var(--azul-oscuro); background:none; border:none; cursor:pointer; padding:2px 0; text-decoration:underline; display:block; margin-top:2px;">+ Asistencia manual</button>'
-        : '';
+      var botonManual = '<button type="button" class="btn-abrir-asis-manual" data-clave="' + claveCelda + '" style="font-size:10px; color:var(--azul-oscuro); background:none; border:none; cursor:pointer; padding:2px 0; text-decoration:underline; display:block; margin-top:2px;">+ Asistencia manual</button>';
       var formularioManual = celdaManualAbierta === claveCelda
         ? '<div style="margin-top:4px; padding:5px; background:#FDF1D6; border:1px solid #E9C46A; border-radius:5px;">' +
           '<select id="sel-manual-alumno" style="width:100%; font-size:10px; margin-bottom:3px; padding:2px;"><option value="">Estudiante…</option>' +
           alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
           '</select>' +
           '<select id="sel-manual-clase" style="width:100%; font-size:10px; margin-bottom:3px; padding:2px;"><option value="">Curso…</option>' +
-          todasClasesCelda.map(function (o) { return '<option value="' + o.i + '">' + o.c.programa + '</option>'; }).join('') +
+          PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
           '</select>' +
           '<div style="display:flex; gap:4px;">' +
-          '<button type="button" id="btn-guardar-asis-manual" data-fecha="' + fechaCelda + '" style="flex:1; font-size:10px; background:var(--azul-oscuro); color:#fff; border:none; border-radius:3px; padding:3px; cursor:pointer;">Guardar</button>' +
+          '<button type="button" id="btn-guardar-asis-manual" data-fecha="' + fechaCelda + '" data-dia="' + dia + '" data-hora="' + hora + '" style="flex:1; font-size:10px; background:var(--azul-oscuro); color:#fff; border:none; border-radius:3px; padding:3px; cursor:pointer;">Guardar</button>' +
           '<button type="button" id="btn-cancelar-asis-manual" style="font-size:10px; background:#fff; border:1px solid #ccc; border-radius:3px; padding:3px 6px; cursor:pointer;">✕</button>' +
           '</div>' +
           '<p id="msj-error-asis-manual" style="font-size:9.5px; color:#c0392b; display:none; margin:3px 0 0;"></p>' +
@@ -3717,34 +3716,11 @@ function renderAsistencia(sesion) {
     (alumnoHistorial ? '<button class="btn-primario" id="btn-asis-historial-pdf" style="max-width:260px; margin-top:12px;">Imprimir / descargar PDF</button>' : '') +
     '</div>';
 
-  var opcionesEstudianteExtra = '<option value="">Seleccioná un estudiante…</option>' +
-    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('');
-
-  var opcionesClaseExtra = '<option value="">Seleccioná la clase a la que asistió…</option>' +
-    clases.map(function (c, i) { return '<option value="' + i + '">' + DIAS_SEMANA[c.dia] + ' ' + c.hora + ' — ' + c.programa + '</option>'; }).join('');
-
-  var panelExtraordinaria =
-    '<div class="panel"><h2>¿Alguien vino a un horario que no le tocaba?</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Registrá acá su asistencia igual — va a aparecer resaltada en la grilla de abajo, para diferenciarla de su horario habitual.</p>' +
-    '<div class="grilla-2col">' +
-    '<div class="campo"><label>Estudiante</label><select id="asis-extra-alumno">' + opcionesEstudianteExtra + '</select></div>' +
-    '<div class="campo"><label>Clase a la que asistió</label><select id="asis-extra-clase">' + opcionesClaseExtra + '</select></div>' +
-    '<div class="campo"><label>Fecha</label><input id="asis-extra-fecha" type="date" value="' + hoyStr + '" /></div>' +
-    '<div class="campo"><label>Estado</label><select id="asis-extra-estado">' +
-    ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return '<option value="' + e + '"' + (e === 'asistio' ? ' selected' : '') + '>' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('') +
-    '</select></div>' +
-    '</div>' +
-    '<button class="btn-primario" id="btn-registrar-asis-extra" style="max-width:260px; margin-top:6px;">Registrar</button>' +
-    '<p id="msj-asis-extra-error" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
-    '</div>';
-
   return '' +
     '<div class="panel"><h2>Asistencia</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la semana a registrar — cada columna usa su fecha real (lunes a sábado). El día de hoy queda resaltado en naranja. Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
     grillaHtml +
     '</div>' +
-
-    panelExtraordinaria +
 
     panelHistorialIndividual +
 
@@ -3822,21 +3798,35 @@ function activarLogicaAsistencia() {
       msjError.style.display = 'none';
 
       var alumnoIdxStr = document.getElementById('sel-manual-alumno').value;
-      var claseIdxStr = document.getElementById('sel-manual-clase').value;
+      var programaElegido = document.getElementById('sel-manual-clase').value;
       var fecha = btnGuardarManual.getAttribute('data-fecha');
+      var dia = Number(btnGuardarManual.getAttribute('data-dia'));
+      var hora = btnGuardarManual.getAttribute('data-hora');
 
-      if (alumnoIdxStr === '' || claseIdxStr === '') {
+      if (alumnoIdxStr === '' || programaElegido === '') {
         msjError.textContent = 'Elegí estudiante y curso.';
         msjError.style.display = 'block';
         return;
       }
 
       var alumnoIdx = Number(alumnoIdxStr);
-      var claseIdx = Number(claseIdxStr);
       var alumno = cargarAlumnos()[alumnoIdx];
-      var clase = cargarClases()[claseIdx];
-      if (!alumno || !alumno.id || !clase || !clase.id) {
-        msjError.textContent = 'No se pudo identificar al estudiante o el curso.';
+      var clasesTodas = cargarClases();
+      // Prioriza una clase real de ese curso que sea justo de este día y
+      // hora; si no hay ninguna ahí, cualquier otra clase real del mismo
+      // curso (el estado de asistencia siempre queda igual, "Asistió" —
+      // lo único que cambia es a qué clase real queda atada la fila).
+      var claseIdx = clasesTodas.findIndex(function (c) { return c.programa === programaElegido && c.dia === dia && c.hora === hora; });
+      if (claseIdx === -1) claseIdx = clasesTodas.findIndex(function (c) { return c.programa === programaElegido; });
+      var clase = claseIdx !== -1 ? clasesTodas[claseIdx] : null;
+
+      if (!alumno || !alumno.id) {
+        msjError.textContent = 'No se pudo identificar al estudiante.';
+        msjError.style.display = 'block';
+        return;
+      }
+      if (!clase || !clase.id) {
+        msjError.textContent = 'Todavía no hay ninguna clase creada de "' + programaElegido + '" — creá una primero en Horarios.';
         msjError.style.display = 'block';
         return;
       }
@@ -3861,58 +3851,6 @@ function activarLogicaAsistencia() {
         })
         .catch(function (err) {
           btnGuardarManual.disabled = false;
-          msjError.textContent = 'No se pudo registrar: ' + (err.message || 'error de conexión.');
-          msjError.style.display = 'block';
-        });
-    });
-  }
-
-  var btnRegistrarExtra = document.getElementById('btn-registrar-asis-extra');
-  if (btnRegistrarExtra) {
-    btnRegistrarExtra.addEventListener('click', function () {
-      var msjError = document.getElementById('msj-asis-extra-error');
-      msjError.style.display = 'none';
-
-      var alumnoIdxStr = document.getElementById('asis-extra-alumno').value;
-      var claseIdxStr = document.getElementById('asis-extra-clase').value;
-      var fecha = document.getElementById('asis-extra-fecha').value;
-      var estado = document.getElementById('asis-extra-estado').value;
-
-      if (alumnoIdxStr === '' || claseIdxStr === '' || !fecha) {
-        msjError.textContent = 'Elegí estudiante, clase y fecha.';
-        msjError.style.display = 'block';
-        return;
-      }
-
-      var alumnoIdx = Number(alumnoIdxStr);
-      var claseIdx = Number(claseIdxStr);
-      var alumno = cargarAlumnos()[alumnoIdx];
-      var clase = cargarClases()[claseIdx];
-      if (!alumno || !alumno.id || !clase || !clase.id) {
-        msjError.textContent = 'No se pudo identificar al estudiante o la clase — recargá la página e intentá de nuevo.';
-        msjError.style.display = 'block';
-        return;
-      }
-
-      btnRegistrarExtra.disabled = true;
-      apiFetch('/api/asistencia', {
-        method: 'POST',
-        body: JSON.stringify({ claseId: clase.id, alumnoId: alumno.id, fecha: fecha, estado: estado })
-      })
-        .then(function () {
-          var asistencias = cargarAsistencias();
-          var existenteIdx = asistencias.findIndex(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fecha; });
-          if (existenteIdx !== -1) asistencias[existenteIdx].estado = estado;
-          else asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fecha, estado: estado });
-          guardarAsistencias(asistencias);
-
-          // Salta a la semana de esa fecha para que se vea al instante en la grilla.
-          semanaAsistenciaSeleccionada = semanaDeFecha(fecha);
-          btnRegistrarExtra.disabled = false;
-          renderContenido('asistencia');
-        })
-        .catch(function (err) {
-          btnRegistrarExtra.disabled = false;
           msjError.textContent = 'No se pudo registrar: ' + (err.message || 'error de conexión.');
           msjError.style.display = 'block';
         });
