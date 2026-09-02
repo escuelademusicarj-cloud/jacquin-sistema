@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { obtenerConceptos, generarCargo, registrarPago, obtenerCargosDeAlumno, obtenerCartera } from "../../servicios/pagos/servicio.js";
+import { obtenerConceptos, generarCargo, registrarPago, obtenerCargosDeAlumno, obtenerCartera, borrarCargo } from "../../servicios/pagos/servicio.js";
 import { respuestaExitosa } from "../middlewares/manejoErrores.js";
 import { requiereAutenticacion } from "../middlewares/autenticacion.js";
 import { requierePermiso } from "../middlewares/autorizacion.js";
@@ -15,6 +15,17 @@ rutasPagos.post("/cargos", requierePermiso("pagos:crear"), async (req, res, next
   try {
     const cargo = await generarCargo(req.body, { usuarioId: req.usuario?.id, rolId: req.usuario?.rolId });
     respuestaExitosa(res, cargo);
+  } catch (err) { next(err); }
+});
+
+// NUEVO: elimina un cargo sin pagos — el caso real es "el estudiante no
+// asistió ese mes, no corresponde cobrarle". Mismo permiso que crear un
+// cargo (pagos:crear), ya que es la misma familia de acción (modificar
+// la cartera), no una consulta.
+rutasPagos.delete("/cargos/:id", requierePermiso("pagos:crear"), async (req, res, next) => {
+  try {
+    const resultado = await borrarCargo(req.params.id, { usuarioId: req.usuario?.id, rolId: req.usuario?.rolId });
+    respuestaExitosa(res, resultado);
   } catch (err) { next(err); }
 });
 
