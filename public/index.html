@@ -2572,27 +2572,18 @@ function renderPagos() {
   return heroPagos() + toggleHtml + (vistaPagos === 'cartera' ? renderCartera(alumnos, cargos) : renderPagosTab(alumnos, cargos));
 }
 
-// ---- Cartera: cargo mensual automático por fecha ancla ----
-// Suma exactamente un mes a una fecha "AAAA-MM-DD", respetando el día del
-// mes (si ese día no existe en el mes siguiente, cae en el último día de
-// ese mes — ej. 31 de enero -> 28/29 de febrero).
-function sumarUnMes(fechaStr) {
-  var partes = fechaStr.split('-');
-  var d = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
-  var diaOriginal = d.getDate();
-  d.setMonth(d.getMonth() + 1);
-  if (d.getDate() !== diaOriginal) d.setDate(0);
-  return d.toISOString().slice(0, 10);
-}
-
-// Genera el/los cargo(s) de "Mensualidad" que ya le tocan a cada estudiante
-// activo, según SU PROPIA fecha ancla (el día del mes en que se matriculó,
-// o el día del último cargo de mensualidad ya generado) — nunca según
-// cuándo pagó el mes anterior. Si un estudiante quedó atrasado varios
-// meses sin que nadie abriera el sistema, genera uno por cada mes ya
-// cumplido (no solo el más reciente), para que el historial no tenga
-// huecos. Usa el mismo POST /api/pagos/cargos que ya usa "Registrar
-// cargo" a mano — no hizo falta ningún endpoint nuevo para esta parte.
+// ---- Cartera: cargo mensual automático, día 5 del mes para todos ----
+// Decisión de negocio (2026-09-02): ya no depende de la fecha de
+// matrícula de cada uno — TODOS los estudiantes matriculados pagan
+// dentro de los primeros 5 días del mes, mismo día de vencimiento para
+// todos. Cada vez que se abre "Pagos y cartera" se revisa quién todavía
+// no tiene el cargo de "Mensualidad" de ESTE mes calendario y se lo crea
+// — así, la primera vez que corra esto (con Cartera recién vaciada), le
+// genera el cargo del mes actual a todos los matriculados activos de una
+// sola vez; de ahí en adelante, cualquiera que se matricule nuevo entra
+// solo al mismo ciclo apenas quede activo. Usa el mismo POST
+// /api/pagos/cargos que ya usa "Registrar cargo" a mano — no hizo falta
+// ningún endpoint nuevo para esta parte.
 var cargosMensualesYaRevisados = false;
 async function generarCargosMensualesFaltantes() {
   var alumnos = cargarAlumnos();
@@ -2601,24 +2592,20 @@ async function generarCargosMensualesFaltantes() {
   var conceptoMensualidad = CACHE_CONCEPTOS.find(function (c) { return c.nombre === 'Mensualidad'; });
   if (!conceptoMensualidad) return;
 
-  var hoyStr2 = new Date().toISOString().slice(0, 10);
+  var hoy = new Date();
+  var ymActual = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+  var vencimientoDelMes = ymActual + '-05';
   var creaciones = [];
 
   alumnos.forEach(function (a, i) {
-    if (a.estado !== 'activo' || !a.fechaMatricula) return;
+    if (a.estado !== 'activo') return;
     var inscripcion = inscripciones.find(function (ins) { return ins.alumnoIdx === i; });
     if (!inscripcion || !inscripcion.valor) return;
 
-    var cargosMensualidad = cargos.filter(function (c) { return c.alumnoIdx === i && c.concepto === 'Mensualidad'; });
-    var ultimoVencimiento = cargosMensualidad.reduce(function (max, c) { return (!max || c.vencimiento > max) ? c.vencimiento : max; }, null);
-    var proximoVencimiento = ultimoVencimiento ? sumarUnMes(ultimoVencimiento) : a.fechaMatricula;
+    var yaTieneEsteMes = cargos.some(function (c) { return c.alumnoIdx === i && c.concepto === 'Mensualidad' && c.vencimiento && c.vencimiento.slice(0, 7) === ymActual; });
+    if (yaTieneEsteMes) return;
 
-    var tope = 0;
-    while (proximoVencimiento <= hoyStr2 && tope < 24) {
-      creaciones.push({ alumnoId: a.id, conceptoId: conceptoMensualidad.id, valor: inscripcion.valor, descuento: 0, fechaVencimiento: proximoVencimiento });
-      proximoVencimiento = sumarUnMes(proximoVencimiento);
-      tope++;
-    }
+    creaciones.push({ alumnoId: a.id, conceptoId: conceptoMensualidad.id, valor: inscripcion.valor, descuento: 0, fechaVencimiento: vencimientoDelMes });
   });
 
   if (creaciones.length === 0) return;
@@ -2636,6 +2623,10 @@ function nombreMesCorto(ym) {
   return nombres[Number(partes[1]) - 1] + ' ' + partes[0];
 }
 
+// Mes que la Secretaría tiene elegido para el botón de "Cobro por
+// WhatsApp" — cambia el mensaje sin tocar nada más de la tabla.
+var mesCobroWhatsapp = '';
+
 function renderHistorialMensualidades(alumnos, cargos) {
   var meses = {};
   cargos.forEach(function (c) { if (c.concepto === 'Mensualidad' && c.vencimiento) meses[c.vencimiento.slice(0, 7)] = true; });
@@ -2645,27 +2636,55 @@ function renderHistorialMensualidades(alumnos, cargos) {
     return '<div class="panel"><h2>Historial de mensualidades</h2><p style="font-size:13px; color:var(--muted);">Todavía no hay cargos de mensualidad generados.</p></div>';
   }
 
+  if (!mesCobroWhatsapp || mesesOrdenados.indexOf(mesCobroWhatsapp) === -1) mesCobroWhatsapp = mesesOrdenados[mesesOrdenados.length - 1];
+
   var hoyStr2 = new Date().toISOString().slice(0, 10);
   var alumnosActivos = alumnos.map(function (a, i) { return { a: a, i: i }; }).filter(function (o) { return o.a.estado === 'activo'; });
 
-  var encabezado = '<th>Estudiante</th>' + mesesOrdenados.map(function (ym) { return '<th style="text-align:center; white-space:nowrap;">' + nombreMesCorto(ym) + '</th>'; }).join('');
+  var selectorMesCobro = '<div class="campo" style="max-width:220px; margin-bottom:10px;"><label>Mes a cobrar por WhatsApp</label><select id="sel-mes-cobro-whatsapp">' +
+    mesesOrdenados.map(function (ym) { return '<option value="' + ym + '"' + (ym === mesCobroWhatsapp ? ' selected' : '') + '>' + nombreMesCorto(ym) + '</option>'; }).join('') +
+    '</select></div>';
+
+  var encabezado = '<th>Estudiante</th>' + mesesOrdenados.map(function (ym) { return '<th style="text-align:center; white-space:nowrap;">' + nombreMesCorto(ym) + '</th>'; }).join('') + '<th style="text-align:center;">Cobro</th>';
 
   var filas = alumnosActivos.map(function (o) {
     var celdas = mesesOrdenados.map(function (ym) {
       var cargo = cargos.find(function (c) { return c.alumnoIdx === o.i && c.concepto === 'Mensualidad' && c.vencimiento && c.vencimiento.slice(0, 7) === ym; });
       if (!cargo) return '<td style="text-align:center; color:var(--muted);">—</td>';
-      if (cargo.saldo <= 0) return '<td style="text-align:center;"><span style="color:var(--verde); font-weight:600; font-size:11.5px;">Pagado</span></td>';
+      var valorTxt = '<div style="font-size:10.5px; color:var(--muted);">' + formatearCOPContable(cargo.valor) + '</div>';
+      if (cargo.saldo <= 0) return '<td style="text-align:center; white-space:nowrap;">' + valorTxt + '<span style="color:var(--verde); font-weight:600; font-size:11.5px;">Pagado</span></td>';
       var etiqueta = cargo.vencimiento <= hoyStr2
         ? '<span style="color:#fff; background:var(--rojo); padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600;" title="Vence ' + cargo.vencimiento + '">Debe pagar</span>'
         : '<span style="color:var(--naranja); font-size:11.5px;">Pendiente</span>';
-      return '<td style="text-align:center; white-space:nowrap;">' + etiqueta +
+      return '<td style="text-align:center; white-space:nowrap;">' + valorTxt + etiqueta + '<br>' +
+        '<button class="btn-marcar-pagado-cargo" data-id="' + cargo.id + '" data-saldo="' + cargo.saldo + '" style="font-size:10px; margin-top:3px; padding:2px 8px; border-radius:5px; border:1px solid var(--verde); background:#fff; color:var(--verde); cursor:pointer;">Ya pagó</button>' +
         ' <button class="btn-eliminar-cargo-mensual" data-id="' + cargo.id + '" title="Eliminar este cargo — usalo solo si el estudiante no asistió ese mes" style="font-size:10px; background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0 0 2px;">🗑</button></td>';
     }).join('');
-    return '<tr><td style="font-weight:600; white-space:nowrap;">' + o.a.nombres + ' ' + o.a.apellidos + '</td>' + celdas + '</tr>';
+
+    var cargoDelMesCobro = cargos.find(function (c) { return c.alumnoIdx === o.i && c.concepto === 'Mensualidad' && c.vencimiento && c.vencimiento.slice(0, 7) === mesCobroWhatsapp; });
+    var celdaCobro;
+    if (!cargoDelMesCobro || cargoDelMesCobro.saldo <= 0) {
+      celdaCobro = '<td style="text-align:center; color:var(--muted); font-size:11px;">—</td>';
+    } else {
+      var telefonoContacto = ((o.a.celularAcudiente || o.a.telefono || '')).replace(/\D/g, '');
+      if (!telefonoContacto) {
+        celdaCobro = '<td style="text-align:center; color:var(--muted); font-size:10.5px; font-style:italic;">Sin teléfono</td>';
+      } else {
+        var mensajeCobro = encodeURIComponent(
+          'Hola! Te escribimos de Academia Musical Jacquin para recordarte amablemente que la mensualidad de ' +
+          o.a.nombres + ' ' + o.a.apellidos + ' correspondiente a ' + nombreMesCorto(mesCobroWhatsapp) +
+          ' está pendiente (' + formatearCOPContable(cargoDelMesCobro.valor) + '). Cualquier novedad con gusto te ayudamos. ¡Gracias!'
+        );
+        celdaCobro = '<td style="text-align:center;"><a href="https://wa.me/' + telefonoContacto + '?text=' + mensajeCobro + '" target="_blank" rel="noopener" style="font-size:11px; background:#25D366; color:#fff; padding:5px 10px; border-radius:6px; text-decoration:none; white-space:nowrap;">📲 Cobro por WhatsApp</a></td>';
+      }
+    }
+
+    return '<tr><td style="font-weight:600; white-space:nowrap;">' + o.a.nombres + ' ' + o.a.apellidos + '</td>' + celdas + celdaCobro + '</tr>';
   }).join('');
 
   return '<div class="panel"><h2>Historial de mensualidades</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Un cargo por mes, generado solo cuando ya toca según la fecha de matrícula de cada estudiante — no según cuándo pagó el mes anterior. El 🗑 al lado de un cargo lo elimina (usalo solo si el estudiante no asistió ese mes).</p>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Todos los matriculados pagan dentro de los primeros 5 días del mes — el cargo se genera solo, mismo día para todos. El 🗑 elimina un cargo (usalo solo si el estudiante no asistió ese mes).</p>' +
+    selectorMesCobro +
     '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr>' + encabezado + '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
     '</div>';
 }
@@ -2898,6 +2917,33 @@ function activarLogicaPagos() {
         });
     });
   });
+
+  document.querySelectorAll('.btn-marcar-pagado-cargo').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-id');
+      var saldo = Number(btn.getAttribute('data-saldo'));
+      if (!confirm('¿Confirmar que este cargo ya fue pagado, por ' + formatearCOPContable(saldo) + '?')) return;
+      btn.disabled = true;
+      apiFetch('/api/pagos/pagos', {
+        method: 'POST',
+        body: JSON.stringify({ cargoId: id, valor: saldo, fechaPago: new Date().toISOString().slice(0, 10), medioPago: 'Efectivo' })
+      })
+        .then(function () { return Promise.all([refrescarCacheAlumnos(), refrescarCacheCargos()]); })
+        .then(function () { renderContenido('pagos'); })
+        .catch(function (err) {
+          btn.disabled = false;
+          alert('No se pudo registrar el pago: ' + (err.message || 'error de conexión.'));
+        });
+    });
+  });
+
+  var selMesCobro = document.getElementById('sel-mes-cobro-whatsapp');
+  if (selMesCobro) {
+    selMesCobro.addEventListener('change', function () {
+      mesCobroWhatsapp = this.value;
+      renderContenido('pagos');
+    });
+  }
 
   var btnCargo = document.getElementById('btn-crear-cargo');
   if (btnCargo) {
