@@ -1,5 +1,6 @@
 import { pool } from "../../config/db.js";
 
+// ---- Ingresos ----
 export async function listarConceptos() {
   const { rows } = await pool.query(`SELECT * FROM conceptos_pago WHERE activo = true ORDER BY nombre`);
   return rows;
@@ -32,15 +33,45 @@ export async function actualizarSaldoCargo(id, saldoPendiente, estado) {
   return rows[0];
 }
 
-// NUEVO: usado por borrarCargo() para no dejar borrar un cargo que ya
-// tiene algún pago real registrado en su contra.
+// NUEVO: edita el valor y/o descuento de un cargo ya creado — para el
+// caso real de "este mes asistió solo la mitad y le toca pagar menos/más".
+// Recalcula el saldo pendiente respetando lo que ya se haya pagado (no
+// resetea a cero un abono ya registrado): saldo nuevo = (valor nuevo -
+// descuento nuevo) - lo que ya estaba pagado antes de este cambio. Usa
+// un WITH para poder referirse a los valores VIEJOS de la fila (valor,
+// descuento, saldo_pendiente) dentro del mismo UPDATE.
+export async function actualizarCargo(id, { valor, descuento }) {
+  const { rows } = await pool.query(
+    `WITH calc AS (
+       SELECT id, GREATEST($1::numeric - $2::numeric - (valor - descuento - saldo_pendiente), 0) AS nuevo_saldo
+       FROM cargos WHERE id = $3
+     )
+     UPDATE cargos c SET valor = $1, descuento = $2, saldo_pendiente = calc.nuevo_saldo,
+            estado = CASE WHEN calc.nuevo_saldo <= 0 THEN 'pagado' ELSE 'pendiente' END
+     FROM calc WHERE c.id = calc.id
+     RETURNING c.*`,
+    [valor, descuento, id]
+  );
+  return rows[0];
+}
+
+// NUEVO: usado por pagosDeCargo/eliminarCargo (ya existían) y ahora
+// también por reversarUltimoPago — traer el pago más reciente de un
+// cargo, para poder deshacerlo si se marcó "ya pagó" por error.
 export async function pagosDeCargo(cargoId) {
-  const { rows } = await pool.query(`SELECT * FROM pagos WHERE cargo_id = $1`, [cargoId]);
+  const { rows } = await pool.query(`SELECT * FROM pagos WHERE cargo_id = $1 ORDER BY id DESC`, [cargoId]);
   return rows;
 }
 
-// NUEVO: elimina un cargo. Solo se llama desde borrarCargo() (servicio),
-// que ya valida antes que el cargo no tenga pagos.
+export async function ultimoPagoDeCargo(cargoId) {
+  const { rows } = await pool.query(`SELECT * FROM pagos WHERE cargo_id = $1 ORDER BY id DESC LIMIT 1`, [cargoId]);
+  return rows[0] ?? null;
+}
+
+export async function eliminarPago(id) {
+  await pool.query(`DELETE FROM pagos WHERE id = $1`, [id]);
+}
+
 export async function eliminarCargo(id) {
   await pool.query(`DELETE FROM cargos WHERE id = $1`, [id]);
 }
