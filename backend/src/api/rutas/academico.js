@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { altaAlumno, obtenerAlumno, obtenerListaAlumnos, cambiarEstado } from "../../servicios/academico/servicio.js";
+import { altaAlumno, obtenerAlumno, obtenerListaAlumnos, editarAlumno, cambiarEstado } from "../../servicios/academico/servicio.js";
 import { PROGRAMAS_OFICIALES, ESTADOS_ALUMNO } from "../../dominio/academico/entidades.js";
 import { respuestaExitosa } from "../middlewares/manejoErrores.js";
 import { requiereAutenticacion } from "../middlewares/autenticacion.js";
@@ -32,6 +32,16 @@ rutasAcademico.post("/estudiantes", requierePermiso("academico:crear"), async (r
   try {
     const resultado = await altaAlumno(req.body, { usuarioId: req.usuario?.id ?? null });
     respuestaExitosa(res, resultado);
+  } catch (err) { next(err); }
+});
+
+// NUEVO: edita los datos de un estudiante ya existente (nombres, contacto,
+// programa, profesor asignado, observaciones) — antes esta ruta no
+// existía y el botón "Guardar cambios" del editor le pegaba a un 404.
+rutasAcademico.put("/estudiantes/:id", requierePermiso("academico:crear"), async (req, res, next) => {
+  try {
+    const actualizado = await editarAlumno(req.params.id, req.body, { usuarioId: req.usuario?.id ?? null });
+    respuestaExitosa(res, actualizado);
   } catch (err) { next(err); }
 });
 
