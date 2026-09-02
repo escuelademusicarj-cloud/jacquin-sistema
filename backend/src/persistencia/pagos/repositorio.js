@@ -32,6 +32,19 @@ export async function actualizarSaldoCargo(id, saldoPendiente, estado) {
   return rows[0];
 }
 
+// NUEVO: usado por borrarCargo() para no dejar borrar un cargo que ya
+// tiene algún pago real registrado en su contra.
+export async function pagosDeCargo(cargoId) {
+  const { rows } = await pool.query(`SELECT * FROM pagos WHERE cargo_id = $1`, [cargoId]);
+  return rows;
+}
+
+// NUEVO: elimina un cargo. Solo se llama desde borrarCargo() (servicio),
+// que ya valida antes que el cargo no tenga pagos.
+export async function eliminarCargo(id) {
+  await pool.query(`DELETE FROM cargos WHERE id = $1`, [id]);
+}
+
 export async function insertarPago(pago) {
   const { rows } = await pool.query(
     `INSERT INTO pagos (cargo_id, valor, fecha_pago, medio_pago) VALUES ($1,$2,$3,$4) RETURNING *`,
