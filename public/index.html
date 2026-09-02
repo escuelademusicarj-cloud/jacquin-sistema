@@ -1180,15 +1180,16 @@ var busquedaHistorialAsistencia = ''; // texto del buscador de estudiante en el 
 var busquedaAvanceMensual = ''; // texto del buscador de estudiante en Avances académicos
 
 // ---- Helpers de semana ISO (input type="week") ----
-function semanaActualStr() {
-  var hoy = new Date();
-  var d = new Date(Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()));
+function semanaDeFecha(fechaStr) {
+  var base = fechaStr ? new Date(fechaStr + 'T00:00:00') : new Date();
+  var d = new Date(Date.UTC(base.getFullYear(), base.getMonth(), base.getDate()));
   var dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   var inicioAnio = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
   var numSemana = Math.ceil((((d - inicioAnio) / 86400000) + 1) / 7);
   return d.getUTCFullYear() + '-W' + (numSemana < 10 ? '0' + numSemana : numSemana);
 }
+function semanaActualStr() { return semanaDeFecha(); }
 function lunesDeSemana(semanaStr) {
   var partes = semanaStr.split('-W');
   var anio = parseInt(partes[0], 10);
@@ -3539,8 +3540,14 @@ function renderAsistencia(sesion) {
           var fechaAlta = al.fechaMatricula || respaldoFechaAsistencia;
           return fechaAlta <= fechaCelda;
         });
-        return { o: o, listaAlumnos: listaAlumnos };
-      }).filter(function (x) { return x.listaAlumnos.length > 0; });
+        // Asistencias "extraordinarias": alguien que vino a este horario
+        // aunque no le corresponda (no está en o.c.alumnos para esta
+        // fecha) — se listan aparte y se resaltan distinto en la celda.
+        var idxExtraordinarios = asistencias.filter(function (a) {
+          return a.claseIdx === o.i && a.fecha === fechaCelda && listaAlumnos.indexOf(a.alumnoIdx) === -1;
+        }).map(function (a) { return a.alumnoIdx; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; });
+        return { o: o, listaAlumnos: listaAlumnos, idxExtraordinarios: idxExtraordinarios };
+      }).filter(function (x) { return x.listaAlumnos.length > 0 || x.idxExtraordinarios.length > 0; });
 
       var contenidoOcupantes = ocupantesConAlumnos.map(function (x) {
         var o = x.o, listaAlumnos = x.listaAlumnos;
@@ -3560,9 +3567,25 @@ function renderAsistencia(sesion) {
             '</div>';
         }).join('');
 
+        var filasExtraordinarias = x.idxExtraordinarios.map(function (idxAlumno) {
+          var alumno = alumnos[idxAlumno];
+          if (!alumno) return '';
+          var registro = asistencias.find(function (a) { return a.alumnoIdx === idxAlumno && a.claseIdx === o.i && a.fecha === fechaCelda; });
+          var estadoActual = registro ? registro.estado : '';
+          var colorEstado = estadoActual ? (COLOR_ESTADO_ASISTENCIA[estadoActual] || '#ccc') : '#ccc';
+          var opciones = '<option value="">—</option>' +
+            ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return '<option value="' + e + '"' + (e === estadoActual ? ' selected' : '') + '>' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('');
+          return '' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:3px; background:#FDF1D6; border:1px solid #E9C46A; border-radius:4px; padding:1px 3px;" title="No es su horario habitual — asistencia extraordinaria">' +
+            '<span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:66px; color:#8a6300;" title="' + alumno.nombres + ' ' + alumno.apellidos + ' — no es su horario habitual">⚡ ' + alumno.nombres + ' ' + alumno.apellidos.split(' ')[0] + '</span>' +
+            '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '" data-fecha="' + fechaCelda + '" style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:70px;">' +
+            opciones + '</select>' +
+            '</div>';
+        }).join('');
+
         return '<div class="celda-clase-asistencia" style="font-size:11px; text-align:left; background:#fff; border-radius:5px; padding:5px 6px; margin-bottom:4px;">' +
           '<div style="font-weight:600; margin-bottom:3px;">' + chipPrograma(o.c.programa) + '</div>' +
-          filasEstudiantes +
+          filasEstudiantes + filasExtraordinarias +
           '</div>';
       }).join('');
 
@@ -3596,6 +3619,7 @@ function renderAsistencia(sesion) {
     ESTADOS_ASISTENCIA_RAPIDA.map(function (e) {
       return '<span><span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:' + COLOR_ESTADO_ASISTENCIA[e] + '; margin-right:4px;"></span>' + ETIQUETA_ASISTENCIA[e] + '</span>';
     }).join('') +
+    '<span><span style="display:inline-block; width:12px; height:9px; border-radius:2px; background:#FDF1D6; border:1px solid #E9C46A; margin-right:4px;"></span>⚡ No es su horario habitual</span>' +
     '</div>';
 
   var grillaHtml =
@@ -3664,11 +3688,34 @@ function renderAsistencia(sesion) {
     (alumnoHistorial ? '<button class="btn-primario" id="btn-asis-historial-pdf" style="max-width:260px; margin-top:12px;">Imprimir / descargar PDF</button>' : '') +
     '</div>';
 
+  var opcionesEstudianteExtra = '<option value="">Seleccioná un estudiante…</option>' +
+    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('');
+
+  var opcionesClaseExtra = '<option value="">Seleccioná la clase a la que asistió…</option>' +
+    clases.map(function (c, i) { return '<option value="' + i + '">' + DIAS_SEMANA[c.dia] + ' ' + c.hora + ' — ' + c.programa + '</option>'; }).join('');
+
+  var panelExtraordinaria =
+    '<div class="panel"><h2>¿Alguien vino a un horario que no le tocaba?</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Registrá acá su asistencia igual — va a aparecer resaltada en la grilla de abajo, para diferenciarla de su horario habitual.</p>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Estudiante</label><select id="asis-extra-alumno">' + opcionesEstudianteExtra + '</select></div>' +
+    '<div class="campo"><label>Clase a la que asistió</label><select id="asis-extra-clase">' + opcionesClaseExtra + '</select></div>' +
+    '<div class="campo"><label>Fecha</label><input id="asis-extra-fecha" type="date" value="' + hoyStr + '" /></div>' +
+    '<div class="campo"><label>Estado</label><select id="asis-extra-estado">' +
+    ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return '<option value="' + e + '"' + (e === 'asistio' ? ' selected' : '') + '>' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('') +
+    '</select></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-registrar-asis-extra" style="max-width:260px; margin-top:6px;">Registrar</button>' +
+    '<p id="msj-asis-extra-error" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
+    '</div>';
+
   return '' +
     '<div class="panel"><h2>Asistencia</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí la semana a registrar — cada columna usa su fecha real (lunes a sábado). El día de hoy queda resaltado en naranja. Marcá el estado al lado de cada estudiante; se guarda al instante. Se actualiza solo cuando se agrega o quita gente en Horarios.</p>' +
     grillaHtml +
     '</div>' +
+
+    panelExtraordinaria +
 
     panelHistorialIndividual +
 
@@ -3721,6 +3768,58 @@ function activarLogicaAsistencia() {
       renderContenido('asistencia');
     });
   });
+
+  var btnRegistrarExtra = document.getElementById('btn-registrar-asis-extra');
+  if (btnRegistrarExtra) {
+    btnRegistrarExtra.addEventListener('click', function () {
+      var msjError = document.getElementById('msj-asis-extra-error');
+      msjError.style.display = 'none';
+
+      var alumnoIdxStr = document.getElementById('asis-extra-alumno').value;
+      var claseIdxStr = document.getElementById('asis-extra-clase').value;
+      var fecha = document.getElementById('asis-extra-fecha').value;
+      var estado = document.getElementById('asis-extra-estado').value;
+
+      if (alumnoIdxStr === '' || claseIdxStr === '' || !fecha) {
+        msjError.textContent = 'Elegí estudiante, clase y fecha.';
+        msjError.style.display = 'block';
+        return;
+      }
+
+      var alumnoIdx = Number(alumnoIdxStr);
+      var claseIdx = Number(claseIdxStr);
+      var alumno = cargarAlumnos()[alumnoIdx];
+      var clase = cargarClases()[claseIdx];
+      if (!alumno || !alumno.id || !clase || !clase.id) {
+        msjError.textContent = 'No se pudo identificar al estudiante o la clase — recargá la página e intentá de nuevo.';
+        msjError.style.display = 'block';
+        return;
+      }
+
+      btnRegistrarExtra.disabled = true;
+      apiFetch('/api/asistencia', {
+        method: 'POST',
+        body: JSON.stringify({ claseId: clase.id, alumnoId: alumno.id, fecha: fecha, estado: estado })
+      })
+        .then(function () {
+          var asistencias = cargarAsistencias();
+          var existenteIdx = asistencias.findIndex(function (a) { return a.alumnoIdx === alumnoIdx && a.claseIdx === claseIdx && a.fecha === fecha; });
+          if (existenteIdx !== -1) asistencias[existenteIdx].estado = estado;
+          else asistencias.push({ alumnoIdx: alumnoIdx, claseIdx: claseIdx, fecha: fecha, estado: estado });
+          guardarAsistencias(asistencias);
+
+          // Salta a la semana de esa fecha para que se vea al instante en la grilla.
+          semanaAsistenciaSeleccionada = semanaDeFecha(fecha);
+          btnRegistrarExtra.disabled = false;
+          renderContenido('asistencia');
+        })
+        .catch(function (err) {
+          btnRegistrarExtra.disabled = false;
+          msjError.textContent = 'No se pudo registrar: ' + (err.message || 'error de conexión.');
+          msjError.style.display = 'block';
+        });
+    });
+  }
 
   document.querySelectorAll('.select-asistencia-rapida').forEach(function (select) {
     select.addEventListener('change', function () {
