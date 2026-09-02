@@ -1,5 +1,8 @@
 import { crearCargo, aplicarPago } from "../../dominio/pagos/entidades.js";
-import { insertarCargo, buscarCargoPorId, actualizarSaldoCargo, insertarPago, cargosDeAlumno, carteraPendiente, listarConceptos, buscarConceptoPorNombre } from "../../persistencia/pagos/repositorio.js";
+import {
+  insertarCargo, buscarCargoPorId, actualizarSaldoCargo, insertarPago, cargosDeAlumno, carteraPendiente,
+  listarConceptos, buscarConceptoPorNombre, pagosDeCargo, eliminarCargo,
+} from "../../persistencia/pagos/repositorio.js";
 import { cambiarEstado } from "../academico/servicio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
@@ -19,6 +22,35 @@ export async function generarCargo(datosCargo, contextoAuditoria) {
     entidad: "cargo", entidadId: cargo.id, resultado: "exito",
   });
   return cargo;
+}
+
+/**
+ * Elimina un cargo que todavía no tiene ningún pago registrado en su
+ * contra — pensado para el caso real que describió Sergio: el estudiante
+ * no asistió ese mes, así que ese cargo no corresponde y Secretaría lo
+ * saca a mano. Si el cargo ya tiene algún pago (aunque sea parcial), no
+ * se deja borrar — ahí lo correcto sería un ajuste contable, no hacer
+ * desaparecer el registro de un pago real.
+ */
+export async function borrarCargo(id, contextoAuditoria) {
+  const cargo = await buscarCargoPorId(id);
+  if (!cargo) {
+    const err = new Error("Cargo no encontrado.");
+    err.codigoHttp = 404;
+    throw err;
+  }
+  const pagosDelCargo = await pagosDeCargo(id);
+  if (pagosDelCargo.length > 0) {
+    const err = new Error("Este cargo ya tiene pagos registrados — no se puede eliminar.");
+    err.codigoHttp = 400;
+    throw err;
+  }
+  await eliminarCargo(id);
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "eliminar", modulo: "pagos",
+    entidad: "cargo", entidadId: id, resultado: "exito",
+  });
+  return { eliminado: true };
 }
 
 /**
