@@ -13,6 +13,7 @@ rutasAuditoria.get("/", requierePermiso("auditoria:ver"), async (req, res, next)
     const filas = await listarAuditoria({
       rol: req.query.rol || undefined,
       accion: req.query.accion || undefined,
+      usuario: req.query.usuario || undefined,
       desde: req.query.desde || undefined,
       hasta: req.query.hasta || undefined,
     });
