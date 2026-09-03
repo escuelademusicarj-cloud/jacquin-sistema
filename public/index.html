@@ -494,6 +494,8 @@
   .btn-nivel-pensum { font-size:13px; padding:7px 18px; border-radius:20px; border:1px solid var(--azul-oscuro); cursor:pointer; font-family:var(--font-ui); margin-right:8px; font-weight:600; }
   .btn-volver-pensum { background:transparent; border:none; color:var(--azul-oscuro); font-size:13px; font-weight:600; cursor:pointer; font-family:var(--font-ui); padding:0; margin-bottom:14px; display:inline-flex; align-items:center; gap:4px; }
   .btn-volver-pensum:hover { text-decoration:underline; }
+  /* ---- Buscador de estudiante con autocompletar ---- */
+  .item-buscador-estudiante:last-child { border-bottom: none !important; }
 </style>
 </head>
 <body>
@@ -720,6 +722,88 @@ function resolverProfesorDeAlumnos() {
     var p = CACHE_PROFESORES.find(function (pp) { return pp.id === a.profesor; });
     a.profesor = p ? p.email : '';
   });
+}
+
+// ==================== BUSCADOR DE ESTUDIANTE CON AUTOCOMPLETAR ====================
+// Reemplaza los <select> largos y difíciles de recorrer en Estudiantes,
+// Matrícula, Horarios, Asistencia y Pagos. Se apoya en el mismo patrón en
+// todos lados: un <input type="hidden" id="idBase"> guarda el índice
+// elegido (mismo id que tenía el <select> viejo, así el resto del código
+// que lee ese valor no cambia), un <input type="text" id="idBase-texto">
+// es lo que la persona ve y tipea, y un <div id="idBase-resultados">
+// lista las coincidencias a medida que escribe.
+function htmlBuscadorEstudiante(idBase, valorPrecargado, placeholder) {
+  return '' +
+    '<div style="position:relative;">' +
+    '<input type="text" id="' + idBase + '-texto" autocomplete="off" placeholder="' + (placeholder || 'Escribí para buscar…') + '" />' +
+    '<input type="hidden" id="' + idBase + '" value="' + (valorPrecargado != null ? valorPrecargado : '') + '" />' +
+    '<div id="' + idBase + '-resultados" style="display:none; position:absolute; z-index:40; background:#fff; border:1px solid #ddd; border-radius:8px; margin-top:2px; max-height:220px; overflow-y:auto; width:100%; box-shadow:0 6px 16px rgba(0,0,0,0.14);"></div>' +
+    '</div>';
+}
+
+function activarBuscadorEstudiante(idBase, alumnosOProveedor, onSeleccionar) {
+  var obtenerAlumnos = typeof alumnosOProveedor === 'function' ? alumnosOProveedor : function () { return alumnosOProveedor; };
+  var inputTexto = document.getElementById(idBase + '-texto');
+  var inputOculto = document.getElementById(idBase);
+  var listaResultados = document.getElementById(idBase + '-resultados');
+  if (!inputTexto || !inputOculto || !listaResultados) return;
+
+  function normalizar(s) {
+    return (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function mostrarResultados(filtro) {
+    var alumnos = obtenerAlumnos() || [];
+    var texto = normalizar(filtro);
+    if (alumnos.length === 0) {
+      listaResultados.innerHTML = '<div style="padding:8px 10px; font-size:12.5px; color:var(--muted);">No hay estudiantes disponibles para elegir acá</div>';
+      listaResultados.style.display = 'block';
+      return;
+    }
+    var coincidencias = alumnos
+      .map(function (a, i) { return { a: a, i: i }; })
+      .filter(function (o) { return !texto || normalizar(o.a.nombres + ' ' + o.a.apellidos).indexOf(texto) !== -1; })
+      .slice(0, 8);
+
+    if (coincidencias.length === 0) {
+      listaResultados.innerHTML = '<div style="padding:8px 10px; font-size:12.5px; color:var(--muted);">Sin resultados</div>';
+    } else {
+      listaResultados.innerHTML = coincidencias.map(function (o) {
+        return '<div class="item-buscador-estudiante" data-idx="' + o.i + '" style="padding:8px 10px; font-size:13px; cursor:pointer; border-bottom:1px solid #f0f0f0;">' +
+          o.a.nombres + ' ' + o.a.apellidos + (o.a.programa ? ' <span style="color:var(--muted); font-size:11px;">— ' + o.a.programa + '</span>' : '') + '</div>';
+      }).join('');
+      listaResultados.querySelectorAll('.item-buscador-estudiante').forEach(function (item) {
+        item.addEventListener('mousedown', function (ev) {
+          ev.preventDefault();
+          var idx = Number(item.getAttribute('data-idx'));
+          var alumno = obtenerAlumnos()[idx];
+          inputOculto.value = idx;
+          inputTexto.value = alumno.nombres + ' ' + alumno.apellidos;
+          listaResultados.style.display = 'none';
+          if (onSeleccionar) onSeleccionar(idx);
+        });
+        item.addEventListener('mouseover', function () { item.style.background = '#f5f5f5'; });
+        item.addEventListener('mouseout', function () { item.style.background = '#fff'; });
+      });
+    }
+    listaResultados.style.display = 'block';
+  }
+
+  inputTexto.addEventListener('focus', function () { mostrarResultados(inputTexto.value); });
+  inputTexto.addEventListener('input', function () {
+    inputOculto.value = '';
+    mostrarResultados(inputTexto.value);
+  });
+  inputTexto.addEventListener('blur', function () {
+    setTimeout(function () { listaResultados.style.display = 'none'; }, 150);
+  });
+
+  // Si ya venía un valor precargado (ej. al editar), mostrar el nombre.
+  var alumnosIniciales = obtenerAlumnos() || [];
+  if (inputOculto.value !== '' && alumnosIniciales[Number(inputOculto.value)]) {
+    var pre = alumnosIniciales[Number(inputOculto.value)];
+    inputTexto.value = pre.nombres + ' ' + pre.apellidos;
+  }
 }
 
 function cargarAlumnos() {
@@ -1186,7 +1270,6 @@ var filtroProgramaAsistencia = 'General';
 // manual" — null si ninguna. Solo una a la vez.
 var celdaManualAbierta = null;
 var alumnoHistorialAsistenciaIdx = null; // estudiante elegido en el recuadro de historial individual
-var busquedaHistorialAsistencia = ''; // texto del buscador de estudiante en el historial de asistencia
 var busquedaAvanceMensual = ''; // texto del buscador de estudiante en Avances académicos
 
 // ---- Helpers de semana ISO (input type="week") ----
@@ -1687,10 +1770,7 @@ function renderEstudiantes() {
     '<div class="panel"><h2>Certificado de estudio</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Elegí un estudiante y generá su constancia de estudio en PDF — se completa sola con sus datos.</p>' +
     '<div class="grilla-2col" style="align-items:end;">' +
-    '<div class="campo"><label>Estudiante</label><select id="cert-alumno">' +
-    (alumnos.length === 0 ? '<option value="">No hay estudiantes registrados</option>' :
-      alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('')) +
-    '</select></div>' +
+    '<div class="campo"><label>Estudiante</label>' + htmlBuscadorEstudiante('cert-alumno', '', 'Escribí el nombre del estudiante…') + '</div>' +
     '<button class="btn-primario" id="btn-generar-certificado" style="max-width:260px;"' + (alumnos.length === 0 ? ' disabled' : '') + '>Generar certificado de estudio</button>' +
     '</div>' +
     '<p id="msj-certificado" style="font-size:12px; color:var(--muted); display:none; margin-top:8px;">Generando PDF…</p>' +
@@ -1764,6 +1844,8 @@ function renderModalEditorEstudiante(profesoresDisponibles) {
 
 function activarLogicaEstudiantes(volverA) {
   volverA = volverA || 'estudiantes';
+
+  activarBuscadorEstudiante('cert-alumno', cargarAlumnos());
 
   var btnCertificado = document.getElementById('btn-generar-certificado');
   if (btnCertificado) {
@@ -2379,9 +2461,7 @@ function renderMatricula(sesion) {
         (alumnos.length === 0 ? '<p class="ayuda">Primero registrá un estudiante en el módulo Estudiantes.</p>' :
         '<p class="ayuda">El programa se toma del estudiante elegido — se puede corregir acá y queda guardado también en su ficha.</p>' +
         '<div class="grilla-moderna">' +
-        '<div class="campo-moderno"><label>Estudiante</label><select id="in-alumno">' +
-        alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + ' — ' + a.programa + '</option>'; }).join('') +
-        '</select></div>' +
+        '<div class="campo-moderno"><label>Estudiante</label>' + htmlBuscadorEstudiante('in-alumno', alumnos.length > 0 ? '0' : '', 'Escribí el nombre del estudiante…') + '</div>' +
         '<div class="campo-moderno"><label>Programa 1</label><select id="in-programa">' +
         PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
         '</select></div>' +
@@ -2476,7 +2556,7 @@ function activarLogicaMatricula() {
     aplicarTipoPlanSeleccionado();
   }
 
-  selectAlumno.addEventListener('change', alDefinirEstudiante);
+  activarBuscadorEstudiante('in-alumno', alumnos, alDefinirEstudiante);
   document.getElementById('in-programa').addEventListener('change', repoblarTiposPlanPorPrograma);
   document.getElementById('in-tipo-plan').addEventListener('change', aplicarTipoPlanSeleccionado);
   document.getElementById('in-descuento').addEventListener('input', recalcularTotal);
@@ -2771,9 +2851,7 @@ function renderPagosTab(alumnos, cargos) {
     '<div class="panel" style="border:2px solid #dbe6f5; background:#fafcff;"><h2 style="color:var(--azul-oscuro);">Generar cargo</h2>' +
     (alumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Primero registrá un estudiante.</p>' :
     '<div class="grilla-2col">' +
-    '<div class="campo"><label>Estudiante</label><select id="cg-alumno">' +
-    alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
-    '</select></div>' +
+    '<div class="campo"><label>Estudiante</label>' + htmlBuscadorEstudiante('cg-alumno', '', 'Escribí el nombre del estudiante…') + '</div>' +
     '<div class="campo"><label>Concepto</label><select id="cg-concepto">' +
     CONCEPTOS_PAGO.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') +
     '</select></div>' +
@@ -2941,6 +3019,8 @@ function activarLogicaPagos() {
   var btnTabPagos = document.getElementById('btn-tab-pagos');
   if (btnTabCartera) btnTabCartera.addEventListener('click', function () { vistaPagos = 'cartera'; renderContenido('pagos'); });
   if (btnTabPagos) btnTabPagos.addEventListener('click', function () { vistaPagos = 'pagos'; renderContenido('pagos'); });
+
+  activarBuscadorEstudiante('cg-alumno', cargarAlumnos());
 
   document.querySelectorAll('.btn-abrir-cargo-modal').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -3163,6 +3243,10 @@ var FESTIVOS_2026 = {
 
 var vistaHorarios = 'semana'; // 'semana' (reservas) o 'mensual' (calendario tipo Outlook)
 var filtroProgramaHorario = 'General'; // 'General' o el nombre exacto de un programa
+// Candidatos para "Reemplazar por" en el modal de editar estudiante de
+// horario — se recalcula cada vez que se abre el modal (mismo programa
+// que la clase, sin contar a quien ya está en ella).
+var candidatosReemplazoHorario = [];
 // Por defecto el horario se ve en modo solo-lectura (sin ✎/✕/arrastrar/
 // agregar) — "Editar horario" lo habilita. Aplica igual al filtro General
 // y a cualquier curso puntual, porque es la misma grilla, solo filtrada.
@@ -3415,10 +3499,7 @@ function renderHorariosSemana(sesion) {
     '<div class="campo"><label>Sala (opcional)</label><select id="mo-sala"><option value="">Sin sala asignada</option>' +
     CACHE_SALAS.map(function (s) { return '<option value="' + s.id + '">' + s.nombre + '</option>'; }).join('') +
     '</select></div>' +
-    '<div class="campo"><label>Estudiante</label><select id="mo-alumno">' +
-    (alumnos.length === 0 ? '<option value="">Sin estudiantes registrados</option>' :
-     alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('')) +
-    '</select></div>' +
+    '<div class="campo"><label>Estudiante</label>' + htmlBuscadorEstudiante('mo-alumno', '', 'Escribí el nombre del estudiante…') + '</div>' +
     '<button class="btn-primario" id="btn-confirmar-agendar">Confirmar</button>' +
     '<button id="btn-cancelar-agendar" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
     '</div></div>';
@@ -3442,7 +3523,7 @@ function renderHorariosSemana(sesion) {
     '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px;">' +
     '<h2 style="margin-top:0;">Editar estudiante del horario</h2>' +
     '<p id="ee-horario-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
-    '<div class="campo"><label>Reemplazar por</label><select id="ee-horario-alumno"></select></div>' +
+    '<div class="campo"><label>Reemplazar por</label>' + htmlBuscadorEstudiante('ee-horario-alumno', '', 'Escribí para buscar…') + '</div>' +
     '<button class="btn-primario" id="btn-guardar-editar-estudiante-horario">Guardar cambio</button>' +
     '<button id="btn-quitar-desde-modal-horario" style="width:100%; margin-top:8px; background:transparent; border:1px solid var(--rojo); border-radius:8px; padding:8px; color:var(--rojo); font-size:13px; cursor:pointer;">Quitar del horario</button>' +
     '<button id="btn-cancelar-editar-estudiante-horario" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
@@ -3465,6 +3546,8 @@ function renderHorariosSemana(sesion) {
 function activarLogicaHorarios() {
   var btnAlternarEdicion = document.getElementById('btn-alternar-edicion-horario');
   if (btnAlternarEdicion) btnAlternarEdicion.addEventListener('click', alternarModoEdicionHorario);
+
+  activarBuscadorEstudiante('ee-horario-alumno', function () { return candidatosReemplazoHorario.map(function (o) { return o.a; }); });
 
   document.querySelectorAll('.btn-filtro-programa').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -3531,6 +3614,7 @@ function activarLogicaHorarios() {
 
   var modalAgendar = document.getElementById('modal-agendar');
   var modalAsignar = document.getElementById('modal-asignar');
+  activarBuscadorEstudiante('mo-alumno', cargarAlumnos());
 
   document.querySelectorAll('.btn-celda-agendar').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -3627,12 +3711,10 @@ function activarLogicaHorarios() {
       modalEditarEstHorario.setAttribute('data-clase-idx', claseIdx);
       modalEditarEstHorario.setAttribute('data-alumno-idx', alumnoIdx);
       document.getElementById('ee-horario-info').textContent = clase.programa + ' — ' + DIAS_SEMANA[clase.dia] + ' ' + clase.hora + ' · actualmente: ' + alumnoActual.nombres + ' ' + alumnoActual.apellidos;
-      var selectAlumno = document.getElementById('ee-horario-alumno');
-      var candidatos = cargarAlumnos().map(function (a, i) { return { a: a, i: i }; })
+      candidatosReemplazoHorario = cargarAlumnos().map(function (a, i) { return { a: a, i: i }; })
         .filter(function (o) { return o.a.programa === clase.programa && (clase.alumnos || []).indexOf(o.i) === -1; });
-      selectAlumno.innerHTML = candidatos.length
-        ? candidatos.map(function (o) { return '<option value="' + o.i + '">' + o.a.nombres + ' ' + o.a.apellidos + '</option>'; }).join('')
-        : '<option value="">No hay otros estudiantes de ' + clase.programa + ' disponibles</option>';
+      document.getElementById('ee-horario-alumno').value = '';
+      document.getElementById('ee-horario-alumno-texto').value = '';
       modalEditarEstHorario.style.display = 'flex';
     });
   });
@@ -3662,10 +3744,11 @@ function activarLogicaHorarios() {
       var claseIdx = Number(modalEditarEstHorario.getAttribute('data-clase-idx'));
       var alumnoIdxActual = Number(modalEditarEstHorario.getAttribute('data-alumno-idx'));
       var nuevoIdxStr = document.getElementById('ee-horario-alumno').value;
-      if (nuevoIdxStr === '') { alert('No hay ningún estudiante para reemplazar.'); return; }
+      if (nuevoIdxStr === '') { alert('Elegí un estudiante para reemplazar.'); return; }
       var clase = cargarClases()[claseIdx];
       var alumnoActual = cargarAlumnos()[alumnoIdxActual];
-      var alumnoNuevo = cargarAlumnos()[Number(nuevoIdxStr)];
+      var candidatoElegido = candidatosReemplazoHorario[Number(nuevoIdxStr)];
+      var alumnoNuevo = candidatoElegido ? candidatoElegido.a : null;
       if (!clase || !alumnoActual || !alumnoNuevo) return;
       btnGuardarEditarEstHorario.disabled = true;
       agregarEstudianteAClaseBackend(clase.id, alumnoNuevo.id)
@@ -3878,9 +3961,11 @@ function renderAsistencia(sesion) {
       var botonManual = '<button type="button" class="btn-abrir-asis-manual" data-clave="' + claveCelda + '" style="font-size:10px; color:var(--azul-oscuro); background:none; border:none; cursor:pointer; padding:2px 0; text-decoration:underline; display:block; margin-top:2px;">+ Asistencia manual</button>';
       var formularioManual = celdaManualAbierta === claveCelda
         ? '<div style="margin-top:4px; padding:5px; background:#FDF1D6; border:1px solid #E9C46A; border-radius:5px;">' +
-          '<select id="sel-manual-alumno" style="width:100%; font-size:10px; margin-bottom:3px; padding:2px;"><option value="">Estudiante…</option>' +
-          alumnos.map(function (a, i) { return '<option value="' + i + '">' + a.nombres + ' ' + a.apellidos + '</option>'; }).join('') +
-          '</select>' +
+          '<div style="position:relative; margin-bottom:3px;">' +
+          '<input type="text" id="sel-manual-alumno-texto" autocomplete="off" placeholder="Estudiante…" style="width:100%; font-size:10px; padding:2px; box-sizing:border-box;" />' +
+          '<input type="hidden" id="sel-manual-alumno" value="" />' +
+          '<div id="sel-manual-alumno-resultados" style="display:none; position:absolute; z-index:40; background:#fff; border:1px solid #ddd; border-radius:4px; margin-top:1px; max-height:150px; overflow-y:auto; width:180px; box-shadow:0 4px 10px rgba(0,0,0,0.16);"></div>' +
+          '</div>' +
           '<select id="sel-manual-clase" style="width:100%; font-size:10px; margin-bottom:3px; padding:2px;"><option value="">Curso…</option>' +
           PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
           '</select>' +
@@ -3942,19 +4027,8 @@ function renderAsistencia(sesion) {
       '<td><span style="display:inline-block; padding:2px 9px; border-radius:10px; font-size:11px; font-weight:600; color:#fff; background:' + color + ';">' + ETIQUETA_ASISTENCIA[a.estado] + '</span></td></tr>';
   }).join('');
 
-  // Buscador de historial individual — filtra el listado de estudiantes por
-  // nombre y muestra su histórico de asistencias en orden, con opción de
-  // imprimir/descargar en PDF.
-  var alumnosParaSelector = alumnos.map(function (a, i) { return { a: a, i: i }; });
-
-  var terminoBusqueda = (busquedaHistorialAsistencia || '').trim().toLowerCase();
-  var alumnosFiltrados = terminoBusqueda
-    ? alumnosParaSelector.filter(function (o) { return (o.a.nombres + ' ' + o.a.apellidos).toLowerCase().indexOf(terminoBusqueda) !== -1; })
-    : alumnosParaSelector;
-
-  var opcionesAlumnoHistorial = '<option value="">Seleccioná un estudiante…</option>' +
-    alumnosFiltrados.map(function (o) { return '<option value="' + o.i + '"' + (o.i === alumnoHistorialAsistenciaIdx ? ' selected' : '') + '>' + o.a.nombres + ' ' + o.a.apellidos + '</option>'; }).join('');
-
+  // Buscador de historial individual — elegí un estudiante y mostrá su
+  // histórico de asistencias en orden, con opción de imprimir/descargar en PDF.
   var contenidoHistorialIndividual = '<p style="font-size:13px; color:var(--muted);">Buscá y elegí un estudiante para ver su historial de asistencias en orden.</p>';
   var alumnoHistorial = alumnoHistorialAsistenciaIdx !== null ? alumnos[alumnoHistorialAsistenciaIdx] : null;
 
@@ -3983,8 +4057,7 @@ function renderAsistencia(sesion) {
   var panelHistorialIndividual =
     '<div class="panel"><h2>Historial por estudiante</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Buscá por nombre, elegí el estudiante y descargá o imprimí su histórico de asistencias.</p>' +
-    '<div class="campo" style="max-width:320px;"><label>Buscar estudiante</label><input id="asis-buscar-alumno" type="text" placeholder="Nombre del estudiante…" value="' + (busquedaHistorialAsistencia || '').replace(/"/g, '&quot;') + '" /></div>' +
-    '<div class="campo" style="max-width:320px;"><label>Estudiante</label><select id="asis-alumno-historial">' + opcionesAlumnoHistorial + '</select></div>' +
+    '<div class="campo" style="max-width:320px;"><label>Estudiante</label>' + htmlBuscadorEstudiante('asis-alumno-historial', alumnoHistorialAsistenciaIdx !== null ? alumnoHistorialAsistenciaIdx : '', 'Escribí el nombre del estudiante…') + '</div>' +
     '<div id="asis-historial-individual-contenido">' + contenidoHistorialIndividual + '</div>' +
     (alumnoHistorial ? '<button class="btn-primario" id="btn-asis-historial-pdf" style="max-width:260px; margin-top:12px;">Imprimir / descargar PDF</button>' : '') +
     '</div>';
@@ -4032,6 +4105,8 @@ function generarHtmlHistorialAsistencia(alumno, registros) {
 }
 
 function activarLogicaAsistencia() {
+  activarBuscadorEstudiante('sel-manual-alumno', cargarAlumnos());
+
   var campoSemana = document.getElementById('asis-semana-grilla');
   if (campoSemana) {
     campoSemana.addEventListener('change', function () {
@@ -4185,24 +4260,10 @@ function activarLogicaAsistencia() {
     });
   });
 
-  var campoBuscarAlumno = document.getElementById('asis-buscar-alumno');
-  if (campoBuscarAlumno) {
-    campoBuscarAlumno.addEventListener('input', function () {
-      busquedaHistorialAsistencia = this.value;
-      renderContenido('asistencia');
-      // Devuelve el foco al buscador después de re-renderizar, para poder seguir escribiendo.
-      var campo = document.getElementById('asis-buscar-alumno');
-      if (campo) { campo.focus(); campo.setSelectionRange(campo.value.length, campo.value.length); }
-    });
-  }
-
-  var selectAlumnoHistorial = document.getElementById('asis-alumno-historial');
-  if (selectAlumnoHistorial) {
-    selectAlumnoHistorial.addEventListener('change', function () {
-      alumnoHistorialAsistenciaIdx = this.value === '' ? null : Number(this.value);
-      renderContenido('asistencia');
-    });
-  }
+  activarBuscadorEstudiante('asis-alumno-historial', cargarAlumnos(), function (idx) {
+    alumnoHistorialAsistenciaIdx = idx;
+    renderContenido('asistencia');
+  });
 
   var btnHistorialPdf = document.getElementById('btn-asis-historial-pdf');
   if (btnHistorialPdf) {
@@ -4868,9 +4929,7 @@ function renderEvaluacionLineaPanel(sesion) {
 
   return '' +
     '<div class="panel"><p style="font-size:12px; color:var(--muted); margin:0;">Método propio de Jacquin — cualitativo, por observación del profesor. No es examen ni nota numérica. Es un seguimiento aparte de la evaluación mensual, con más detalle por indicador.</p>' +
-    '<div class="campo" style="margin-top:10px;"><label>Estudiante</label><select id="ev-alumno-ver">' +
-    alumnosVisibles.map(function (o) { return '<option value="' + o.i + '">' + o.a.nombres + ' ' + o.a.apellidos + '</option>'; }).join('') +
-    '</select></div>' +
+    '<div class="campo" style="margin-top:10px;"><label>Estudiante</label>' + htmlBuscadorEstudiante('ev-alumno-ver', alumnosVisibles.length > 0 ? alumnosVisibles[0].i : '', 'Escribí el nombre del estudiante…') + '</div>' +
     '</div>' +
 
     '<div class="panel" id="panel-linea-tiempo"><h2>Línea de tiempo de avance</h2>' +
@@ -4960,8 +5019,7 @@ function activarLogicaEvaluacion() {
       });
     }
 
-    selectVer.addEventListener('change', function () {
-      var idx = Number(this.value);
+    activarBuscadorEstudiante('ev-alumno-ver', cargarAlumnos(), function (idx) {
       var panelLinea = document.getElementById('panel-linea-tiempo');
       var panelHist = document.getElementById('panel-historial-indicadores');
       if (panelLinea) panelLinea.innerHTML = '<h2>Línea de tiempo de avance</h2><p style="font-size:13px; color:var(--muted);">Cargando…</p>';
@@ -6623,7 +6681,7 @@ var REPORTES_DISPONIBLES = [
 // porque es de uso ocasional — se trae bajo demanda al abrir el módulo o
 // al cambiar los filtros.
 var CACHE_AUDITORIA = [];
-var filtrosAuditoria = { rol: '', accion: '', desde: '', hasta: '' };
+var filtrosAuditoria = { rol: '', accion: '', usuario: '', desde: '', hasta: '' };
 var auditoriaCargadaAlMenosUnaVez = false;
 
 var ETIQUETA_ACCION_AUDITORIA = {
@@ -6638,6 +6696,7 @@ async function refrescarCacheAuditoria() {
     var params = [];
     if (filtrosAuditoria.rol) params.push('rol=' + encodeURIComponent(filtrosAuditoria.rol));
     if (filtrosAuditoria.accion) params.push('accion=' + encodeURIComponent(filtrosAuditoria.accion));
+    if (filtrosAuditoria.usuario) params.push('usuario=' + encodeURIComponent(filtrosAuditoria.usuario));
     if (filtrosAuditoria.desde) params.push('desde=' + encodeURIComponent(filtrosAuditoria.desde));
     if (filtrosAuditoria.hasta) params.push('hasta=' + encodeURIComponent(filtrosAuditoria.hasta));
     var qs = params.length ? ('?' + params.join('&')) : '';
@@ -6676,9 +6735,11 @@ function renderAuditoria() {
       return '<option value="' + r + '"' + (filtrosAuditoria.rol === r ? ' selected' : '') + '>' + (r || 'Todos') + '</option>';
     }).join('') + '</select></div>' +
     '<div class="campo"><label>Acción</label><select id="aud-filtro-accion">' +
-    [['', 'Todas'], ['login', 'Inicio de sesión'], ['login_fallido', 'Login fallido'], ['crear', 'Creó'], ['editar', 'Editó'], ['eliminar', 'Eliminó']].map(function (o) {
-      return '<option value="' + o[0] + '"' + (filtrosAuditoria.accion === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+    '<option value=""' + (filtrosAuditoria.accion === '' ? ' selected' : '') + '>Todas</option>' +
+    Object.keys(ETIQUETA_ACCION_AUDITORIA).map(function (clave) {
+      return '<option value="' + clave + '"' + (filtrosAuditoria.accion === clave ? ' selected' : '') + '>' + ETIQUETA_ACCION_AUDITORIA[clave] + '</option>';
     }).join('') + '</select></div>' +
+    '<div class="campo"><label>Nombre (profesor o personal)</label><input id="aud-filtro-usuario" type="text" placeholder="Ej: Sergio, Nicolás…" value="' + filtrosAuditoria.usuario + '" /></div>' +
     '<div class="campo"><label>Desde</label><input id="aud-filtro-desde" type="date" value="' + filtrosAuditoria.desde + '" /></div>' +
     '<div class="campo"><label>Hasta</label><input id="aud-filtro-hasta" type="date" value="' + filtrosAuditoria.hasta + '" /></div>' +
     '</div>' +
@@ -6704,6 +6765,7 @@ function activarLogicaAuditoria() {
     btnFiltrar.addEventListener('click', function () {
       filtrosAuditoria.rol = document.getElementById('aud-filtro-rol').value;
       filtrosAuditoria.accion = document.getElementById('aud-filtro-accion').value;
+      filtrosAuditoria.usuario = document.getElementById('aud-filtro-usuario').value.trim();
       filtrosAuditoria.desde = document.getElementById('aud-filtro-desde').value;
       filtrosAuditoria.hasta = document.getElementById('aud-filtro-hasta').value;
       document.getElementById('tabla-auditoria-contenedor').innerHTML = '<p style="font-size:13px; color:var(--muted);">Cargando…</p>';
