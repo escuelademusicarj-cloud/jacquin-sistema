@@ -4062,7 +4062,7 @@ function renderAsistencia(sesion) {
             ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return '<option value="' + e + '"' + (e === estadoActual ? ' selected' : '') + '>' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('');
           return '' +
             '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:3px;">' +
-            '<span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:78px;" title="' + alumno.nombres + ' ' + alumno.apellidos + '">' + alumno.nombres + ' ' + alumno.apellidos.split(' ')[0] + '</span>' +
+            '<span style="font-size:11px; white-space:normal; word-break:break-word; max-width:82px; line-height:1.25;" title="' + alumno.nombres + ' ' + alumno.apellidos + '">' + alumno.nombres + ' ' + alumno.apellidos.split(' ')[0] + '</span>' +
             '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '" data-fecha="' + fechaCelda + '" style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:78px;">' +
             opciones + '</select>' +
             '</div>';
@@ -4078,7 +4078,7 @@ function renderAsistencia(sesion) {
             ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return '<option value="' + e + '"' + (e === estadoActual ? ' selected' : '') + '>' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('');
           return '' +
             '<div style="display:flex; justify-content:space-between; align-items:center; gap:4px; margin-bottom:3px; background:#FDF1D6; border:1px solid #E9C46A; border-radius:4px; padding:1px 3px;" title="No es su horario habitual — asistencia extraordinaria">' +
-            '<span style="font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:66px; color:#8a6300;" title="' + alumno.nombres + ' ' + alumno.apellidos + ' — no es su horario habitual">⚡ ' + alumno.nombres + ' ' + alumno.apellidos.split(' ')[0] + '</span>' +
+            '<span style="font-size:11px; white-space:normal; word-break:break-word; max-width:72px; line-height:1.25; color:#8a6300;" title="' + alumno.nombres + ' ' + alumno.apellidos + ' — no es su horario habitual">⚡ ' + alumno.nombres + ' ' + alumno.apellidos.split(' ')[0] + '</span>' +
             '<select class="select-asistencia-rapida" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '" data-fecha="' + fechaCelda + '" style="font-size:10px; padding:1px 2px; border-radius:4px; border:1px solid ' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + '; background:#fff; max-width:70px;">' +
             opciones + '</select>' +
             '</div>';
