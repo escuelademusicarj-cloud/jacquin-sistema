@@ -1073,11 +1073,61 @@ function guardarPagosRegistrados(lista) { CACHE_PAGOS_REGISTRADOS = lista; }
 // Escala cualitativa, no numérica de exámenes — el número acá es solo interno, para poder graficar la línea de tiempo.
 var ESCALA_EVALUACION = { iniciando: 1, en_desarrollo: 2, consolidado: 3 };
 var ETIQUETA_ESCALA = { iniciando: 'Iniciando', en_desarrollo: 'En desarrollo', consolidado: 'Consolidado' };
-var INDICADORES_EVALUACION = ['tecnica', 'ritmo', 'coordinacion', 'interpretacion', 'repertorio', 'participacion', 'disciplina'];
-var ETIQUETA_INDICADOR = {
-  tecnica: 'Técnica', ritmo: 'Ritmo', coordinacion: 'Coordinación', interpretacion: 'Interpretación',
-  repertorio: 'Repertorio', participacion: 'Participación', disciplina: 'Disciplina'
+
+// Criterios de evaluación cualitativa por indicadores — específicos de
+// cada curso (decisión de negocio 2026-09-02, a partir del ejemplo real
+// que dio Sergio para Técnica vocal). Misma cantidad de criterios (6) y
+// misma escala de respuesta (Iniciando / En desarrollo / Consolidado) en
+// todos los programas, pero cada uno enfocado en lo que corresponde a su
+// instrumento o etapa. Los ids llevan el prefijo del programa para que
+// nunca choquen entre sí en el diccionario de etiquetas de más abajo.
+var INDICADORES_POR_PROGRAMA = {
+  'Piano': ['piano_postura', 'piano_lectura', 'piano_coordinacion', 'piano_ritmo', 'piano_dinamica', 'piano_repertorio'],
+  'Guitarra': ['guitarra_postura', 'guitarra_pulsacion', 'guitarra_digitacion', 'guitarra_ritmo', 'guitarra_afinacion', 'guitarra_repertorio'],
+  'Bajo': ['bajo_postura', 'bajo_pulsacion', 'bajo_digitacion', 'bajo_ritmo', 'bajo_afinacion', 'bajo_repertorio'],
+  'Técnica vocal': ['vocal_afinacion', 'vocal_respiracion', 'vocal_diccion', 'vocal_proyeccion', 'vocal_flexibilidad', 'vocal_postura'],
+  'Violín': ['violin_postura', 'violin_arco', 'violin_digitacion', 'violin_ritmo', 'violin_sonido', 'violin_repertorio'],
+  'Percusión': ['percusion_postura', 'percusion_golpe', 'percusion_coordinacion', 'percusion_ritmo', 'percusion_lectura', 'percusion_repertorio'],
+  'Iniciación musical': ['inicial_percepcion', 'inicial_ritmo', 'inicial_coordinacion', 'inicial_participacion', 'inicial_expresion', 'inicial_atencion'],
+  'Exploración musical infantil': ['exploracion_percepcion', 'exploracion_sonora', 'exploracion_ritmo', 'exploracion_participacion', 'exploracion_expresion', 'exploracion_socializacion'],
+  'Senior': ['senior_percepcion', 'senior_coordinacion', 'senior_ritmo', 'senior_participacion', 'senior_expresion', 'senior_constancia']
 };
+
+var ETIQUETA_INDICADOR = {
+  piano_postura: 'Postura y posición de manos', piano_lectura: 'Lectura de partitura', piano_coordinacion: 'Coordinación entre manos',
+  piano_ritmo: 'Ritmo y pulso', piano_dinamica: 'Dinámica y expresividad', piano_repertorio: 'Repertorio y memorización',
+
+  guitarra_postura: 'Postura y sujeción del instrumento', guitarra_pulsacion: 'Técnica de pulsación', guitarra_digitacion: 'Digitación y cambios de acorde',
+  guitarra_ritmo: 'Ritmo y rasgueo', guitarra_afinacion: 'Afinación y cuidado del instrumento', guitarra_repertorio: 'Repertorio y progreso',
+
+  bajo_postura: 'Postura y sujeción del instrumento', bajo_pulsacion: 'Técnica de pulsación', bajo_digitacion: 'Digitación y desplazamiento',
+  bajo_ritmo: 'Ritmo y groove', bajo_afinacion: 'Afinación', bajo_repertorio: 'Repertorio y progreso',
+
+  vocal_afinacion: 'Afinación y entonación', vocal_respiracion: 'Respiración y apoyo', vocal_diccion: 'Dicción y articulación',
+  vocal_proyeccion: 'Proyección y volumen', vocal_flexibilidad: 'Flexibilidad y registros', vocal_postura: 'Postura y relajación',
+
+  violin_postura: 'Postura y posición del instrumento', violin_arco: 'Técnica de arco', violin_digitacion: 'Digitación y afinación',
+  violin_ritmo: 'Ritmo y pulso', violin_sonido: 'Sonido y calidad tímbrica', violin_repertorio: 'Repertorio y progreso',
+
+  percusion_postura: 'Postura y sujeción', percusion_golpe: 'Técnica de golpe', percusion_coordinacion: 'Coordinación entre extremidades',
+  percusion_ritmo: 'Ritmo y pulso', percusion_lectura: 'Lectura rítmica', percusion_repertorio: 'Repertorio y progreso',
+
+  inicial_percepcion: 'Percepción auditiva', inicial_ritmo: 'Sentido del ritmo', inicial_coordinacion: 'Coordinación motriz',
+  inicial_participacion: 'Participación y disfrute', inicial_expresion: 'Expresión corporal y vocal', inicial_atencion: 'Atención y seguimiento de instrucciones',
+
+  exploracion_percepcion: 'Percepción auditiva', exploracion_sonora: 'Exploración sonora', exploracion_ritmo: 'Sentido del ritmo',
+  exploracion_participacion: 'Participación y disfrute', exploracion_expresion: 'Expresión corporal y vocal', exploracion_socializacion: 'Socialización en grupo',
+
+  senior_percepcion: 'Percepción auditiva y memoria musical', senior_coordinacion: 'Coordinación motriz', senior_ritmo: 'Sentido del ritmo',
+  senior_participacion: 'Participación y disfrute', senior_expresion: 'Expresión y comunicación', senior_constancia: 'Constancia y motivación'
+};
+
+// Devuelve los 6 criterios que le corresponden a un programa — si por
+// algún motivo el programa no está en el mapa (dato viejo/atípico), cae
+// en Piano para no romper la pantalla.
+function indicadoresDelPrograma(programa) {
+  return INDICADORES_POR_PROGRAMA[programa] || INDICADORES_POR_PROGRAMA['Piano'];
+}
 
 // ---- Seguimiento por indicadores: conectado al backend real, ya no
 // localStorage. A diferencia de Evaluación mensual (que trae TODO de una),
@@ -1090,9 +1140,10 @@ async function refrescarIndicadoresDeAlumno(alumnoIdx) {
   if (!alumno) { CACHE_INDICADORES = { alumnoIdx: alumnoIdx, lista: [] }; return; }
   try {
     var filas = await apiFetch('/api/avances/indicadores?alumnoId=' + alumno.id, { method: 'GET' }) || [];
+    var criterios = indicadoresDelPrograma(alumno.programa);
     var lista = filas.map(function (f) {
-      var obj = { id: f.id, alumnoIdx: alumnoIdx, fecha: f.fecha, observaciones: f.observaciones };
-      INDICADORES_EVALUACION.forEach(function (ind) { obj[ind] = (f.indicadores || {})[ind]; });
+      var obj = { id: f.id, alumnoIdx: alumnoIdx, programa: alumno.programa, fecha: f.fecha, observaciones: f.observaciones };
+      criterios.forEach(function (ind) { obj[ind] = (f.indicadores || {})[ind]; });
       return obj;
     });
     CACHE_INDICADORES = { alumnoIdx: alumnoIdx, lista: lista };
@@ -1111,8 +1162,9 @@ function historialIndicadoresHtml(evaluacionesAlumno) {
 
 function promedioEvaluacion(ev) {
   var suma = 0;
-  INDICADORES_EVALUACION.forEach(function (ind) { suma += ESCALA_EVALUACION[ev[ind]] || 2; });
-  return suma / INDICADORES_EVALUACION.length; // 1 a 3
+  var criterios = indicadoresDelPrograma(ev.programa);
+  criterios.forEach(function (ind) { suma += ESCALA_EVALUACION[ev[ind]] || 2; });
+  return suma / criterios.length; // 1 a 3
 }
 
 // ---- Evaluación mensual cualitativa (2026-08-15) — distinta de la línea de
@@ -4936,16 +4988,8 @@ function renderEvaluacionLineaPanel(sesion) {
     (cargado ? renderLineaTiempoEvaluacion(evaluacionesAlumno) : cargandoTxt) +
     '</div>' +
 
-    '<div class="panel"><h2>Nueva evaluación</h2>' +
-    '<div class="grilla-2col">' +
-    '<div class="campo"><label>Fecha</label><input id="ev-fecha" type="date" value="' + new Date().toISOString().slice(0, 10) + '" /></div>' +
-    INDICADORES_EVALUACION.map(function (ind) {
-      return '<div class="campo"><label>' + ETIQUETA_INDICADOR[ind] + '</label><select id="ev-' + ind + '">' +
-        Object.keys(ETIQUETA_ESCALA).map(function (k) { return '<option value="' + k + '"' + (k === 'en_desarrollo' ? ' selected' : '') + '>' + ETIQUETA_ESCALA[k] + '</option>'; }).join('') +
-        '</select></div>';
-    }).join('') +
-    '<div class="campo"><label>Observaciones</label><input id="ev-observaciones" type="text" placeholder="Notas del profesor sobre esta evaluación..." /></div>' +
-    '</div>' +
+    '<div class="panel" id="panel-nueva-evaluacion"><h2>Nueva evaluación</h2>' +
+    htmlNuevaEvaluacionFields(alumnos[alumnoSeleccionadoIdx]) +
     '<button class="btn-primario" id="btn-guardar-evaluacion" style="max-width:280px;">Guardar evaluación</button>' +
     '<p id="msj-evaluacion-ok" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Evaluación registrada — la línea de tiempo ya se actualizó.</p>' +
     '</div>' +
@@ -5005,6 +5049,24 @@ function generarHtmlInformeEvaluacion(alumno, evaluaciones) {
     '</div>';
 }
 
+// Reutilizado tanto en el primer render como al cambiar de estudiante —
+// arma el formulario de "Nueva evaluación" con los criterios que le
+// tocan al programa de ESE estudiante puntual.
+function htmlNuevaEvaluacionFields(alumno) {
+  var criteriosDelPrograma = indicadoresDelPrograma(alumno.programa);
+  return '' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Criterios de ' + alumno.programa + '.</p>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Fecha</label><input id="ev-fecha" type="date" value="' + new Date().toISOString().slice(0, 10) + '" /></div>' +
+    criteriosDelPrograma.map(function (ind) {
+      return '<div class="campo"><label>' + ETIQUETA_INDICADOR[ind] + '</label><select id="ev-' + ind + '">' +
+        Object.keys(ETIQUETA_ESCALA).map(function (k) { return '<option value="' + k + '"' + (k === 'en_desarrollo' ? ' selected' : '') + '>' + ETIQUETA_ESCALA[k] + '</option>'; }).join('') +
+        '</select></div>';
+    }).join('') +
+    '<div class="campo"><label>Observaciones</label><input id="ev-observaciones" type="text" placeholder="Notas del profesor sobre esta evaluación..." /></div>' +
+    '</div>';
+}
+
 function activarLogicaEvaluacion() {
   var selectVer = document.getElementById('ev-alumno-ver');
   if (selectVer) {
@@ -5020,10 +5082,15 @@ function activarLogicaEvaluacion() {
     }
 
     activarBuscadorEstudiante('ev-alumno-ver', cargarAlumnos(), function (idx) {
+      var alumnoElegido = cargarAlumnos()[idx];
       var panelLinea = document.getElementById('panel-linea-tiempo');
       var panelHist = document.getElementById('panel-historial-indicadores');
+      var panelNueva = document.getElementById('panel-nueva-evaluacion');
       if (panelLinea) panelLinea.innerHTML = '<h2>Línea de tiempo de avance</h2><p style="font-size:13px; color:var(--muted);">Cargando…</p>';
       if (panelHist) panelHist.innerHTML = '<h2>Historial</h2><p style="font-size:13px; color:var(--muted);">Cargando…</p>';
+      // Los criterios cambian con el estudiante (dependen de su programa) —
+      // se refrescan al toque, no hace falta esperar la carga del historial.
+      if (panelNueva && alumnoElegido) panelNueva.innerHTML = '<h2>Nueva evaluación</h2>' + htmlNuevaEvaluacionFields(alumnoElegido);
       refrescarIndicadoresDeAlumno(idx).then(function () {
         if (Number(selectVer.value) !== idx) return;
         if (panelLinea) panelLinea.innerHTML = '<h2>Línea de tiempo de avance</h2>' + renderLineaTiempoEvaluacion(CACHE_INDICADORES.lista);
@@ -5041,7 +5108,7 @@ function activarLogicaEvaluacion() {
       if (!fecha) { alert('La fecha es obligatoria.'); return; }
       if (!alumno) { alert('No se encontró el estudiante.'); return; }
       var indicadores = {};
-      INDICADORES_EVALUACION.forEach(function (ind) { indicadores[ind] = document.getElementById('ev-' + ind).value; });
+      indicadoresDelPrograma(alumno.programa).forEach(function (ind) { indicadores[ind] = document.getElementById('ev-' + ind).value; });
       var observaciones = document.getElementById('ev-observaciones').value.trim();
 
       btnGuardar.disabled = true;
