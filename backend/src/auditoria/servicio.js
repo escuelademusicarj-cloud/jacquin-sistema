@@ -13,17 +13,20 @@ export async function registrarAuditoria({ usuarioId, accion, modulo, entidad, e
   );
 }
 
-// NUEVO: consulta de auditoría para la pantalla "Auditoría" — quién hizo
-// qué en el sistema. Filtros opcionales por rol, acción y rango de
-// fechas (todos combinables). Trae los 300 registros más recientes que
-// calcen — no hay paginación todavía, no hace falta con este volumen.
-export async function listarAuditoria({ rol, accion, desde, hasta } = {}) {
+// Consulta de auditoría para la pantalla "Auditoría" — quién hizo qué en
+// el sistema. Filtros opcionales por rol, acción, nombre de usuario
+// (ILIKE parcial — sirve para buscar un profesor o alguien del personal
+// puntual) y rango de fechas, todos combinables. Trae los 300 registros
+// más recientes que calcen — no hay paginación todavía, no hace falta
+// con este volumen.
+export async function listarAuditoria({ rol, accion, usuario, desde, hasta } = {}) {
   const condiciones = [];
   const valores = [];
   let i = 1;
 
   if (rol) { condiciones.push(`r.nombre = $${i++}`); valores.push(rol); }
   if (accion) { condiciones.push(`a.accion = $${i++}`); valores.push(accion); }
+  if (usuario) { condiciones.push(`u.nombre ILIKE $${i++}`); valores.push(`%${usuario}%`); }
   if (desde) { condiciones.push(`a.fecha_hora >= $${i++}`); valores.push(desde); }
   if (hasta) { condiciones.push(`a.fecha_hora <= $${i++}::date + interval '1 day'`); valores.push(hasta); }
 
