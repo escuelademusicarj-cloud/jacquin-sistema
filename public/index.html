@@ -1170,16 +1170,106 @@ function promedioEvaluacion(ev) {
 // ---- Evaluación mensual cualitativa (2026-08-15) — distinta de la línea de
 // tiempo de arriba: acá se hace UNA vez por estudiante por mes calendario,
 // con 8 preguntas de seguimiento y una escala simple de 4 niveles.
-var PREGUNTAS_EVAL_MENSUAL = [
-  { id: 'digitacion', texto: 'Avance en digitación musical durante el mes' },
-  { id: 'ritmo', texto: 'Manejo del ritmo y el pulso durante el mes' },
-  { id: 'lectura', texto: 'Lectura musical / lectura de partitura' },
-  { id: 'postura', texto: 'Postura corporal y técnica de sujeción del instrumento' },
-  { id: 'memorizacion', texto: 'Memorización del repertorio asignado' },
-  { id: 'participacion', texto: 'Participación y actitud durante la clase' },
-  { id: 'practica', texto: 'Constancia en la práctica en casa' },
-  { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
-];
+// Preguntas de la evaluación mensual — específicas de cada curso (mismo
+// criterio de negocio que Seguimiento por indicadores: misma cantidad de
+// preguntas en todos los programas —8, la que ya tenía este módulo—
+// pero el contenido de cada una apunta a lo que corresponde según el
+// instrumento o etapa).
+var PREGUNTAS_EVAL_MENSUAL_POR_PROGRAMA = {
+  'Piano': [
+    { id: 'digitacion', texto: 'Avance en digitación y técnica pianística durante el mes' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el pulso durante el mes' },
+    { id: 'lectura', texto: 'Lectura musical / lectura de partitura' },
+    { id: 'postura', texto: 'Postura corporal y posición de las manos' },
+    { id: 'memorizacion', texto: 'Memorización del repertorio asignado' },
+    { id: 'participacion', texto: 'Participación y actitud durante la clase' },
+    { id: 'practica', texto: 'Constancia en la práctica en casa' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ],
+  'Guitarra': [
+    { id: 'digitacion', texto: 'Avance en digitación y cambios de acorde durante el mes' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el rasgueo durante el mes' },
+    { id: 'lectura', texto: 'Lectura musical / lectura de partitura o tablatura' },
+    { id: 'postura', texto: 'Postura corporal y sujeción del instrumento' },
+    { id: 'memorizacion', texto: 'Memorización del repertorio asignado' },
+    { id: 'participacion', texto: 'Participación y actitud durante la clase' },
+    { id: 'practica', texto: 'Constancia en la práctica en casa' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ],
+  'Bajo': [
+    { id: 'digitacion', texto: 'Avance en digitación y desplazamiento durante el mes' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el groove durante el mes' },
+    { id: 'lectura', texto: 'Lectura musical / lectura de partitura o tablatura' },
+    { id: 'postura', texto: 'Postura corporal y sujeción del instrumento' },
+    { id: 'memorizacion', texto: 'Memorización del repertorio asignado' },
+    { id: 'participacion', texto: 'Participación y actitud durante la clase' },
+    { id: 'practica', texto: 'Constancia en la práctica en casa' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ],
+  'Técnica vocal': [
+    { id: 'tecnica', texto: 'Avance en técnica vocal y respiración durante el mes' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el pulso durante el mes' },
+    { id: 'afinacion', texto: 'Afinación y entonación' },
+    { id: 'postura', texto: 'Postura corporal y relajación al cantar' },
+    { id: 'memorizacion', texto: 'Memorización del repertorio asignado' },
+    { id: 'participacion', texto: 'Participación y actitud durante la clase' },
+    { id: 'practica', texto: 'Constancia en la práctica en casa' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ],
+  'Violín': [
+    { id: 'tecnica', texto: 'Avance en técnica de arco y digitación durante el mes' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el pulso durante el mes' },
+    { id: 'lectura', texto: 'Lectura musical / lectura de partitura' },
+    { id: 'postura', texto: 'Postura corporal y posición del instrumento' },
+    { id: 'memorizacion', texto: 'Memorización del repertorio asignado' },
+    { id: 'participacion', texto: 'Participación y actitud durante la clase' },
+    { id: 'practica', texto: 'Constancia en la práctica en casa' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ],
+  'Percusión': [
+    { id: 'tecnica', texto: 'Avance en técnica de golpe durante el mes' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el pulso durante el mes' },
+    { id: 'lectura', texto: 'Lectura rítmica / lectura de partitura' },
+    { id: 'postura', texto: 'Postura corporal y sujeción de baquetas o instrumento' },
+    { id: 'memorizacion', texto: 'Memorización del repertorio asignado' },
+    { id: 'participacion', texto: 'Participación y actitud durante la clase' },
+    { id: 'practica', texto: 'Constancia en la práctica en casa' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ],
+  'Iniciación musical': [
+    { id: 'percepcion', texto: 'Avance en percepción auditiva durante el mes' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el pulso básico durante el mes' },
+    { id: 'coordinacion', texto: 'Coordinación motriz en las actividades' },
+    { id: 'expresion', texto: 'Expresión corporal y vocal durante las actividades' },
+    { id: 'atencion', texto: 'Atención y seguimiento de instrucciones' },
+    { id: 'participacion', texto: 'Participación y disfrute durante la clase' },
+    { id: 'constancia', texto: 'Constancia en la asistencia y el interés en casa' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ],
+  'Exploración musical infantil': [
+    { id: 'percepcion', texto: 'Avance en percepción auditiva durante el mes' },
+    { id: 'exploracion', texto: 'Exploración sonora e iniciativa con los instrumentos' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el pulso básico durante el mes' },
+    { id: 'expresion', texto: 'Expresión corporal y vocal durante las actividades' },
+    { id: 'socializacion', texto: 'Socialización con el grupo durante la clase' },
+    { id: 'participacion', texto: 'Participación y disfrute durante la clase' },
+    { id: 'constancia', texto: 'Constancia en la asistencia y el interés en casa' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ],
+  'Senior': [
+    { id: 'percepcion', texto: 'Avance en percepción y memoria musical durante el mes' },
+    { id: 'ritmo', texto: 'Manejo del ritmo y el pulso durante el mes' },
+    { id: 'coordinacion', texto: 'Coordinación motriz en las actividades' },
+    { id: 'expresion', texto: 'Expresión y comunicación durante la clase' },
+    { id: 'participacion', texto: 'Participación y disfrute durante la clase' },
+    { id: 'constancia', texto: 'Constancia en la asistencia' },
+    { id: 'actitud', texto: 'Actitud y motivación durante el mes' },
+    { id: 'progreso', texto: 'Progreso general del estudiante durante el mes' }
+  ]
+};
+function preguntasMensualDelPrograma(programa) {
+  return PREGUNTAS_EVAL_MENSUAL_POR_PROGRAMA[programa] || PREGUNTAS_EVAL_MENSUAL_POR_PROGRAMA['Piano'];
+}
 var ESCALA_MENSUAL = ['mala', 'regular', 'normal', 'buena'];
 var ETIQUETA_ESCALA_MENSUAL = { mala: 'Mala', regular: 'Regular', normal: 'Normal', buena: 'Buena' };
 var COLOR_ESCALA_MENSUAL = { mala: 'var(--rojo)', regular: 'var(--naranja)', normal: 'var(--azul-claro)', buena: 'var(--verde)' };
@@ -4762,11 +4852,7 @@ function renderEvaluacionMensualPanel(sesion) {
     '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto;">' +
     '<h2 style="margin-top:0;" id="modal-eval-mensual-titulo">Evaluación mensual</h2>' +
     '<p id="modal-eval-mensual-mes" style="font-size:12px; color:var(--muted); margin-top:-8px;">' + mesLegible + '</p>' +
-    PREGUNTAS_EVAL_MENSUAL.map(function (p) {
-      return '<div class="campo"><label>' + p.texto + '</label><select id="evm-' + p.id + '">' +
-        ESCALA_MENSUAL.map(function (e) { return '<option value="' + e + '">' + ETIQUETA_ESCALA_MENSUAL[e] + '</option>'; }).join('') +
-        '</select></div>';
-    }).join('') +
+    '<div id="evm-preguntas-contenedor"></div>' +
     '<div class="campo"><label>Observaciones (opcional)</label><input id="evm-observaciones" type="text" /></div>' +
     '<button class="btn-primario" id="btn-guardar-eval-mensual">Guardar evaluación</button>' +
     '<button id="btn-cancelar-eval-mensual" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
@@ -4834,7 +4920,13 @@ function activarLogicaEvaluacionMensual() {
       modal.setAttribute('data-alumno-idx', alumnoIdx);
       document.getElementById('modal-eval-mensual-titulo').textContent = 'Evaluación mensual — ' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '');
 
-      PREGUNTAS_EVAL_MENSUAL.forEach(function (p) {
+      var preguntas = preguntasMensualDelPrograma(alumno ? alumno.programa : '');
+      document.getElementById('evm-preguntas-contenedor').innerHTML = preguntas.map(function (p) {
+        return '<div class="campo"><label>' + p.texto + '</label><select id="evm-' + p.id + '">' +
+          ESCALA_MENSUAL.map(function (e) { return '<option value="' + e + '">' + ETIQUETA_ESCALA_MENSUAL[e] + '</option>'; }).join('') +
+          '</select></div>';
+      }).join('');
+      preguntas.forEach(function (p) {
         var select = document.getElementById('evm-' + p.id);
         select.value = (existente && existente.respuestas && existente.respuestas[p.id]) || 'normal';
       });
@@ -4854,7 +4946,7 @@ function activarLogicaEvaluacionMensual() {
       var alumno = cargarAlumnos()[alumnoIdx];
       var mesActual = mesActualStr();
       var respuestas = {};
-      PREGUNTAS_EVAL_MENSUAL.forEach(function (p) { respuestas[p.id] = document.getElementById('evm-' + p.id).value; });
+      preguntasMensualDelPrograma(alumno ? alumno.programa : '').forEach(function (p) { respuestas[p.id] = document.getElementById('evm-' + p.id).value; });
       var observaciones = document.getElementById('evm-observaciones').value.trim();
       if (!alumno) { alert('No se encontró el estudiante.'); return; }
 
@@ -4892,7 +4984,7 @@ function activarLogicaEvaluacionMensual() {
         document.getElementById('modal-ver-resultado-titulo').textContent = 'Resultado — ' + (alumno ? alumno.nombres + ' ' + alumno.apellidos : '');
         document.getElementById('modal-ver-resultado-sub').textContent = mesLegibleReg + ' · registrado el ' + (registro.fecha || '—');
 
-        var htmlRespuestas = PREGUNTAS_EVAL_MENSUAL.map(function (p) {
+        var htmlRespuestas = preguntasMensualDelPrograma(alumno ? alumno.programa : '').map(function (p) {
           var valor = (registro.respuestas && registro.respuestas[p.id]) || 'normal';
           var color = COLOR_ESCALA_MENSUAL[valor] || 'var(--muted)';
           return '<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #eee;">' +
