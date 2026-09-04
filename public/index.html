@@ -496,6 +496,9 @@
   .btn-volver-pensum:hover { text-decoration:underline; }
   /* ---- Buscador de estudiante con autocompletar ---- */
   .item-buscador-estudiante:last-child { border-bottom: none !important; }
+
+  /* ---- Amigo Secreto ---- */
+  @keyframes as-wiggle { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
 </style>
 </head>
 <body>
@@ -6967,46 +6970,66 @@ function renderAmigoSecreto(sesion) {
   var hoyStr3 = new Date().toISOString().slice(0, 10);
   var fechaLimitePasada = evento && evento.fecha_limite_deseos && evento.fecha_limite_deseos.slice(0, 10) < hoyStr3;
 
+  var cabecera = '' +
+    '<div style="background:linear-gradient(120deg, #E63946, #F4A300 60%, #F77F00); border-radius:22px; padding:26px 28px; margin-bottom:20px; color:#fff; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; box-shadow:0 10px 26px rgba(230,57,70,0.25);">' +
+    '<div>' +
+    '<p style="margin:0 0 4px; font-size:12.5px; text-transform:uppercase; letter-spacing:0.09em; opacity:0.95;">🎉 ¡Ya casi llega la fiesta! 🎉</p>' +
+    '<h1 style="margin:0; font-family:var(--font-wordmark); font-weight:600; font-size:30px;">Amigo Secreto</h1>' +
+    '</div>' +
+    '<span style="font-size:46px; display:inline-block; animation: as-wiggle 2.4s ease-in-out infinite;">🎅</span>' +
+    '</div>';
+
   var avisoFechaLimite = (evento && evento.fecha_limite_deseos)
-    ? '<p style="font-size:12.5px; color:' + (fechaLimitePasada ? 'var(--rojo)' : 'var(--naranja)') + '; font-weight:600; margin:0 0 10px;">' +
-      (fechaLimitePasada ? 'El plazo para cargar ideas de regalo ya venció (' + evento.fecha_limite_deseos.slice(0, 10) + ').' : 'Tenés hasta el ' + evento.fecha_limite_deseos.slice(0, 10) + ' para cargar tus ideas de regalo.') +
-      '</p>'
+    ? '<div style="background:' + (fechaLimitePasada ? '#FDECEC' : '#FFF3D6') + '; border:2px dashed ' + (fechaLimitePasada ? '#E63946' : '#F4A300') + '; border-radius:12px; padding:10px 14px; margin-bottom:12px; font-size:12.5px; font-weight:600; color:' + (fechaLimitePasada ? '#C0392B' : '#B8860B') + ';">' +
+      (fechaLimitePasada ? '⏰ El plazo para cargar ideas de regalo ya venció (' + evento.fecha_limite_deseos.slice(0, 10) + ').' : '⏰ Tenés hasta el ' + evento.fecha_limite_deseos.slice(0, 10) + ' para cargar tus ideas de regalo.') +
+      '</div>'
     : '';
 
+  var contenidoResultado;
+  if (!evento) {
+    contenidoResultado = '<p style="font-size:13.5px; color:var(--muted);">Todavía no hay un Amigo Secreto activo. 🎄</p>';
+  } else if (!CACHE_AMIGOSECRETO.revelado) {
+    contenidoResultado = '<p style="font-size:13.5px; color:var(--muted);">🤫 Todavía no se reveló quién le toca a quién — por ahora, aprovechá para dejar tus ideas de regalo más abajo.</p>';
+  } else if (!CACHE_AMIGOSECRETO.resultado) {
+    contenidoResultado = '<p style="font-size:13.5px; color:var(--muted);">No estás anotado en el sorteo actual.</p>';
+  } else {
+    contenidoResultado = '' +
+      (evento.fecha_evento || evento.presupuesto_sugerido
+        ? '<p style="font-size:12px; color:var(--muted); margin:0 0 10px;">' +
+          (evento.fecha_evento ? '📅 Fecha del intercambio: <strong>' + evento.fecha_evento.slice(0, 10) + '</strong>. ' : '') +
+          (evento.presupuesto_sugerido ? '💰 Presupuesto sugerido: <strong>' + formatearCOPContable(evento.presupuesto_sugerido) + '</strong>.' : '') +
+          '</p>'
+        : '') +
+      '<div style="background:linear-gradient(120deg, #9D4EDD, #E63946); color:#fff; border-radius:16px; padding:22px; text-align:center; box-shadow:0 8px 20px rgba(157,78,221,0.3);">' +
+      '<p style="margin:0 0 6px; font-size:13px; text-transform:uppercase; letter-spacing:0.08em; opacity:0.95;">🎊 Te tocó regalarle a 🎊</p>' +
+      '<p style="margin:0; font-family:var(--font-wordmark); font-weight:600; font-size:28px;">' + CACHE_AMIGOSECRETO.resultado.nombre + '</p>' +
+      '</div>' +
+      (CACHE_AMIGOSECRETO.deseos
+        ? '<div style="background:#FFF9EC; border:2px dashed #F4A300; border-radius:12px; padding:12px 16px; margin-top:14px;"><p style="font-size:12px; color:#B8860B; font-weight:700; margin:0 0 4px;">💡 Ideas de regalo que dejó:</p><p style="font-size:14px; white-space:pre-wrap; margin:0;">' + CACHE_AMIGOSECRETO.deseos + '</p></div>'
+        : '<p style="font-size:12px; color:var(--muted); margin-top:14px;">Todavía no dejó ninguna idea de regalo.</p>');
+  }
+
   var panelResultado = '' +
-    '<div class="panel"><h2>🎁 Tu Amigo Secreto</h2>' +
-    (!evento
-      ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay un Amigo Secreto activo.</p>'
-      : (!CACHE_AMIGOSECRETO.revelado
-        ? '<p style="font-size:13px; color:var(--muted);">Todavía no se reveló quién le toca a quién — por ahora, aprovechá para dejar tus ideas de regalo más abajo.</p>'
-        : (!CACHE_AMIGOSECRETO.resultado
-          ? '<p style="font-size:13px; color:var(--muted);">No estás anotado en el sorteo actual.</p>'
-          : '' +
-            (evento.fecha_evento || evento.presupuesto_sugerido
-              ? '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">' +
-                (evento.fecha_evento ? 'Fecha del intercambio: <strong>' + evento.fecha_evento.slice(0, 10) + '</strong>. ' : '') +
-                (evento.presupuesto_sugerido ? 'Presupuesto sugerido: <strong>' + formatearCOPContable(evento.presupuesto_sugerido) + '</strong>.' : '') +
-                '</p>'
-              : '') +
-            '<div style="background:linear-gradient(120deg, var(--naranja), var(--azul-claro)); color:#fff; border-radius:14px; padding:20px; margin-top:10px;">' +
-            '<p style="margin:0 0 4px; font-size:12px; text-transform:uppercase; letter-spacing:0.05em; opacity:0.9;">Te tocó regalarle a</p>' +
-            '<p style="margin:0; font-family:var(--font-wordmark); font-weight:600; font-size:24px;">' + CACHE_AMIGOSECRETO.resultado.nombre + '</p>' +
-            '</div>' +
-            (CACHE_AMIGOSECRETO.deseos
-              ? '<p style="font-size:12px; color:var(--muted); margin:14px 0 4px;">Ideas de regalo que dejó:</p><p style="font-size:14px; white-space:pre-wrap;">' + CACHE_AMIGOSECRETO.deseos + '</p>'
-              : '<p style="font-size:12px; color:var(--muted); margin-top:14px;">Todavía no dejó ninguna idea de regalo.</p>')))) +
+    '<div class="panel" style="background:linear-gradient(135deg,#FFF3E0,#FFE8F0); border:none; box-shadow:0 6px 18px rgba(0,0,0,0.06);">' +
+    '<div style="display:flex; gap:22px; align-items:center; flex-wrap:wrap;">' +
+    '<div style="flex:2; min-width:240px;">' +
+    '<h2 style="color:#C0392B;">🎁 Tu Amigo Secreto</h2>' +
+    contenidoResultado +
+    '</div>' +
+    '<img src="amigo-secreto-meme.png" alt="" style="flex:1; min-width:160px; max-width:220px; width:100%; border-radius:16px; box-shadow:0 10px 22px rgba(0,0,0,0.18); transform:rotate(3deg);" onerror="this.style.display=\'none\';" />' +
+    '</div>' +
     '</div>';
 
   var panelMisDeseos = '' +
-    '<div class="panel"><h2>Tus ideas de regalo</h2>' +
+    '<div class="panel" style="border:2px solid #52B788; background:#F0FFF4;"><h2 style="color:#2D6A4F;">💌 Tus ideas de regalo</h2>' +
     avisoFechaLimite +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Escribí algo que te gustaría recibir — lo va a ver quien te haya tocado a vos.</p>' +
-    '<textarea id="as-mis-deseos" rows="3" style="width:100%; border:1px solid #dde1e7; border-radius:8px; padding:10px; font-family:var(--font-ui); font-size:13.5px;" placeholder="Ej: me gusta la música, el café, algo para tocar guitarra...">' + (CACHE_AMIGOSECRETO.misDeseos || '') + '</textarea>' +
-    '<button class="btn-primario" id="btn-guardar-mis-deseos" style="max-width:200px; margin-top:8px;">Guardar</button>' +
-    '<p id="msj-guardado-deseos" style="font-size:12px; color:var(--verde); display:none; margin-top:6px;">Guardado ✓</p>' +
+    '<textarea id="as-mis-deseos" rows="3" style="width:100%; border:1.5px solid #52B788; border-radius:10px; padding:10px; font-family:var(--font-ui); font-size:13.5px;" placeholder="Ej: me gusta la música, el café, algo para tocar guitarra...">' + (CACHE_AMIGOSECRETO.misDeseos || '') + '</textarea>' +
+    '<button class="btn-primario" id="btn-guardar-mis-deseos" style="max-width:200px; margin-top:8px; background:#2D6A4F;">✨ Guardar</button>' +
+    '<p id="msj-guardado-deseos" style="font-size:12px; color:var(--verde); display:none; margin-top:6px; font-weight:700;">¡Guardado! 🎉</p>' +
     '</div>';
 
-  if (!esAdmin) return panelResultado + panelMisDeseos;
+  if (!esAdmin) return cabecera + panelResultado + panelMisDeseos;
 
   // Panel de administración — solo Administrador.
   var participantes = CACHE_AMIGOSECRETO.participantes || [];
@@ -7016,51 +7039,53 @@ function renderAmigoSecreto(sesion) {
     usuarios.filter(function (u) { return idsYaParticipan.indexOf(u.id) === -1; })
       .map(function (u) { return '<option value="' + u.id + '">' + u.nombre + ' (' + (ETIQUETA_ROL_MENSAJE[u.rol] || u.rol) + ')</option>'; }).join('');
 
-  var filasParticipantes = participantes.map(function (p) {
-    return '<tr><td>' + p.nombre + '</td><td>' + (ETIQUETA_ROL_MENSAJE[p.rol] || p.rol || '—') + '</td><td>' + p.email + '</td>' +
+  var coloresBadge = ['#E63946', '#F4A300', '#9D4EDD', '#2D6A4F', '#1D8A99'];
+  var filasParticipantes = participantes.map(function (p, i) {
+    var color = coloresBadge[i % coloresBadge.length];
+    return '<tr><td>🙋 ' + p.nombre + '</td><td><span style="background:' + color + '1a; color:' + color + '; font-weight:700; font-size:11px; padding:3px 10px; border-radius:10px;">' + (ETIQUETA_ROL_MENSAJE[p.rol] || p.rol || '—') + '</span></td><td>' + p.email + '</td>' +
       '<td><button class="btn-quitar-participante-as" data-id="' + p.usuario_id + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Quitar</button></td></tr>';
   }).join('');
 
   var cruces = CACHE_AMIGOSECRETO.cruces || [];
   var filasCruces = cruces.map(function (c) {
-    return '<tr><td>' + c.usuario_nombre + '</td><td>→</td><td>' + c.le_toca_nombre + '</td></tr>';
+    return '<tr><td>' + c.usuario_nombre + '</td><td>🎁→</td><td>' + c.le_toca_nombre + '</td></tr>';
   }).join('');
 
   var panelAdmin = '' +
-    '<div class="panel"><h2>Configurar evento</h2>' +
+    '<div class="panel" style="border:2px dashed #F4A300; background:#FFF9EC;"><h2 style="color:#B8860B;">⚙️ Configurar el evento</h2>' +
     '<div class="grilla-2col">' +
-    '<div class="campo"><label>Nombre del evento</label><input id="as-nombre-evento" type="text" value="' + (evento ? (evento.nombre || '') : 'Amigo secreto') + '" /></div>' +
-    '<div class="campo"><label>Fecha límite para cargar ideas de regalo</label><input id="as-fecha-limite-evento" type="date" value="' + (evento && evento.fecha_limite_deseos ? evento.fecha_limite_deseos.slice(0, 10) : '') + '" /></div>' +
-    '<div class="campo"><label>Fecha del intercambio</label><input id="as-fecha-evento" type="date" value="' + (evento && evento.fecha_evento ? evento.fecha_evento.slice(0, 10) : '') + '" /></div>' +
-    '<div class="campo"><label>Presupuesto sugerido</label><input id="as-presupuesto-evento" type="number" min="0" value="' + (evento ? (evento.presupuesto_sugerido || '') : '') + '" /></div>' +
+    '<div class="campo"><label>🎈 Nombre del evento</label><input id="as-nombre-evento" type="text" value="' + (evento ? (evento.nombre || '') : 'Amigo secreto') + '" /></div>' +
+    '<div class="campo"><label>⏰ Fecha límite para cargar ideas de regalo</label><input id="as-fecha-limite-evento" type="date" value="' + (evento && evento.fecha_limite_deseos ? evento.fecha_limite_deseos.slice(0, 10) : '') + '" /></div>' +
+    '<div class="campo"><label>📅 Fecha del intercambio</label><input id="as-fecha-evento" type="date" value="' + (evento && evento.fecha_evento ? evento.fecha_evento.slice(0, 10) : '') + '" /></div>' +
+    '<div class="campo"><label>💰 Presupuesto sugerido</label><input id="as-presupuesto-evento" type="number" min="0" value="' + (evento ? (evento.presupuesto_sugerido || '') : '') + '" /></div>' +
     '</div>' +
-    '<button class="btn-primario" id="btn-guardar-evento-as" style="max-width:200px; margin-top:6px;">Guardar</button>' +
+    '<button class="btn-primario" id="btn-guardar-evento-as" style="max-width:200px; margin-top:6px; background:#F4A300;">Guardar</button>' +
     '</div>' +
 
-    '<div class="panel"><h2>Participantes (' + participantes.length + ')</h2>' +
+    '<div class="panel" style="border:2px solid #A8DADC; background:#F1FAFA;"><h2 style="color:#1D8A99;">👥 Participantes (' + participantes.length + ')</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Para agregar a alguien que todavía no tiene usuario en el sistema, primero creale uno desde "Usuarios y permisos" con el rol <strong>Invitado</strong> (así solo va a poder entrar a esta pantalla) y después aparece acá para sumarlo.</p>' +
     '<div class="campo" style="max-width:340px;"><select id="as-agregar-participante">' + opcionesUsuario + '</select></div>' +
     (participantes.length > 0
       ? '<div class="tabla-scroll" style="margin-top:10px;"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Rol</th><th>Email</th><th></th></tr></thead><tbody>' + filasParticipantes + '</tbody></table></div>'
-      : '<p style="font-size:13px; color:var(--muted); margin-top:10px;">Todavía no hay nadie anotado.</p>') +
+      : '<p style="font-size:13px; color:var(--muted); margin-top:10px;">Todavía no hay nadie anotado. 🦗</p>') +
     '</div>' +
 
-    '<div class="panel"><h2>Sorteo</h2>' +
+    '<div class="panel" style="border:2px solid #9D4EDD; background:#F7F0FF;"><h2 style="color:#7B2CBF;">🎲 Sorteo</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Al azar, sin exclusiones — nadie se saca a sí mismo. Podés hacer el sorteo con anticipación: armar los cruces NO se los muestra a nadie todavía, eso lo controlás aparte con "Revelar resultados".</p>' +
-    '<button class="btn-primario" id="btn-sortear-as" style="max-width:200px;">' + (cruces.length > 0 ? 'Volver a sortear' : 'Hacer el sorteo') + '</button>' +
+    '<button class="btn-primario" id="btn-sortear-as" style="max-width:220px; background:linear-gradient(90deg,#9D4EDD,#E63946); font-size:14.5px; padding:12px 20px;">🎲 ' + (cruces.length > 0 ? 'Volver a sortear' : '¡Hacer el sorteo!') + '</button>' +
     '<p id="msj-error-sorteo-as" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
     (cruces.length > 0
       ? '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Le regala a</th><th></th><th>Recibe de</th></tr></thead><tbody>' + filasCruces + '</tbody></table></div>'
       : '') +
     (cruces.length > 0
-      ? '<div style="margin-top:16px; padding-top:14px; border-top:1px solid #eee;">' +
-        '<p style="font-size:13px; margin:0 0 8px;">Estado actual: ' + (CACHE_AMIGOSECRETO.revelado ? '<strong style="color:var(--verde);">Revelado — todos ya pueden ver su resultado</strong>' : '<strong style="color:var(--naranja);">Oculto — nadie ve resultados todavía</strong>') + '</p>' +
-        '<button class="btn-primario" id="btn-revelar-as" style="max-width:260px; background:' + (CACHE_AMIGOSECRETO.revelado ? 'var(--rojo)' : 'var(--verde)') + ';">' + (CACHE_AMIGOSECRETO.revelado ? 'Ocultar resultados de nuevo' : 'Revelar resultados a todos') + '</button>' +
+      ? '<div style="margin-top:16px; padding-top:14px; border-top:2px dashed #d9c2f0;">' +
+        '<p style="font-size:13px; margin:0 0 8px;">Estado actual: ' + (CACHE_AMIGOSECRETO.revelado ? '<strong style="color:var(--verde);">🔓 Revelado — todos ya pueden ver su resultado</strong>' : '<strong style="color:var(--naranja);">🔒 Oculto — nadie ve resultados todavía</strong>') + '</p>' +
+        '<button class="btn-primario" id="btn-revelar-as" style="max-width:260px; background:' + (CACHE_AMIGOSECRETO.revelado ? 'var(--rojo)' : 'var(--verde)') + ';">' + (CACHE_AMIGOSECRETO.revelado ? '🙈 Ocultar resultados de nuevo' : '🎉 ¡Revelar resultados a todos!') + '</button>' +
         '</div>'
       : '') +
     '</div>';
 
-  return panelAdmin + panelResultado + panelMisDeseos;
+  return cabecera + panelAdmin + panelResultado + panelMisDeseos;
 }
 
 function activarLogicaAmigoSecreto() {
