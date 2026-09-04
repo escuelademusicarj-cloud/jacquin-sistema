@@ -6958,6 +6958,11 @@ async function refrescarCacheAmigoSecreto() {
     if (sesion.rol === 'ADMINISTRADOR') {
       CACHE_AMIGOSECRETO.participantes = await apiFetch('/api/amigosecreto/participantes', { method: 'GET' }) || [];
       CACHE_AMIGOSECRETO.cruces = await apiFetch('/api/amigosecreto/cruces', { method: 'GET' }) || [];
+      // Amigo Secreto es el primer módulo del menú y puede pintarse antes
+      // de que la cadena general de carga (navegar()) llegue a traer los
+      // usuarios — por eso acá se pide su propia copia fresca, sin
+      // depender de en qué punto vaya esa cadena.
+      await refrescarCacheUsuarios();
     }
   } catch (err) {
     console.error('No se pudo cargar Amigo secreto desde el backend:', err.message);
