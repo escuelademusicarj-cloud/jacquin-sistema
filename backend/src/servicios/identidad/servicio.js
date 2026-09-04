@@ -87,32 +87,39 @@ export async function bootstrapAdmin() {
 // nuevos en vez de bloquear o intentar un INSERT duplicado — la columna
 // email tiene una restricción UNIQUE real en la tabla, así que un INSERT
 // nuevo fallaría igual aunque el chequeo de acá lo dejara pasar.
-// En los dos casos (alta nueva o reactivación), debe_cambiar_password
-// queda en true — la contraseña que se le puso es temporal — y se le
-// manda un correo de bienvenida con esos datos. Si el correo falla, el
-// alta del usuario NO se deshace (ya quedó guardada en la base de datos);
-// se devuelve correoEnviado:false para que quien creó al usuario sepa
-// que tiene que avisarle los datos por otro medio.
+//
+// debe_cambiar_password queda en true (la contraseña que se le puso es
+// temporal) para TODOS los roles, EXCEPTO Invitado (decisión de negocio
+// 2026-09-04): a esa gente externa que solo entra a jugar al Amigo
+// Secreto no le pedimos ese paso extra, para que el ingreso sea directo.
+// En los dos casos (alta nueva o reactivación) se le manda igual el
+// correo de bienvenida con esos datos. Si el correo falla, el alta del
+// usuario NO se deshace (ya quedó guardada en la base de datos); se
+// devuelve correoEnviado:false para que quien creó al usuario sepa que
+// tiene que avisarle los datos por otro medio.
 export async function altaUsuario({ nombre, email, password, rolId }, contextoAuditoria) {
   const existente = await buscarUsuarioPorEmail(email);
   if (existente && existente.activo) {
     throw new Error(`Ya existe un usuario con el email ${email}.`);
   }
 
+  const rol = await buscarRolPorId(rolId);
+  const esInvitado = rol?.nombre === "INVITADO";
+
   const passwordHash = await bcrypt.hash(password, RONDAS_HASH);
   let guardado;
 
   if (existente) {
     const reactivado = await actualizarUsuario(existente.id, { nombre, email, rolId, activo: true });
-    await actualizarPasswordUsuario(existente.id, passwordHash, true);
+    await actualizarPasswordUsuario(existente.id, passwordHash, !esInvitado);
     await registrarAuditoria({
       usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "reactivar", modulo: "identidad",
       entidad: "usuario", entidadId: reactivado.id, resultado: "exito",
     });
-    guardado = { ...reactivado, debe_cambiar_password: true };
+    guardado = { ...reactivado, debe_cambiar_password: !esInvitado };
   } else {
     const usuario = crearUsuario({ nombre, email, passwordHash, rolId });
-    guardado = await insertarUsuario(usuario);
+    guardado = await insertarUsuario({ ...usuario, debeCambiarPassword: !esInvitado });
     await registrarAuditoria({
       usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "crear", modulo: "identidad",
       entidad: "usuario", entidadId: guardado.id, resultado: "exito",
