@@ -7033,9 +7033,13 @@ function renderAmigoSecreto(sesion) {
   var participantes = CACHE_AMIGOSECRETO.participantes || [];
   var usuarios = cargarUsuarios();
   var idsYaParticipan = participantes.map(function (p) { return p.usuario_id; });
-  var opcionesUsuario = '<option value="">Agregar participante…</option>' +
-    usuarios.filter(function (u) { return idsYaParticipan.indexOf(u.id) === -1; })
-      .map(function (u) { return '<option value="' + u.id + '">' + u.nombre + ' (' + (ETIQUETA_ROL_MENSAJE[u.rol] || u.rol) + ')</option>'; }).join('');
+  var usuariosDisponibles = usuarios.filter(function (u) { return idsYaParticipan.indexOf(u.id) === -1; });
+  var checkboxesUsuarios = usuariosDisponibles.map(function (u) {
+    return '<label style="display:flex; align-items:center; gap:8px; padding:6px 4px; font-size:13.5px; border-bottom:1px solid #e3f3f3; cursor:pointer;">' +
+      '<input type="checkbox" class="chk-agregar-participante-as" value="' + u.id + '" style="width:auto;" />' +
+      u.nombre + ' <span style="color:var(--muted); font-size:11.5px;">(' + (ETIQUETA_ROL_MENSAJE[u.rol] || u.rol) + ')</span>' +
+      '</label>';
+  }).join('');
 
   var coloresBadge = ['#E63946', '#F4A300', '#9D4EDD', '#2D6A4F', '#1D8A99'];
   var filasParticipantes = participantes.map(function (p, i) {
@@ -7062,7 +7066,11 @@ function renderAmigoSecreto(sesion) {
 
     '<div class="panel" style="border:2px solid #A8DADC; background:#F1FAFA;"><h2 style="color:#1D8A99;">👥 Participantes (' + participantes.length + ')</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Para agregar a alguien que todavía no tiene usuario en el sistema, primero creale uno desde "Usuarios y permisos" con el rol <strong>Invitado</strong> (así solo va a poder entrar a esta pantalla) y después aparece acá para sumarlo.</p>' +
-    '<div class="campo" style="max-width:340px;"><select id="as-agregar-participante">' + opcionesUsuario + '</select></div>' +
+    (usuariosDisponibles.length > 0
+      ? '<div style="max-width:420px; max-height:220px; overflow-y:auto; border:1px solid #dde1e7; border-radius:8px; padding:4px 10px; background:#fff;">' + checkboxesUsuarios + '</div>' +
+        '<button class="btn-primario" id="btn-agregar-varios-participantes-as" style="max-width:220px; margin-top:10px;">➕ Agregar seleccionados</button>' +
+        '<p id="msj-error-agregar-participantes-as" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>'
+      : '<p style="font-size:13px; color:var(--muted);">No hay más usuarios disponibles para agregar.</p>') +
     (participantes.length > 0
       ? '<div class="tabla-scroll" style="margin-top:10px;"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Rol</th><th>Email</th><th></th></tr></thead><tbody>' + filasParticipantes + '</tbody></table></div>'
       : '<p style="font-size:13px; color:var(--muted); margin-top:10px;">Todavía no hay nadie anotado. 🦗</p>') +
@@ -7158,15 +7166,28 @@ function activarLogicaAmigoSecreto() {
     });
   }
 
-  var selAgregarParticipante = document.getElementById('as-agregar-participante');
-  if (selAgregarParticipante) {
-    selAgregarParticipante.addEventListener('change', function () {
-      var usuarioId = this.value;
-      if (!usuarioId) return;
-      apiFetch('/api/amigosecreto/participantes', { method: 'POST', body: JSON.stringify({ usuarioId: Number(usuarioId) }) })
+  var btnAgregarVarios = document.getElementById('btn-agregar-varios-participantes-as');
+  if (btnAgregarVarios) {
+    btnAgregarVarios.addEventListener('click', function () {
+      var msjError = document.getElementById('msj-error-agregar-participantes-as');
+      msjError.style.display = 'none';
+      var idsElegidos = Array.prototype.slice.call(document.querySelectorAll('.chk-agregar-participante-as:checked')).map(function (chk) { return Number(chk.value); });
+      if (idsElegidos.length === 0) {
+        msjError.textContent = 'Marcá al menos una persona.';
+        msjError.style.display = 'block';
+        return;
+      }
+      btnAgregarVarios.disabled = true;
+      mapearEnParalelo(idsElegidos, 5, function (usuarioId) {
+        return apiFetch('/api/amigosecreto/participantes', { method: 'POST', body: JSON.stringify({ usuarioId: usuarioId }) });
+      })
         .then(function () { return refrescarCacheAmigoSecreto(); })
         .then(function () { renderContenido('amigosecreto'); })
-        .catch(function (err) { alert('No se pudo agregar: ' + (err.message || 'error de conexión.')); });
+        .catch(function (err) {
+          btnAgregarVarios.disabled = false;
+          msjError.textContent = 'No se pudo agregar a todos: ' + (err.message || 'error de conexión.');
+          msjError.style.display = 'block';
+        });
     });
   }
 
