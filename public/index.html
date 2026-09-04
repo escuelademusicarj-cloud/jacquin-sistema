@@ -6942,7 +6942,7 @@ function activarLogicaAuditoria() {
 }
 
 // ==================== AMIGO SECRETO ====================
-var CACHE_AMIGOSECRETO = { evento: null, resultado: null, deseos: '', misDeseos: '', participantes: [], cruces: [], revelado: false };
+var CACHE_AMIGOSECRETO = { evento: null, resultado: null, deseos: '', misDeseos: '', participantes: [], cruces: [], revelado: false, todosLosUsuarios: [] };
 var amigosecretoCargado = false;
 
 async function refrescarCacheAmigoSecreto() {
@@ -6962,7 +6962,12 @@ async function refrescarCacheAmigoSecreto() {
       // de que la cadena general de carga (navegar()) llegue a traer los
       // usuarios — por eso acá se pide su propia copia fresca, sin
       // depender de en qué punto vaya esa cadena.
-      await refrescarCacheUsuarios();
+      // Antes se apoyaba en refrescarCacheUsuarios() (la caché
+      // compartida con el resto del sistema) — pero como Amigo Secreto
+      // ahora es el primer módulo, esa caché se pisaba con otras partes
+      // del sistema que también la escriben al mismo tiempo en paralelo.
+      // Trae su propia copia, aparte, para que nadie más se la pueda pisar.
+      CACHE_AMIGOSECRETO.todosLosUsuarios = await apiFetch('/api/identidad/usuarios', { method: 'GET' }) || [];
     }
   } catch (err) {
     console.error('No se pudo cargar Amigo secreto desde el backend:', err.message);
@@ -7036,7 +7041,7 @@ function renderAmigoSecreto(sesion) {
 
   // Panel de administración — solo Administrador.
   var participantes = CACHE_AMIGOSECRETO.participantes || [];
-  var usuarios = cargarUsuarios();
+  var usuarios = CACHE_AMIGOSECRETO.todosLosUsuarios || [];
   var idsYaParticipan = participantes.map(function (p) { return p.usuario_id; });
   var usuariosDisponibles = usuarios.filter(function (u) { return idsYaParticipan.indexOf(u.id) === -1; });
   var checkboxesUsuarios = usuariosDisponibles.map(function (u) {
