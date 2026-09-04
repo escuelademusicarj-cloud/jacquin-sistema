@@ -6976,7 +6976,10 @@ function renderAmigoSecreto(sesion) {
     '<p style="margin:0 0 4px; font-size:12.5px; text-transform:uppercase; letter-spacing:0.09em; opacity:0.95;">🎉 ¡Ya casi llega la fiesta! 🎉</p>' +
     '<h1 style="margin:0; font-family:var(--font-wordmark); font-weight:600; font-size:30px;">Amigo Secreto</h1>' +
     '</div>' +
-    '<span style="font-size:46px; display:inline-block; animation: as-wiggle 2.4s ease-in-out infinite;">🎅</span>' +
+    '<span style="display:flex; align-items:center;">' +
+    '<img src="amigo-secreto-meme.png" alt="" style="height:104px; width:auto; border-radius:14px; box-shadow:0 8px 18px rgba(0,0,0,0.25); transform:rotate(-4deg);" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'inline-block\';" />' +
+    '<span style="display:none; font-size:46px; animation: as-wiggle 2.4s ease-in-out infinite;">🎅</span>' +
+    '</span>' +
     '</div>';
 
   var avisoFechaLimite = (evento && evento.fecha_limite_deseos)
@@ -7011,13 +7014,8 @@ function renderAmigoSecreto(sesion) {
 
   var panelResultado = '' +
     '<div class="panel" style="background:linear-gradient(135deg,#FFF3E0,#FFE8F0); border:none; box-shadow:0 6px 18px rgba(0,0,0,0.06);">' +
-    '<div style="display:flex; gap:22px; align-items:center; flex-wrap:wrap;">' +
-    '<div style="flex:2; min-width:240px;">' +
     '<h2 style="color:#C0392B;">🎁 Tu Amigo Secreto</h2>' +
     contenidoResultado +
-    '</div>' +
-    '<img src="amigo-secreto-meme.png" alt="" style="flex:1; min-width:160px; max-width:220px; width:100%; border-radius:16px; box-shadow:0 10px 22px rgba(0,0,0,0.18); transform:rotate(3deg);" onerror="this.style.display=\'none\';" />' +
-    '</div>' +
     '</div>';
 
   var panelMisDeseos = '' +
