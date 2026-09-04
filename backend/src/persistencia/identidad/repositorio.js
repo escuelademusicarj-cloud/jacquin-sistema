@@ -1,14 +1,16 @@
 import { pool } from "../../config/db.js";
 
-export async function insertarUsuario({ nombre, email, passwordHash, rolId }) {
-  // debe_cambiar_password siempre arranca en true: todo usuario nuevo
-  // entra con una contraseña temporal puesta por otra persona (quien lo
-  // creó), así que tiene que cambiarla antes de poder usar el sistema.
+// NUEVO: debeCambiarPassword ahora se recibe como parámetro (antes
+// siempre true) — para poder eximir al rol INVITADO de tener que
+// cambiar su contraseña temporal en el primer ingreso (decisión de
+// negocio 2026-09-04, solo para ese rol). Si no se manda explícito,
+// sigue arrancando en true como siempre.
+export async function insertarUsuario({ nombre, email, passwordHash, rolId, debeCambiarPassword }) {
   const { rows } = await pool.query(
     `INSERT INTO usuarios (nombre, email, password_hash, rol_id, activo, debe_cambiar_password)
-     VALUES ($1, $2, $3, $4, true, true)
+     VALUES ($1, $2, $3, $4, true, $5)
      RETURNING id, nombre, email, rol_id, activo, debe_cambiar_password, creado_en`,
-    [nombre, email, passwordHash, rolId]
+    [nombre, email, passwordHash, rolId, debeCambiarPassword === false ? false : true]
   );
   return rows[0];
 }
