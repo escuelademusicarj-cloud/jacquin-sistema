@@ -6168,20 +6168,24 @@ function panelIngresos(esAdmin) {
   var ingresos = cargarIngresos();
   var editIdx = (contabEditando && contabEditando.tipo === 'ingreso') ? contabEditando.idx : null;
   var r = editIdx != null ? ingresos[editIdx] : null;
+  // Buscador de estudiante: si se está editando un ingreso que ya tenía un
+  // cliente asociado, se busca su índice en cargarAlumnos() para precargarlo.
+  var alumnosIng = cargarAlumnos();
+  var idxClienteIng = '';
+  if (r && r.cliente) {
+    var idxClienteEncontrado = alumnosIng.findIndex(function (a) { return (a.nombres + ' ' + a.apellidos).trim() === r.cliente; });
+    if (idxClienteEncontrado !== -1) idxClienteIng = String(idxClienteEncontrado);
+  }
   var form =
     '<div class="panel"><h2>' + (r ? 'Editar ingreso' : 'Registrar ingreso') + '</h2>' +
     '<div class="grilla-2col">' +
-    '<div class="campo"><label>Fecha</label><input id="ing-fecha" type="date" value="' + (r ? r.fecha || '' : '') + '" /></div>' +
+    '<div class="campo"><label>Fecha</label><input id="ing-fecha" type="date" value="' + (r ? r.fecha || '' : new Date().toISOString().slice(0, 10)) + '" /></div>' +
     '<div class="campo"><label>Concepto</label><input id="ing-concepto" type="text" placeholder="Ej: Mensualidad de piano" value="' + (r ? r.concepto || '' : '') + '" /></div>' +
     '<div class="campo"><label>Programa (opcional)</label><select id="ing-programa"><option value="">General</option>' +
     PROGRAMAS.map(function (p) { return '<option value="' + p + '"' + (r && r.programa === p ? ' selected' : '') + '>' + p + '</option>'; }).join('') + '</select></div>' +
     '<div class="campo"><label>Categoría</label><select id="ing-categoria">' +
-    CATEGORIAS_INGRESO.map(function (c) { return '<option value="' + c + '"' + (r && r.categoria === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Estudiante / cliente (opcional)</label><select id="ing-cliente"><option value="">Ninguno(a)</option>' +
-    cargarAlumnos().map(function (a) {
-      var nombreCompleto = (a.nombres + ' ' + a.apellidos).trim();
-      return '<option value="' + nombreCompleto.replace(/"/g, '&quot;') + '"' + (r && r.cliente === nombreCompleto ? ' selected' : '') + '>' + nombreCompleto + '</option>';
-    }).join('') + '</select></div>' +
+    CATEGORIAS_INGRESO.map(function (c) { return '<option value="' + c + '"' + ((r ? r.categoria === c : c === 'Mensualidad') ? ' selected' : '') + '>' + c + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Estudiante / cliente (opcional)</label>' + htmlBuscadorEstudiante('ing-cliente', idxClienteIng, 'Escribí el nombre del estudiante…') + '</div>' +
     '<div class="campo"><label>Método de pago</label><select id="ing-metodo">' +
     METODOS_PAGO_CONTABLE.map(function (m) { return '<option value="' + m + '"' + (r && r.metodo === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>' +
     '<div class="campo"><label>Estado</label><select id="ing-estado"><option value="pagado"' + (r && r.estado === 'pagado' ? ' selected' : '') + '>Pagado</option><option value="pendiente"' + (r && r.estado === 'pendiente' ? ' selected' : '') + '>Pendiente</option></select></div>' +
@@ -6826,18 +6830,36 @@ function activarLogicaContabilidad() {
     });
   }
 
+  // Buscador de estudiante en "Registrar ingreso": al elegir uno de la lista
+  // se precarga el Programa con el que tiene inscrito (el select sigue
+  // habilitado por si hay que corregirlo, p.ej. un ingreso de otro programa).
+  var elCampoClienteIng = document.getElementById('ing-cliente');
+  if (elCampoClienteIng) {
+    activarBuscadorEstudiante('ing-cliente', cargarAlumnos(), function (idx) {
+      var alumnoElegido = cargarAlumnos()[idx];
+      var selPrograma = document.getElementById('ing-programa');
+      if (alumnoElegido && alumnoElegido.programa && selPrograma) selPrograma.value = alumnoElegido.programa;
+    });
+  }
+
   var btnIngreso = document.getElementById('btn-crear-ingreso');
   if (btnIngreso) {
     btnIngreso.addEventListener('click', function () {
       var valor = Number(document.getElementById('ing-valor').value) || 0;
       var concepto = document.getElementById('ing-concepto').value.trim();
       if (!concepto || !valor) { alert('Concepto y valor son obligatorios.'); return; }
+      var idxClienteIngElegido = document.getElementById('ing-cliente').value;
+      var clienteIngNombre = '';
+      if (idxClienteIngElegido !== '') {
+        var alumnoIngSel = cargarAlumnos()[Number(idxClienteIngElegido)];
+        if (alumnoIngSel) clienteIngNombre = (alumnoIngSel.nombres + ' ' + alumnoIngSel.apellidos).trim();
+      }
       var registro = {
         fecha: document.getElementById('ing-fecha').value,
         concepto: concepto,
         programa: document.getElementById('ing-programa').value,
         categoria: document.getElementById('ing-categoria').value,
-        cliente: document.getElementById('ing-cliente').value.trim(),
+        cliente: clienteIngNombre,
         metodo: document.getElementById('ing-metodo').value,
         estado: document.getElementById('ing-estado').value,
         valor: valor
