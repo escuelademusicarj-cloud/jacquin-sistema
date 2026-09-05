@@ -44,3 +44,64 @@ export async function guardarCancionDeAlumno(alumnoId, numero, cancion) {
   );
   return rows[0];
 }
+
+// ---- Ensambles: grupos de estudiantes de distintos cursos que tocan
+// juntos una misma pieza (ej. 2 pianistas + 4 percusionistas + 2 violines).
+// Un ensamble no pertenece a un solo programa, por eso es una entidad
+// aparte con su propia tabla de integrantes (muchos a muchos con alumnos).
+export async function listarEnsambles() {
+  const ensambles = (await pool.query(
+    `SELECT id, nombre, cancion, notas FROM clausura_ensambles ORDER BY id`
+  )).rows;
+
+  const integrantes = (await pool.query(
+    `SELECT ei.ensamble_id, a.id AS alumno_id, a.nombres, a.apellidos, a.programa_principal AS programa
+     FROM clausura_ensamble_integrantes ei
+     JOIN alumnos a ON a.id = ei.alumno_id
+     ORDER BY ei.ensamble_id, a.apellidos, a.nombres`
+  )).rows;
+
+  const integrantesPorEnsamble = {};
+  for (const i of integrantes) {
+    if (!integrantesPorEnsamble[i.ensamble_id]) integrantesPorEnsamble[i.ensamble_id] = [];
+    integrantesPorEnsamble[i.ensamble_id].push({
+      alumnoId: i.alumno_id, nombres: i.nombres, apellidos: i.apellidos, programa: i.programa,
+    });
+  }
+
+  return ensambles.map((e) => ({ ...e, integrantes: integrantesPorEnsamble[e.id] || [] }));
+}
+
+export async function crearEnsamble({ nombre, cancion, notas }) {
+  const { rows } = await pool.query(
+    `INSERT INTO clausura_ensambles (nombre, cancion, notas) VALUES ($1,$2,$3) RETURNING *`,
+    [nombre, cancion || null, notas || null]
+  );
+  return rows[0];
+}
+
+export async function editarEnsamble(id, { nombre, cancion, notas }) {
+  const { rows } = await pool.query(
+    `UPDATE clausura_ensambles SET nombre=$1, cancion=$2, notas=$3 WHERE id=$4 RETURNING *`,
+    [nombre, cancion || null, notas || null, id]
+  );
+  return rows[0] ?? null;
+}
+
+export async function borrarEnsamble(id) {
+  await pool.query(`DELETE FROM clausura_ensambles WHERE id=$1`, [id]);
+}
+
+export async function agregarIntegranteEnsamble(ensambleId, alumnoId) {
+  await pool.query(
+    `INSERT INTO clausura_ensamble_integrantes (ensamble_id, alumno_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+    [ensambleId, alumnoId]
+  );
+}
+
+export async function quitarIntegranteEnsamble(ensambleId, alumnoId) {
+  await pool.query(
+    `DELETE FROM clausura_ensamble_integrantes WHERE ensamble_id=$1 AND alumno_id=$2`,
+    [ensambleId, alumnoId]
+  );
+}

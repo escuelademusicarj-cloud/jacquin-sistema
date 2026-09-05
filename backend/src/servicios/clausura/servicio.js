@@ -1,4 +1,8 @@
-import { listarRepertorioDeAlumnos, guardarCancionDeAlumno } from "../../persistencia/clausura/repositorio.js";
+import {
+  listarRepertorioDeAlumnos, guardarCancionDeAlumno,
+  listarEnsambles, crearEnsamble, editarEnsamble, borrarEnsamble,
+  agregarIntegranteEnsamble, quitarIntegranteEnsamble,
+} from "../../persistencia/clausura/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
 export async function obtenerRepertorio() {
@@ -29,4 +33,75 @@ export async function editarCancionesDeAlumno(alumnoId, canciones, contextoAudit
   });
 
   return guardadas;
+}
+
+// ---- Ensambles ----
+export async function obtenerEnsambles() {
+  return listarEnsambles();
+}
+
+export async function crearEnsambleNuevo(datos, contextoAuditoria) {
+  const nombre = (datos.nombre || "").trim();
+  if (!nombre) {
+    const err = new Error("El ensamble necesita un nombre.");
+    err.codigoHttp = 400;
+    throw err;
+  }
+  const guardado = await crearEnsamble({ nombre, cancion: (datos.cancion || "").trim(), notas: (datos.notas || "").trim() });
+
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "crear", modulo: "clausura",
+    entidad: "ensamble", entidadId: guardado.id, resultado: "exito",
+  });
+
+  return guardado;
+}
+
+export async function editarEnsambleExistente(id, datos, contextoAuditoria) {
+  const nombre = (datos.nombre || "").trim();
+  if (!nombre) {
+    const err = new Error("El ensamble necesita un nombre.");
+    err.codigoHttp = 400;
+    throw err;
+  }
+  const actualizado = await editarEnsamble(id, { nombre, cancion: (datos.cancion || "").trim(), notas: (datos.notas || "").trim() });
+  if (!actualizado) {
+    const err = new Error("Ensamble no encontrado.");
+    err.codigoHttp = 404;
+    throw err;
+  }
+
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "editar", modulo: "clausura",
+    entidad: "ensamble", entidadId: id, resultado: "exito",
+  });
+
+  return actualizado;
+}
+
+export async function eliminarEnsambleExistente(id, contextoAuditoria) {
+  await borrarEnsamble(id);
+
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "eliminar", modulo: "clausura",
+    entidad: "ensamble", entidadId: id, resultado: "exito",
+  });
+}
+
+export async function agregarEstudianteAEnsamble(ensambleId, alumnoId, contextoAuditoria) {
+  await agregarIntegranteEnsamble(ensambleId, alumnoId);
+
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "agregar_integrante", modulo: "clausura",
+    entidad: "ensamble", entidadId: ensambleId, resultado: "exito",
+  });
+}
+
+export async function quitarEstudianteDeEnsamble(ensambleId, alumnoId, contextoAuditoria) {
+  await quitarIntegranteEnsamble(ensambleId, alumnoId);
+
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "quitar_integrante", modulo: "clausura",
+    entidad: "ensamble", entidadId: ensambleId, resultado: "exito",
+  });
 }
