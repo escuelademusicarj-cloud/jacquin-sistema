@@ -8307,6 +8307,20 @@ function renderContenido(clave) {
   }
 }
 
+// Evita que las actualizaciones de fondo (traer datos nuevos del backend
+// apenas se entra a un módulo, ver navegar()) le borren a la persona lo que
+// está escribiendo justo en ese momento: repintar #contenido reemplaza TODO
+// el HTML de adentro, formularios incluidos. Si hay un campo de texto/select
+// con el foco puesto, esa actualización puntual se salta el repintado — la
+// próxima que llegue (o la próxima vez que entre al módulo) va a mostrar los
+// datos frescos igual, sin haber interrumpido lo que se estaba escribiendo.
+function hayUnCampoConFocoAhora() {
+  var activo = document.activeElement;
+  if (!activo) return false;
+  var etiqueta = activo.tagName;
+  return etiqueta === 'INPUT' || etiqueta === 'TEXTAREA' || etiqueta === 'SELECT';
+}
+
 function navegar() {
   var clave = location.hash.replace('#', '') || 'dashboard';
   renderNavModulos(clave);
@@ -8323,7 +8337,7 @@ function navegar() {
       // Estudiantes ya tiene con esto todo lo que necesita — se repinta
       // acá mismo en vez de esperar a Cargos/Asistencia/etc, que dependen
       // de un pedido por estudiante y tardan más (ver mapearEnParalelo).
-      if ((location.hash.replace('#', '') || 'dashboard') === clave) renderContenido(clave);
+      if ((location.hash.replace('#', '') || 'dashboard') === clave && !hayUnCampoConFocoAhora()) renderContenido(clave);
       return refrescarCachePlanes();
     })
     .then(function () { return refrescarCacheInscripciones(); })
@@ -8337,7 +8351,7 @@ function navegar() {
       // llegan, no solo el contenido.
       return refrescarCachePermisos().then(function () {
         renderNavModulos(clave);
-        if ((location.hash.replace('#', '') || 'dashboard') === clave) renderContenido(clave);
+        if ((location.hash.replace('#', '') || 'dashboard') === clave && !hayUnCampoConFocoAhora()) renderContenido(clave);
       });
     })
     .then(function () { return refrescarCacheSalas(); })
@@ -8348,7 +8362,7 @@ function navegar() {
         // resolverProfesorDeAlumnos) y repintar si un Profesor está
         // mirando una pantalla que dependía de ese dato.
         resolverProfesorDeAlumnos();
-        if ((location.hash.replace('#', '') || 'dashboard') === clave) renderContenido(clave);
+        if ((location.hash.replace('#', '') || 'dashboard') === clave && !hayUnCampoConFocoAhora()) renderContenido(clave);
       });
     })
     .then(function () { return refrescarCacheClases(); })
@@ -8362,8 +8376,9 @@ function navegar() {
     .then(function () { return refrescarCacheContabNomina(); })
     .then(function () {
       // Si el usuario ya cambió de pantalla mientras se esperaba la
-      // respuesta, no pisar lo que se está viendo ahora.
-      if ((location.hash.replace('#', '') || 'dashboard') === clave) {
+      // respuesta, no pisar lo que se está viendo ahora. Tampoco si tiene
+      // el foco puesto en un campo — ver hayUnCampoConFocoAhora() arriba.
+      if ((location.hash.replace('#', '') || 'dashboard') === clave && !hayUnCampoConFocoAhora()) {
         renderContenido(clave);
       }
     })
