@@ -441,6 +441,43 @@
   .lista-previa { margin-top: 10px; }
   .lista-previa div { font-size: 13px; padding: 4px 0; }
 
+  /* ---- Horarios / Asistencia: vista móvil (pestañas de día + tarjetas) ---- */
+  .tabs-dias-movil { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; margin-bottom: 14px; }
+  .btn-dia-movil {
+    flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    min-width: 52px; padding: 8px 10px; border-radius: 10px; border: 1.5px solid #e2e5ea; background: #fff;
+    cursor: pointer; font-family: var(--font-ui);
+  }
+  .btn-dia-movil .dia-nombre-movil { font-size: 12px; font-weight: 700; color: var(--azul-oscuro); text-transform: uppercase; }
+  .btn-dia-movil .dia-fecha-movil { font-size: 11px; color: var(--muted); }
+  .btn-dia-movil.es-hoy { border-color: var(--naranja); }
+  .btn-dia-movil.activo { background: var(--azul-oscuro); border-color: var(--azul-oscuro); }
+  .btn-dia-movil.activo .dia-nombre-movil, .btn-dia-movil.activo .dia-fecha-movil { color: #fff; }
+  .tarjetas-dia-movil { display: flex; flex-direction: column; gap: 12px; }
+  .tarjeta-franja-movil { background: #fff; border: 1px solid #e2e5ea; border-left: 4px solid #ddd; border-radius: 10px; padding: 12px 14px; }
+  .hora-franja-movil { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: var(--azul-oscuro); text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 10px; }
+  .estado-franja-movil { font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0; }
+  .sin-clases-movil { font-size: 13px; color: var(--muted); margin: 0; }
+  .bloque-programa-movil { background: #fafafa; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+  .bloque-programa-movil:last-of-type { margin-bottom: 0; }
+  .etiqueta-programa-movil { display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 3px 8px; border-radius: 6px; margin-bottom: 8px; }
+  .chip-estudiante-movil, .fila-alumno-asistencia-movil {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    background: #fff; border: 1.5px solid #e2e5ea; border-radius: 8px; padding: 9px 10px; margin-bottom: 6px;
+  }
+  .chip-estudiante-movil:last-child, .fila-alumno-asistencia-movil:last-child { margin-bottom: 0; }
+  .chip-nombre-movil, .nombre-alumno-asistencia-movil { font-size: 14px; font-weight: 600; color: var(--azul-oscuro); line-height: 1.3; }
+  .fila-alumno-asistencia-movil.extraordinaria-movil { background: #FDF1D6; border-color: #E9C46A; }
+  .fila-alumno-asistencia-movil.extraordinaria-movil .nombre-alumno-asistencia-movil { color: #8a6300; }
+  .chip-acciones-movil { display: flex; gap: 2px; flex-shrink: 0; }
+  .chip-acciones-movil button { border: none; background: transparent; cursor: pointer; font-size: 16px; padding: 4px 6px; }
+  .select-asistencia-movil { font-size: 13px; padding: 6px 8px; border-radius: 8px; background: #fff; flex-shrink: 0; min-width: 108px; }
+  .link-agregar-movil { display: block; width: 100%; text-align: left; background: none; border: none; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 4px 2px; font-family: var(--font-ui); }
+  .btn-celda-agendar-movil { width: 100%; margin-top: 2px; font-size: 13px; background: transparent; border: 1.5px dashed var(--azul-claro); border-radius: 8px; padding: 9px; color: var(--azul-oscuro); cursor: pointer; font-weight: 600; }
+  .btn-abrir-asis-manual-movil { display: block; width: 100%; text-align: left; font-size: 12.5px; color: var(--azul-oscuro); background: none; border: none; cursor: pointer; padding: 6px 2px 0; text-decoration: underline; font-family: var(--font-ui); }
+  .form-asis-manual-movil { margin-top: 8px; padding: 10px; background: #FDF1D6; border: 1px solid #E9C46A; border-radius: 8px; }
+  .form-asis-manual-movil input, .form-asis-manual-movil select { width: 100%; font-size: 13px; padding: 7px 8px; box-sizing: border-box; border-radius: 6px; border: 1px solid #ccc; }
+
   @media print {
     body * { visibility: hidden; }
     #comprobante-imprimir, #comprobante-imprimir * { visibility: visible; }
@@ -1420,6 +1457,9 @@ var filtroProgramaAsistencia = 'General';
 // manual" — null si ninguna. Solo una a la vez.
 var celdaManualAbierta = null;
 var alumnoHistorialAsistenciaIdx = null; // estudiante elegido en el recuadro de historial individual
+// Vista móvil de Asistencia (tarjetas por día en vez de la grilla ancha) —
+// qué día está seleccionado en las pestañas Lun..Sáb. Por defecto, hoy.
+var diaMovilAsistencia = (function () { var d = new Date().getDay(); return (d >= 1 && d <= 6) ? d : 1; })();
 var busquedaAvanceMensual = ''; // texto del buscador de estudiante en Avances académicos
 
 // ---- Helpers de semana ISO (input type="week") ----
@@ -3378,6 +3418,15 @@ var FRANJAS = [
 ];
 var COLUMNAS_DIAS = [1, 2, 3, 4, 5, 6]; // lunes(1) a sábado(6), sin domingo — pedido explícito.
 
+// ---- Detección de vista móvil (Horarios/Asistencia) ----
+// En vez de intentar meter la grilla ancha (6 columnas) en una pantalla de
+// celular, por debajo de este ancho se arma una vista alternativa: pestañas
+// de día + tarjetas apiladas. Se decide en JS (no solo con CSS) porque cambia
+// qué HTML se genera, no solo cómo se ve.
+function esVistaMovil() { return window.innerWidth <= 700; }
+// Vista móvil de Horarios — día seleccionado en las pestañas Lun..Sáb. Por defecto, hoy.
+var diaMovilHorario = (function () { var d = new Date().getDay(); return (d >= 1 && d <= 6) ? d : 1; })();
+
 // Festivos oficiales de Colombia 2026 (fuente: festivos.com.co, consultado 2026-08-13).
 // Nota de mantenimiento: esta lista es solo de 2026 — si el proyecto sigue
 // vivo en 2027, hay que actualizarla (los festivos religiosos móviles cambian de fecha cada año).
@@ -3524,6 +3573,81 @@ function renderHorarios(sesion) {
 
   if (vistaHorarios === 'mensual') return toggleHtml + renderCalendarioMensual(sesion);
   return toggleHtml + renderHorariosSemana(sesion);
+}
+
+// ---- Horarios: vista móvil (pestañas de día + tarjetas por franja) ----
+// Reemplaza a la grilla de 6 columnas cuando la pantalla es angosta: en vez
+// de comprimir todo el horario en una tabla ilegible, se navega un día a la
+// vez y cada franja/clase se muestra como una tarjeta de ancho completo.
+function construirVistaHorariosMovil(sesion, alumnos, clases, permiteEditarHorario) {
+  var hoyStrHorario = lunesDeFecha(new Date().toISOString().slice(0, 10));
+  var hoyRealStr = new Date().toISOString().slice(0, 10);
+
+  var tabsDias = '<div class="tabs-dias-movil">' + COLUMNAS_DIAS.map(function (d) {
+    var fechaCol = sumarDiasFecha(semanaHorarioSeleccionada, d - 1);
+    var esHoyCol = fechaCol === hoyRealStr;
+    var activo = d === diaMovilHorario;
+    return '<button type="button" class="btn-dia-movil' + (activo ? ' activo' : '') + (esHoyCol ? ' es-hoy' : '') + '" data-dia="' + d + '">' +
+      '<span class="dia-nombre-movil">' + DIAS_SEMANA[d].slice(0, 3) + '</span>' +
+      '<span class="dia-fecha-movil">' + formatearFechaCorta(fechaCol) + '</span>' +
+      '</button>';
+  }).join('') + '</div>';
+
+  var dia = diaMovilHorario;
+  var fechaColumna = sumarDiasFecha(semanaHorarioSeleccionada, dia - 1);
+  var esSabado = dia === 6;
+
+  var tarjetas = FRANJAS.map(function (franja) {
+    var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
+    var etiqueta = esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie;
+    var ocupantes = clasesDeCelda(clases, dia, hora);
+    if (filtroProgramaHorario !== 'General') ocupantes = ocupantes.filter(function (o) { return o.c.programa === filtroProgramaHorario; });
+
+    var ocupantesConAlumnos = ocupantes.map(function (o) {
+      var alumnosVisibles = (o.c.alumnos || []).filter(function (idx) {
+        var al = alumnos[idx];
+        if (!al) return false;
+        var fechaAlta = al.fechaMatricula || hoyStrHorario;
+        var fechaAsignado = (o.c.alumnosFechas && o.c.alumnosFechas[idx]) || hoyStrHorario;
+        var fechaEfectiva = fechaAlta > fechaAsignado ? fechaAlta : fechaAsignado;
+        return fechaEfectiva <= fechaColumna;
+      });
+      return { o: o, alumnosVisibles: alumnosVisibles };
+    }).filter(function (x) { return x.alumnosVisibles.length > 0; });
+
+    var ocupada = ocupantesConAlumnos.length > 0;
+
+    var bloques = ocupantesConAlumnos.map(function (x) {
+      var o = x.o, alumnosVisibles = x.alumnosVisibles;
+      var colorProg = colorPrograma(o.c.programa);
+      var chips = alumnosVisibles.map(function (idx) {
+        var al = alumnos[idx];
+        return '<div class="chip-estudiante-movil" style="border-color:' + colorProg + '77;">' +
+          '<span class="chip-nombre-movil" style="color:' + colorProg + ';">' + al.nombres + ' ' + al.apellidos + '</span>' +
+          (!permiteEditarHorario ? '' :
+            '<span class="chip-acciones-movil">' +
+            '<button class="btn-editar-estudiante-horario" data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" title="Editar / reemplazar estudiante">✎</button>' +
+            '<button class="btn-quitar-estudiante-horario" data-clase-idx="' + o.i + '" data-alumno-idx="' + idx + '" title="Quitar del horario">✕</button>' +
+            '</span>') +
+          '</div>';
+      }).join('');
+      var linkAgregar = !permiteEditarHorario ? '' : '<button type="button" class="link-agregar-a-clase link-agregar-movil" data-clase-idx="' + o.i + '" style="color:' + colorProg + ';">+ agregar estudiante</button>';
+      return '<div class="bloque-programa-movil">' +
+        '<div class="etiqueta-programa-movil" style="background:' + colorProg + '1a; color:' + colorProg + ';">' + o.c.programa + '</div>' +
+        chips + linkAgregar +
+        '</div>';
+    }).join('');
+
+    var botonAgendar = permiteEditarHorario ? '<button type="button" class="btn-celda-agendar btn-celda-agendar-movil" data-dia="' + dia + '" data-hora="' + hora + '">+ Agendar en esta franja</button>' : '';
+
+    return '<div class="tarjeta-franja-movil" style="border-left-color:' + (ocupada ? 'var(--rojo)' : 'var(--verde)') + ';">' +
+      '<div class="hora-franja-movil">' + etiqueta + '<span class="estado-franja-movil" style="color:' + (ocupada ? 'var(--rojo)' : 'var(--verde)') + ';">' + (ocupada ? '● Ocupado' : '● Disponible') + '</span></div>' +
+      (bloques || '<p class="sin-clases-movil">Sin clases agendadas.</p>') +
+      botonAgendar +
+      '</div>';
+  }).join('');
+
+  return tabsDias + '<div class="tarjetas-dia-movil">' + tarjetas + '</div>';
 }
 
 function renderHorariosSemana(sesion) {
@@ -3682,6 +3806,26 @@ function renderHorariosSemana(sesion) {
   var btnToggleEdicion = esProfesor ? '' :
     '<button id="btn-alternar-edicion-horario" style="font-size:12px; padding:7px 14px; border-radius:8px; border:1.5px solid var(--naranja); background:' + (horarioModoEdicion ? 'var(--naranja)' : '#fff') + '; color:' + (horarioModoEdicion ? '#fff' : 'var(--naranja)') + '; cursor:pointer; font-weight:600; white-space:nowrap;">' + (horarioModoEdicion ? '✓ Editando horario' : '✎ Editar horario') + '</button>';
 
+  // En celular, la grilla de 6 columnas es ilegible — se reemplaza por
+  // pestañas de día + tarjetas por franja, con la misma info y los mismos
+  // botones/clases de siempre (los mismos manejadores de eventos aplican).
+  if (esVistaMovil()) {
+    return '' +
+      '<div class="panel"><div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">' +
+      '<h2 style="margin:0;">Calendario de reservas</h2>' +
+      btnToggleEdicion +
+      '</div>' +
+      '<p style="font-size:12px; color:var(--muted); margin-top:6px;">' + (esProfesor ? 'Vista de solo lectura de todo el horario de la academia.' : (permiteEditarHorario ? 'Tocá una tarjeta para gestionar. Deslizá los días arriba para cambiar de fecha.' : 'Vista de solo lectura — tocá "Editar horario" arriba para poder agendar, quitar o mover estudiantes.')) + '</p>' +
+      selectorSemana + botonesFiltro +
+      construirVistaHorariosMovil(sesion, alumnos, clases, permiteEditarHorario) +
+      '<div style="display:flex; gap:16px; margin-top:14px; font-size:11px; color:var(--muted);">' +
+      '<span><span style="display:inline-block; width:10px; height:10px; background:var(--verde); border-radius:2px; margin-right:4px;"></span>Disponible</span>' +
+      '<span><span style="display:inline-block; width:10px; height:10px; background:var(--rojo); border-radius:2px; margin-right:4px;"></span>Ocupado</span>' +
+      '</div>' +
+      '</div>' +
+      htmlModalAgendar + htmlModalAsignar + htmlModalEditarEstudianteHorario;
+  }
+
   return '' +
     '<div class="panel"><div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">' +
     '<h2 style="margin:0;">Calendario de reservas</h2>' +
@@ -3702,6 +3846,14 @@ function activarLogicaHorarios() {
   document.querySelectorAll('.btn-filtro-programa').forEach(function (btn) {
     btn.addEventListener('click', function () {
       filtroProgramaHorario = btn.getAttribute('data-programa');
+      renderContenido('horarios');
+    });
+  });
+
+  // Pestañas de día de la vista móvil.
+  document.querySelectorAll('.btn-dia-movil').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      diaMovilHorario = Number(btn.getAttribute('data-dia'));
       renderContenido('horarios');
     });
   });
@@ -4011,6 +4163,105 @@ var COLOR_ESTADO_ASISTENCIA = {
   cancelada: '#6b7686', reprogramada: '#93B6EE', recuperada: '#7c5cbf'
 };
 
+// ---- Asistencia: vista móvil (pestañas de día + tarjetas por franja) ----
+// Mismo criterio que Horarios: en celular se navega un día a la vez y cada
+// franja/clase se muestra como tarjeta, en vez de comprimir 6 columnas en
+// una tabla donde los nombres terminan partidos letra por letra.
+function construirVistaAsistenciaMovil(alumnos, clases, asistencias) {
+  var semana = semanaAsistenciaSeleccionada;
+  var hoyStr = new Date().toISOString().slice(0, 10);
+  var respaldoFechaAsistencia = lunesDeFecha(hoyStr);
+
+  var tabsDias = '<div class="tabs-dias-movil">' + COLUMNAS_DIAS.map(function (d) {
+    var fechaCol = fechaColumnaSemana(semana, d);
+    var esHoyCol = fechaCol === hoyStr;
+    var activo = d === diaMovilAsistencia;
+    return '<button type="button" class="btn-dia-movil' + (activo ? ' activo' : '') + (esHoyCol ? ' es-hoy' : '') + '" data-dia="' + d + '">' +
+      '<span class="dia-nombre-movil">' + DIAS_SEMANA[d].slice(0, 3) + '</span>' +
+      '<span class="dia-fecha-movil">' + fechaCol.slice(8, 10) + '/' + fechaCol.slice(5, 7) + '</span>' +
+      '</button>';
+  }).join('') + '</div>';
+
+  var dia = diaMovilAsistencia;
+  var esSabado = dia === 6;
+  var fechaCelda = fechaColumnaSemana(semana, dia);
+  var esHoy = fechaCelda === hoyStr;
+
+  var tarjetas = FRANJAS.map(function (franja) {
+    var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
+    var etiqueta = esSabado ? franja.etiquetaSabado : franja.etiquetaLunVie;
+    var ocupantes = clasesDeCelda(clases, dia, hora);
+    if (filtroProgramaAsistencia !== 'General') ocupantes = ocupantes.filter(function (o) { return o.c.programa === filtroProgramaAsistencia; });
+
+    var ocupantesConAlumnos = ocupantes.map(function (o) {
+      var listaAlumnos = (o.c.alumnos || []).filter(function (idxAlumno) {
+        var al = alumnos[idxAlumno];
+        if (!al) return false;
+        var fechaAlta = al.fechaMatricula || respaldoFechaAsistencia;
+        return fechaAlta <= fechaCelda;
+      });
+      var idxExtraordinarios = asistencias.filter(function (a) {
+        return a.claseIdx === o.i && a.fecha === fechaCelda && listaAlumnos.indexOf(a.alumnoIdx) === -1;
+      }).map(function (a) { return a.alumnoIdx; }).filter(function (v, i, arr) { return arr.indexOf(v) === i; });
+      return { o: o, listaAlumnos: listaAlumnos, idxExtraordinarios: idxExtraordinarios };
+    }).filter(function (x) { return x.listaAlumnos.length > 0 || x.idxExtraordinarios.length > 0; });
+
+    function filaAlumnoMovil(idxAlumno, o, esExtraordinaria) {
+      var alumno = alumnos[idxAlumno];
+      if (!alumno) return '';
+      var registro = asistencias.find(function (a) { return a.alumnoIdx === idxAlumno && a.claseIdx === o.i && a.fecha === fechaCelda; });
+      var estadoActual = registro ? registro.estado : '';
+      var colorEstado = estadoActual ? (COLOR_ESTADO_ASISTENCIA[estadoActual] || '#ccc') : '#ccc';
+      var opciones = '<option value="">—</option>' +
+        ESTADOS_ASISTENCIA_RAPIDA.map(function (e) { return '<option value="' + e + '"' + (e === estadoActual ? ' selected' : '') + '>' + ETIQUETA_ASISTENCIA[e] + '</option>'; }).join('');
+      return '<div class="fila-alumno-asistencia-movil' + (esExtraordinaria ? ' extraordinaria-movil' : '') + '"' + (esExtraordinaria ? ' title="No es su horario habitual — asistencia extraordinaria"' : '') + '>' +
+        '<span class="nombre-alumno-asistencia-movil">' + (esExtraordinaria ? '⚡ ' : '') + alumno.nombres + ' ' + alumno.apellidos + '</span>' +
+        '<select class="select-asistencia-rapida select-asistencia-movil" data-alumno-idx="' + idxAlumno + '" data-clase-idx="' + o.i + '" data-fecha="' + fechaCelda + '" style="border-color:' + colorEstado + '; color:' + (estadoActual ? colorEstado : 'var(--muted)') + ';">' +
+        opciones + '</select>' +
+        '</div>';
+    }
+
+    var bloques = ocupantesConAlumnos.map(function (x) {
+      var o = x.o;
+      var colorProg = colorPrograma(o.c.programa);
+      var filas = x.listaAlumnos.map(function (idxAlumno) { return filaAlumnoMovil(idxAlumno, o, false); }).join('');
+      var filasExtra = x.idxExtraordinarios.map(function (idxAlumno) { return filaAlumnoMovil(idxAlumno, o, true); }).join('');
+      return '<div class="bloque-programa-movil">' +
+        '<div class="etiqueta-programa-movil" style="background:' + colorProg + '1a; color:' + colorProg + ';">' + o.c.programa + '</div>' +
+        filas + filasExtra +
+        '</div>';
+    }).join('');
+
+    var claveCelda = dia + '-' + hora;
+    var botonManual = '<button type="button" class="btn-abrir-asis-manual btn-abrir-asis-manual-movil" data-clave="' + claveCelda + '">+ Asistencia manual</button>';
+    var formularioManual = celdaManualAbierta === claveCelda
+      ? '<div class="form-asis-manual-movil">' +
+        '<div style="position:relative; margin-bottom:6px;">' +
+        '<input type="text" id="sel-manual-alumno-texto" autocomplete="off" placeholder="Estudiante…" />' +
+        '<input type="hidden" id="sel-manual-alumno" value="" />' +
+        '<div id="sel-manual-alumno-resultados" style="display:none; position:absolute; z-index:40; background:#fff; border:1px solid #ddd; border-radius:8px; margin-top:2px; max-height:180px; overflow-y:auto; width:100%; box-shadow:0 6px 16px rgba(0,0,0,0.14);"></div>' +
+        '</div>' +
+        '<select id="sel-manual-clase" style="width:100%; margin-bottom:6px;"><option value="">Curso…</option>' +
+        PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+        '</select>' +
+        '<div style="display:flex; gap:6px;">' +
+        '<button type="button" id="btn-guardar-asis-manual" data-fecha="' + fechaCelda + '" data-dia="' + dia + '" data-hora="' + hora + '" class="btn-primario" style="flex:1;">Guardar</button>' +
+        '<button type="button" id="btn-cancelar-asis-manual" style="background:#fff; border:1px solid #ccc; border-radius:8px; padding:0 14px; cursor:pointer;">✕</button>' +
+        '</div>' +
+        '<p id="msj-error-asis-manual" style="font-size:11.5px; color:#c0392b; display:none; margin:6px 0 0;"></p>' +
+        '</div>'
+      : '';
+
+    return '<div class="tarjeta-franja-movil" style="border-left-color:' + (esHoy ? 'var(--naranja)' : '#ddd') + ';">' +
+      '<div class="hora-franja-movil">' + etiqueta + '</div>' +
+      (bloques || '<p class="sin-clases-movil">Sin clases.</p>') +
+      botonManual + formularioManual +
+      '</div>';
+  }).join('');
+
+  return tabsDias + '<div class="tarjetas-dia-movil">' + tarjetas + '</div>';
+}
+
 function renderAsistencia(sesion) {
   var alumnos = cargarAlumnos();
   var clases = cargarClases();
@@ -4161,7 +4412,9 @@ function renderAsistencia(sesion) {
   var grillaHtml =
     '<div class="campo" style="max-width:220px; margin-bottom:14px;"><label>Semana a registrar</label><input id="asis-semana-grilla" type="week" value="' + semana + '" /></div>' +
     botonesFiltro +
-    '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:4px; width:100%;">' + encabezado + filasGrilla + '</table></div>' +
+    (esVistaMovil()
+      ? construirVistaAsistenciaMovil(alumnos, clases, asistencias)
+      : '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:4px; width:100%;">' + encabezado + filasGrilla + '</table></div>') +
     leyenda;
 
   // Historial completo (todas las fechas) — se conserva como consulta aparte de la grilla de la semana.
@@ -4269,6 +4522,15 @@ function activarLogicaAsistencia() {
   document.querySelectorAll('.btn-filtro-programa-asistencia').forEach(function (btn) {
     btn.addEventListener('click', function () {
       filtroProgramaAsistencia = btn.getAttribute('data-programa');
+      celdaManualAbierta = null;
+      renderContenido('asistencia');
+    });
+  });
+
+  // Pestañas de día de la vista móvil.
+  document.querySelectorAll('.btn-dia-movil').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      diaMovilAsistencia = Number(btn.getAttribute('data-dia'));
       celdaManualAbierta = null;
       renderContenido('asistencia');
     });
@@ -8211,6 +8473,22 @@ document.getElementById('btn-salir').addEventListener('click', function () {
 });
 
 window.addEventListener('hashchange', navegar);
+
+// Si el celular pasa de escritorio a móvil (o al revés, ej. al rotar o
+// achicar la ventana), Horarios/Asistencia necesitan volver a pintarse
+// para cambiar entre la grilla ancha y las tarjetas por día.
+var _esVistaMovilAnterior = esVistaMovil();
+window.addEventListener('resize', function () {
+  clearTimeout(window._resizeGrillaTimeout);
+  window._resizeGrillaTimeout = setTimeout(function () {
+    var ahora = esVistaMovil();
+    if (ahora !== _esVistaMovilAnterior) {
+      _esVistaMovilAnterior = ahora;
+      var claveActual = location.hash.replace('#', '') || 'dashboard';
+      if (claveActual === 'horarios' || claveActual === 'asistencia') renderContenido(claveActual);
+    }
+  }, 200);
+});
 
 if (sesionActual()) { mostrarApp(); } else { mostrarLogin(); }
 </script>
