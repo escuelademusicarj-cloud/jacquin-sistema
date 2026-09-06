@@ -812,6 +812,11 @@ function activarBuscadorEstudiante(idBase, alumnosOProveedor, onSeleccionar) {
     }
     var coincidencias = alumnos
       .map(function (a, i) { return { a: a, i: i }; })
+      // Los retirados (incluye duplicados ya fusionados a otro id) no se
+      // ofrecen para asignarles nada nuevo. Se filtra acá, no en el origen
+      // de datos, para no correr las posiciones que ya usan alumnoIdx
+      // guardados (ej. inscripciones de Matrícula).
+      .filter(function (o) { return o.a.estado !== 'retirado'; })
       .filter(function (o) { return !texto || normalizar(o.a.nombres + ' ' + o.a.apellidos).indexOf(texto) !== -1; })
       .slice(0, 8);
 
