@@ -654,9 +654,9 @@ var VISIBILIDAD_ROL = {
   SECRETARIA: ['dashboard','estudiantes','matricula','cursos','pensum','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos','amigosecreto'],
   PROFESOR: ['dashboard','horarios','asistencia','evaluacion','eventos','comunicacion','pensum','amigosecreto'],
   // INVITADO: rol exclusivo para gente externa que solo entra a jugar al
-  // Amigo Secreto — un único módulo visible, nada más. No es el bug de
-  // Pensum: acá la restricción total es justo lo buscado.
-  INVITADO: ['amigosecreto']
+  // Amigo Secreto — ve Inicio (contenido genérico de bienvenida, sin datos
+  // sensibles) y Amigo secreto, nada más.
+  INVITADO: ['dashboard', 'amigosecreto']
 };
 
 var ROLES_SISTEMA = ['ADMINISTRADOR', 'DIRECCION', 'SECRETARIA', 'PROFESOR', 'INVITADO'];
