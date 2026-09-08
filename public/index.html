@@ -7406,6 +7406,12 @@ function activarLogicaAmigoSecreto() {
     });
     return;
   }
+  // Se resetea acá (no queda en true para siempre): así la próxima vez que
+  // se entre a este módulo se vuelve a pedir todo fresco — roles, participantes,
+  // resultado — en vez de mostrar lo que había la primera vez que se abrió
+  // en esta sesión. Bug real: tras cambiar el rol de un usuario en otro
+  // módulo, acá seguía apareciendo con el rol viejo hasta recargar la página.
+  amigosecretoCargado = false;
 
   var btnGuardarDeseos = document.getElementById('btn-guardar-mis-deseos');
   if (btnGuardarDeseos) {
