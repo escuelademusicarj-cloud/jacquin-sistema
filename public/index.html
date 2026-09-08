@@ -1380,6 +1380,24 @@ async function refrescarCacheProfesores() {
     console.error('No se pudo cargar Profesores desde el backend:', err.message);
   }
 }
+// ---- Horario semanal de profesores (2026-09-08, pedido de Sergio) ----
+// Grilla de "quién dicta qué en cada franja", separada de "clases" (que
+// vincula profesor+alumnos+horario puntual). Reusa las mismas FRANJAS y
+// COLUMNAS_DIAS que Horarios de estudiantes.
+var CACHE_HORARIO_PROFESORES = [];
+async function refrescarCacheHorarioProfesores() {
+  try {
+    var lista = await apiFetch('/api/horario-profesores', { method: 'GET' });
+    CACHE_HORARIO_PROFESORES = (lista || []).map(function (h) {
+      return {
+        id: h.id, profesorId: h.profesor_id, profesorNombre: h.profesor_nombre,
+        programa: h.programa, dia: h.dia_semana, hora: (h.hora_inicio || '').slice(0, 5)
+      };
+    });
+  } catch (err) {
+    console.error('No se pudo cargar el Horario de profesores desde el backend:', err.message);
+  }
+}
 // ---- Roles: se usa solo para encontrar el id real del rol PROFESOR al dar
 // de alta un profesor (crearUsuario necesita rolId, no el nombre).
 var CACHE_ROLES = [];
@@ -4700,6 +4718,72 @@ function activarLogicaAsistencia() {
   }
 }
 
+// ---- Horario semanal de profesores (2026-09-08) ----
+// Grilla de "quién dicta qué en cada franja", dentro del módulo Profesores.
+// Reusa las mismas FRANJAS/COLUMNAS_DIAS que Horarios de estudiantes (Lun-Vie
+// 3-6pm, Sábado 9-12m) y el mismo COLOR_PROGRAMA. A propósito NO limita
+// cuántos profesores distintos puede haber en la misma franja (pedido
+// explícito, "hazlo libre") — solo un mismo profesor no puede repetirse en
+// la misma franja (lo valida el backend).
+function renderGrillaHorarioProfesores(sesion) {
+  var permiteEditar = sesion.rol === 'ADMINISTRADOR' || sesion.rol === 'SECRETARIA';
+  var horario = CACHE_HORARIO_PROFESORES;
+
+  function ocupantesDeCelda(dia, hora) {
+    return horario.filter(function (h) { return h.dia === dia && h.hora === hora; });
+  }
+
+  var encabezado = '<tr><th style="min-width:60px;"></th>' + COLUMNAS_DIAS.map(function (d) {
+    return '<th style="text-align:left; font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; padding:6px 12px;">' + DIAS_SEMANA[d] + '</th>';
+  }).join('') + '</tr>';
+
+  var filasHtml = FRANJAS.map(function (franja) {
+    var celdas = COLUMNAS_DIAS.map(function (dia) {
+      var esSabado = dia === 6;
+      var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
+      var ocupantes = ocupantesDeCelda(dia, hora);
+
+      var chips = ocupantes.map(function (h) {
+        var color = colorPrograma(h.programa);
+        return '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; background:' + color + '2a; border:1.5px solid ' + color + '; border-radius:8px; padding:5px 6px 5px 9px; margin-bottom:5px;">' +
+          '<div style="min-width:0;">' +
+          '<div style="font-weight:700; font-size:10px; color:' + color + '; text-transform:uppercase; letter-spacing:0.03em;">' + h.programa + '</div>' +
+          '<div style="font-weight:600; font-size:13px; color:var(--azul-oscuro); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + h.profesorNombre + '</div>' +
+          '</div>' +
+          (!permiteEditar ? '' : '<button class="btn-quitar-horario-profesor" data-id="' + h.id + '" title="Quitar" style="border:none; background:transparent; cursor:pointer; font-size:13px; padding:2px 4px; color:var(--rojo); flex-shrink:0;">✕</button>') +
+          '</div>';
+      }).join('');
+
+      var botonAgregar = !permiteEditar ? '' : '<button class="btn-celda-agregar-horario-profesor" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:12px; background:transparent; border:1.5px dashed var(--azul-claro); border-radius:7px; width:100%; padding:6px; color:var(--azul-oscuro); cursor:pointer; margin-top:2px; font-weight:600;">+ Agregar profesor</button>';
+
+      return '<td style="background:#fff; padding:10px; vertical-align:top; min-width:190px; border-left:1px solid #f0f0f0;">' + (chips || '') + botonAgregar + '</td>';
+    }).join('');
+    var etiquetaFranja = '<td style="font-size:11px; font-weight:700; color:var(--azul-oscuro); padding:10px 8px; white-space:nowrap; vertical-align:top;">' + franja.etiquetaLunVie + '<br><span style="font-weight:400; color:var(--muted); font-size:10px;">Sáb ' + franja.etiquetaSabado + '</span></td>';
+    return '<tr>' + etiquetaFranja + celdas + '</tr>';
+  }).join('');
+
+  var htmlModal =
+    '<div id="modal-horario-profesor" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:55; align-items:center; justify-content:center; padding:20px;">' +
+    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px; max-height:85vh; overflow-y:auto;">' +
+    '<h2 style="margin-top:0;">Agregar profesor a esta franja</h2>' +
+    '<p id="modal-horario-profesor-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
+    '<div class="campo"><label>Profesor</label>' + htmlBuscadorEstudiante('hp-profesor', '', 'Escribí el nombre del profesor…') + '</div>' +
+    '<div class="campo"><label>Curso / instrumento que dicta acá</label><select id="hp-programa">' +
+    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
+    '</select></div>' +
+    '<button class="btn-primario" id="btn-confirmar-horario-profesor">Agregar</button>' +
+    '<button id="btn-cancelar-horario-profesor" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '<p id="msj-error-horario-profesor" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
+    '</div></div>';
+
+  return '' +
+    '<div class="panel"><h2>Horario semanal de profesores</h2>' +
+    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Qué profesor dicta qué curso en cada franja — pueden coincidir varios profesores en la misma hora, sin límite.' + (permiteEditar ? ' Clic en "+ Agregar profesor" para sumar uno, o en ✕ para quitarlo.' : ' Vista de solo lectura.') + '</p>' +
+    '<div class="tabla-scroll"><table class="tabla-usuarios"><thead>' + encabezado + '</thead><tbody>' + filasHtml + '</tbody></table></div>' +
+    '</div>' +
+    htmlModal;
+}
+
 function renderProfesores(sesion) {
   var usuariosDemo = cargarUsuarios();
   var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
@@ -4779,6 +4863,8 @@ function renderProfesores(sesion) {
      '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Profesor</th><th>Estudiantes asignados</th><th>Horarios</th></tr></thead><tbody>' + filasConsolidado + '</tbody></table></div>') +
     '</div>' +
 
+    renderGrillaHorarioProfesores(sesion) +
+
     '<div class="panel"><h2>Agregar profesor</h2>' +
     '<div class="grilla-2col">' +
     '<div class="campo"><label>Nombre</label><input id="np-nombre" type="text" /></div>' +
@@ -4803,6 +4889,82 @@ function renderProfesores(sesion) {
 }
 
 function activarLogicaProfesores() {
+  // ---- Horario semanal de profesores (2026-09-08) ----
+  var modalHP = document.getElementById('modal-horario-profesor');
+  if (modalHP) {
+    // El buscador de "estudiante" se reutiliza tal cual, pasándole a los
+    // profesores disfrazados de alumno (nombres/apellidos) — así no hay
+    // que duplicar el widget de autocompletar para uno nuevo de profesores.
+    var profesoresParaBuscadorHP = CACHE_PROFESORES.map(function (p) {
+      return { id: p.id, nombres: p.nombre, apellidos: '' };
+    });
+    activarBuscadorEstudiante('hp-profesor', profesoresParaBuscadorHP);
+
+    document.querySelectorAll('.btn-celda-agregar-horario-profesor').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        modalHP.dataset.dia = btn.getAttribute('data-dia');
+        modalHP.dataset.hora = btn.getAttribute('data-hora');
+        document.getElementById('hp-profesor').value = '';
+        document.getElementById('hp-profesor-texto').value = '';
+        document.getElementById('hp-programa').selectedIndex = 0;
+        document.getElementById('msj-error-horario-profesor').style.display = 'none';
+        var dia = Number(btn.getAttribute('data-dia'));
+        var hora = btn.getAttribute('data-hora');
+        document.getElementById('modal-horario-profesor-info').textContent = DIAS_SEMANA[dia].charAt(0).toUpperCase() + DIAS_SEMANA[dia].slice(1) + ' — ' + hora;
+        modalHP.style.display = 'flex';
+      });
+    });
+
+    var btnCancelarHP = document.getElementById('btn-cancelar-horario-profesor');
+    if (btnCancelarHP) btnCancelarHP.addEventListener('click', function () { modalHP.style.display = 'none'; });
+
+    var btnConfirmarHP = document.getElementById('btn-confirmar-horario-profesor');
+    if (btnConfirmarHP) {
+      btnConfirmarHP.addEventListener('click', function () {
+        var idxProfesor = document.getElementById('hp-profesor').value;
+        var msjError = document.getElementById('msj-error-horario-profesor');
+        msjError.style.display = 'none';
+        if (idxProfesor === '' || !profesoresParaBuscadorHP[Number(idxProfesor)]) {
+          msjError.textContent = 'Elegí un profesor de la lista.';
+          msjError.style.display = 'block';
+          return;
+        }
+        var profesorId = profesoresParaBuscadorHP[Number(idxProfesor)].id;
+        var programa = document.getElementById('hp-programa').value;
+        btnConfirmarHP.disabled = true;
+        apiFetch('/api/horario-profesores', {
+          method: 'POST',
+          body: JSON.stringify({
+            profesorId: profesorId, programa: programa,
+            diaSemana: Number(modalHP.dataset.dia), horaInicio: modalHP.dataset.hora
+          })
+        })
+          .then(function () { return refrescarCacheHorarioProfesores(); })
+          .then(function () {
+            btnConfirmarHP.disabled = false;
+            modalHP.style.display = 'none';
+            renderContenido('profesores');
+          })
+          .catch(function (err) {
+            btnConfirmarHP.disabled = false;
+            msjError.textContent = err.message;
+            msjError.style.display = 'block';
+          });
+      });
+    }
+
+    document.querySelectorAll('.btn-quitar-horario-profesor').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-id');
+        btn.disabled = true;
+        apiFetch('/api/horario-profesores/' + id, { method: 'DELETE' })
+          .then(function () { return refrescarCacheHorarioProfesores(); })
+          .then(function () { renderContenido('profesores'); })
+          .catch(function (err) { alert('No se pudo quitar: ' + err.message); btn.disabled = false; });
+      });
+    });
+  }
+
   var btnNuevo = document.getElementById('btn-agregar-profesor');
   if (btnNuevo) {
     btnNuevo.addEventListener('click', function () {
@@ -8382,6 +8544,11 @@ function navegar() {
       });
     })
     .then(function () { return refrescarCacheClases(); })
+    .then(function () {
+      return refrescarCacheHorarioProfesores().then(function () {
+        if ((location.hash.replace('#', '') || 'dashboard') === clave && !hayUnCampoConFocoAhora()) renderContenido(clave);
+      });
+    })
     .then(function () { return refrescarCacheAsistencias(); })
     .then(function () { return refrescarCacheEvaluacionesMensuales(); })
     .then(function () { return refrescarCacheEventos(); })
