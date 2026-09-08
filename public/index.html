@@ -4857,13 +4857,13 @@ function renderProfesores(sesion) {
     '</div></div>';
 
   return '' +
+    renderGrillaHorarioProfesores(sesion) +
+
     '<div class="panel"><h2>Profesores, estudiantes y horarios (' + CACHE_PROFESORES.length + ')</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Vista consolidada — quién enseña, a quiénes y cuándo.</p>' +
     (CACHE_PROFESORES.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay profesores.</p>' :
      '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Profesor</th><th>Estudiantes asignados</th><th>Horarios</th></tr></thead><tbody>' + filasConsolidado + '</tbody></table></div>') +
     '</div>' +
-
-    renderGrillaHorarioProfesores(sesion) +
 
     '<div class="panel"><h2>Agregar profesor</h2>' +
     '<div class="grilla-2col">' +
