@@ -9,15 +9,17 @@ import { generarCargo, registrarPago, obtenerConceptoPorNombre } from "../pagos/
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
 /**
- * Definir planes/tarifas queda restringido a ADMINISTRADOR, aunque
- * Secretaría tenga el permiso general "matricula:crear" para inscribir
- * alumnos — es una regla más fina que un permiso binario, por eso se
- * verifica acá y no solo en el middleware de autorización.
+ * Definir planes/tarifas: ADMINISTRADOR y SECRETARIA (decisión de Sergio,
+ * 2026-09-08 — "todo lo relacionado a estudiantes ella lo debe manejar",
+ * incluye matricular con valores/combinaciones nuevas). Antes era solo
+ * ADMINISTRADOR; se deja este chequeo fino acá (además del permiso
+ * general "matricula:crear" del middleware) por si mañana se vuelve a
+ * acotar a un subconjunto de roles.
  */
 export async function crearPlanNuevo(datosPlan, contextoAuditoria) {
   const rol = await buscarRolPorId(contextoAuditoria?.rolId);
-  if (!rol || rol.nombre !== "ADMINISTRADOR") {
-    const err = new Error("Solo Administración puede crear o editar planes y tarifas.");
+  if (!rol || !["ADMINISTRADOR", "SECRETARIA"].includes(rol.nombre)) {
+    const err = new Error("Solo Administración o Secretaría pueden crear o editar planes y tarifas.");
     err.codigoHttp = 403;
     err.codigo = "sin_permiso";
     throw err;
