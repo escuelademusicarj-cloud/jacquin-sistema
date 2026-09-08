@@ -8406,7 +8406,7 @@ function mostrarApp() {
   document.getElementById('vista-cambiar-password').style.display = 'none';
   document.getElementById('vista-app').style.display = 'block';
   document.getElementById('quien-soy').textContent = sesion.email + ' · ' + sesion.rol;
-  if (!location.hash) location.hash = sesion.rol === 'INVITADO' ? '#amigosecreto' : '#dashboard';
+  if (!location.hash) location.hash = '#dashboard';
   navegar();
 }
 
