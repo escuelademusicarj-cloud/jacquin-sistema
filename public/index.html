@@ -7678,7 +7678,11 @@ function renderAmigoSecreto(sesion) {
   var coloresBadge = ['#E63946', '#F4A300', '#9D4EDD', '#2D6A4F', '#1D8A99'];
   var filasParticipantes = participantes.map(function (p, i) {
     var color = coloresBadge[i % coloresBadge.length];
+    var celdaDeseos = p.deseos_texto
+      ? '<span style="color:#2D6A4F; font-weight:700;">✅</span> <span style="white-space:pre-wrap;">' + p.deseos_texto + '</span>'
+      : '<span style="color:var(--muted); font-style:italic;">— Sin guardar todavía</span>';
     return '<tr><td>🙋 ' + p.nombre + '</td><td><span style="background:' + color + '1a; color:' + color + '; font-weight:700; font-size:11px; padding:3px 10px; border-radius:10px;">' + (ETIQUETA_ROL_MENSAJE[p.rol] || p.rol || '—') + '</span></td><td>' + p.email + '</td>' +
+      '<td style="font-size:12.5px; max-width:260px;">' + celdaDeseos + '</td>' +
       '<td><button class="btn-quitar-participante-as" data-id="' + p.usuario_id + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Quitar</button></td></tr>';
   }).join('');
 
@@ -7699,6 +7703,9 @@ function renderAmigoSecreto(sesion) {
     '</div>' +
 
     '<div class="panel" style="border:2px solid #A8DADC; background:#F1FAFA;"><h2 style="color:#1D8A99;">👥 Participantes (' + participantes.length + ')</h2>' +
+    (participantes.length > 0
+      ? '<p style="font-size:12.5px; color:#1D8A99; font-weight:700; margin-top:-8px; margin-bottom:10px;">🎁 ' + participantes.filter(function (p) { return p.deseos_texto; }).length + ' de ' + participantes.length + ' ya guardaron sus ideas de regalo</p>'
+      : '') +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Para agregar a alguien que todavía no tiene usuario en el sistema, primero creale uno desde "Usuarios y permisos" con el rol <strong>Invitado</strong> (así solo va a poder entrar a esta pantalla) y después aparece acá para sumarlo.</p>' +
     (usuariosDisponibles.length > 0
       ? '<div style="max-width:420px; max-height:220px; overflow-y:auto; border:1px solid #dde1e7; border-radius:8px; padding:4px 10px; background:#fff;">' + checkboxesUsuarios + '</div>' +
@@ -7706,7 +7713,7 @@ function renderAmigoSecreto(sesion) {
         '<p id="msj-error-agregar-participantes-as" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>'
       : '<p style="font-size:13px; color:var(--muted);">No hay más usuarios disponibles para agregar.</p>') +
     (participantes.length > 0
-      ? '<div class="tabla-scroll" style="margin-top:10px;"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Rol</th><th>Email</th><th></th></tr></thead><tbody>' + filasParticipantes + '</tbody></table></div>'
+      ? '<div class="tabla-scroll" style="margin-top:10px;"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Rol</th><th>Email</th><th>Ideas de regalo</th><th></th></tr></thead><tbody>' + filasParticipantes + '</tbody></table></div>'
       : '<p style="font-size:13px; color:var(--muted); margin-top:10px;">Todavía no hay nadie anotado. 🦗</p>') +
     '</div>' +
 

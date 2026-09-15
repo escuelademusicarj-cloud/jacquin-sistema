@@ -34,10 +34,11 @@ export async function marcarRevelado(eventoId, revelado) {
 
 export async function listarParticipantes(eventoId) {
   const { rows } = await pool.query(
-    `SELECT p.id, p.usuario_id, u.nombre, u.email, r.nombre AS rol
+    `SELECT p.id, p.usuario_id, u.nombre, u.email, r.nombre AS rol, d.texto AS deseos_texto
      FROM amigosecreto_participantes p
      JOIN usuarios u ON u.id = p.usuario_id
      LEFT JOIN roles r ON r.id = u.rol_id
+     LEFT JOIN amigosecreto_deseos d ON d.evento_id = p.evento_id AND d.usuario_id = p.usuario_id
      WHERE p.evento_id = $1 ORDER BY u.nombre`,
     [eventoId]
   );
