@@ -29,9 +29,38 @@ export async function buscarAlumnoPorId(id) {
 // NUEVO: borrado real y definitivo (distinto de cambiarEstado/"retirado",
 // que es reversible y deja historial). El botón "Eliminar estudiante
 // (borrado real)" del editor le pegaba a esta ruta desde el frontend,
-// pero nunca existió ni acá ni en la ruta HTTP — por eso el 404.
+// pero nunca existió ni acá ni en la ruta HTTP — por eso el 404 original.
+//
+// Varias tablas del sistema (matrícula/cargos/pagos, asistencia,
+// clase_modificaciones, avances, invitados a eventos) NO tienen
+// ON DELETE CASCADE hacia alumnos — a propósito, porque son historial
+// que normalmente no se quiere perder solo. Pero un "borrado real"
+// pedido explícitamente sí implica limpiar todo rastro del alumno, así
+// que acá se borra manualmente en el orden correcto (hijos primero) y
+// todo junto en una transacción: o se borra todo, o no se borra nada.
 export async function eliminarAlumno(id) {
-  await pool.query(`DELETE FROM alumnos WHERE id = $1`, [id]);
+  const cliente = await pool.connect();
+  try {
+    await cliente.query("BEGIN");
+    await cliente.query(`DELETE FROM pagos WHERE cargo_id IN (SELECT id FROM cargos WHERE alumno_id = $1)`, [id]);
+    await cliente.query(`DELETE FROM cargos WHERE alumno_id = $1`, [id]);
+    await cliente.query(`DELETE FROM inscripciones WHERE alumno_id = $1`, [id]); // inscripcion_historial cae en cascada
+    await cliente.query(`DELETE FROM asistencias WHERE alumno_id = $1`, [id]);
+    await cliente.query(`DELETE FROM clase_modificaciones WHERE alumno_id = $1`, [id]);
+    await cliente.query(`DELETE FROM evaluaciones_mensuales WHERE alumno_id = $1`, [id]);
+    await cliente.query(`DELETE FROM evaluaciones_indicadores WHERE alumno_id = $1`, [id]);
+    await cliente.query(`DELETE FROM evento_invitados WHERE alumno_id = $1`, [id]);
+    // clase_alumnos, alumno_acudientes, alumno_historial_estados,
+    // repertorio_clausura y clausura_ensamble_integrantes ya tienen
+    // ON DELETE CASCADE — se limpian solos al borrar la fila de alumnos.
+    await cliente.query(`DELETE FROM alumnos WHERE id = $1`, [id]);
+    await cliente.query("COMMIT");
+  } catch (err) {
+    await cliente.query("ROLLBACK");
+    throw err;
+  } finally {
+    cliente.release();
+  }
 }
 
 // NUEVO: edita los datos propios de un alumno ya existente (no su estado
