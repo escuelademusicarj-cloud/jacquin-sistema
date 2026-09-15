@@ -2,6 +2,7 @@ import { crearAlumno, crearAcudiente, cambiarEstadoAlumno, esMenorDeEdad } from 
 import {
   insertarAlumno, insertarAcudiente, vincularAcudiente, acudientesDeAlumno,
   listarAlumnos, buscarAlumnoPorId, actualizarAlumno, actualizarEstadoAlumno, insertarHistorialEstado,
+  eliminarAlumno,
 } from "../../persistencia/academico/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
@@ -114,4 +115,37 @@ export async function cambiarEstado({ alumnoId, estadoNuevo, motivo }, contextoA
   });
 
   return actualizado;
+}
+
+// NUEVO: borrado real y definitivo del alumno (y todo lo que dependa de
+// él por ON DELETE CASCADE en la base). Si el alumno tiene registros
+// relacionados en una tabla que NO tenga esa cascada configurada,
+// Postgres rechaza el borrado con un error de llave foránea (23503) —
+// se lo devolvemos al usuario como un mensaje entendible en vez de un
+// error genérico, sugiriéndole usar "retirado" en cambio.
+export async function eliminarAlumnoDefinitivo(id, contextoAuditoria) {
+  const existente = await buscarAlumnoPorId(id);
+  if (!existente) {
+    const err = new Error("Alumno no encontrado.");
+    err.codigoHttp = 404;
+    throw err;
+  }
+
+  try {
+    await eliminarAlumno(id);
+  } catch (err) {
+    if (err.code === "23503") {
+      const errAmigable = new Error(
+        "No se puede borrar: este estudiante todavía tiene registros relacionados (matrícula, pagos, horarios, asistencia, etc.). Usá el cambio de estado a \"Retirado\" en vez del borrado real."
+      );
+      errAmigable.codigoHttp = 409;
+      throw errAmigable;
+    }
+    throw err;
+  }
+
+  await registrarAuditoria({
+    usuarioId: contextoAuditoria?.usuarioId ?? null, accion: "eliminar", modulo: "academico",
+    entidad: "alumno", entidadId: id, resultado: "exito",
+  });
 }

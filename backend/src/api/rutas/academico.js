@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { altaAlumno, obtenerAlumno, obtenerListaAlumnos, editarAlumno, cambiarEstado } from "../../servicios/academico/servicio.js";
+import { altaAlumno, obtenerAlumno, obtenerListaAlumnos, editarAlumno, cambiarEstado, eliminarAlumnoDefinitivo } from "../../servicios/academico/servicio.js";
 import { PROGRAMAS_OFICIALES, ESTADOS_ALUMNO } from "../../dominio/academico/entidades.js";
 import { respuestaExitosa } from "../middlewares/manejoErrores.js";
 import { requiereAutenticacion } from "../middlewares/autenticacion.js";
@@ -52,5 +52,14 @@ rutasAcademico.patch("/estudiantes/:id/estado", requierePermiso("academico:crear
       { usuarioId: req.usuario?.id ?? null }
     );
     respuestaExitosa(res, actualizado);
+  } catch (err) { next(err); }
+});
+
+// NUEVO: borrado real y definitivo — antes esta ruta no existía y el
+// botón "Eliminar estudiante (borrado real)" del editor le pegaba a un 404.
+rutasAcademico.delete("/estudiantes/:id", requierePermiso("academico:crear"), async (req, res, next) => {
+  try {
+    await eliminarAlumnoDefinitivo(req.params.id, { usuarioId: req.usuario?.id ?? null });
+    respuestaExitosa(res, { ok: true });
   } catch (err) { next(err); }
 });

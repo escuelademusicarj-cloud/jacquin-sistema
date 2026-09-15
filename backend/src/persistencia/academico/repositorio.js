@@ -26,6 +26,14 @@ export async function buscarAlumnoPorId(id) {
   return rows[0] ?? null;
 }
 
+// NUEVO: borrado real y definitivo (distinto de cambiarEstado/"retirado",
+// que es reversible y deja historial). El botón "Eliminar estudiante
+// (borrado real)" del editor le pegaba a esta ruta desde el frontend,
+// pero nunca existió ni acá ni en la ruta HTTP — por eso el 404.
+export async function eliminarAlumno(id) {
+  await pool.query(`DELETE FROM alumnos WHERE id = $1`, [id]);
+}
+
 // NUEVO: edita los datos propios de un alumno ya existente (no su estado
 // — eso sigue siendo cambiarEstado/PATCH .../estado, un flujo aparte con
 // su propio historial). Reemplaza estos 9 campos tal cual vienen —
