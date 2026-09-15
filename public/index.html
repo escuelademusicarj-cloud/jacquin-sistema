@@ -1982,9 +1982,9 @@ function renderEstudiantes() {
 // datos de la matrícula, todo editable salvo lo que se calcula solo.
 function renderModalEditorEstudiante(profesoresDisponibles) {
   return '' +
-    '<div id="modal-editar-estudiante" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.55); z-index:60; align-items:center; justify-content:center; padding:20px;">' +
-    '<div style="background:#fff; border-radius:14px; width:100%; max-width:640px; max-height:88vh; display:flex; flex-direction:column; overflow:hidden;">' +
-    '<div style="padding:22px 26px 4px;">' +
+    '<div id="modal-editar-estudiante" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.55); z-index:60; align-items:flex-start; justify-content:center; padding:32px 20px; overflow-y:auto;">' +
+    '<div style="background:#fff; border-radius:14px; width:100%; max-width:640px; max-height:calc(100vh - 64px); display:flex; flex-direction:column; overflow:hidden;">' +
+    '<div style="padding:22px 26px 4px; flex:0 0 auto;">' +
     '<h2 style="margin:0;" id="ed-titulo">Editar estudiante</h2>' +
     '</div>' +
     '<div style="padding:0 26px; overflow-y:auto; flex:1 1 auto;">' +
