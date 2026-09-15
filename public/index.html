@@ -4,11 +4,6 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Jacquin — Sistema de gestión</title>
-<link rel="icon" href="favicon.ico" sizes="any">
-<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
-<link rel="icon" href="favicon-16.png" type="image/png" sizes="16x16">
-<link rel="apple-touch-icon" href="favicon-180.png">
-<link rel="icon" href="favicon-512.png" type="image/png" sizes="512x512">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;0,600;1,400&family=Caveat:wght@500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -636,6 +631,7 @@ var MODULOS = [
   { key: 'asistencia', label: 'Asistencia', grupo: 'academia' },
   { key: 'evaluacion', label: 'Avances académicos', grupo: 'seguimiento' },
   { key: 'eventos', label: 'Eventos', grupo: 'seguimiento' },
+  { key: 'clausura2026', label: 'Clausura 2026', grupo: 'seguimiento' },
   { key: 'comunicacion', label: 'Comunicación', grupo: 'seguimiento' },
   { key: 'inventario', label: 'Inventario', grupo: 'seguimiento' },
   { key: 'reportes', label: 'Reportes', grupo: 'seguimiento' },
@@ -647,16 +643,16 @@ var MODULOS = [
 
 var VISIBILIDAD_ROL = {
   ADMINISTRADOR: MODULOS.map(function (m) { return m.key; }),
-  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes','auditoria','amigosecreto'],
+  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes','auditoria','amigosecreto','clausura2026'],
   // Secretaría ve Contabilidad, pero con visibilidad restringida (renderContabilidad
   // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
   // el resumen financiero — eso queda reservado al Administrador).
-  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','pensum','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos','amigosecreto'],
+  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','pensum','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos','amigosecreto','clausura2026'],
   PROFESOR: ['dashboard','horarios','asistencia','evaluacion','eventos','comunicacion','pensum','amigosecreto'],
   // INVITADO: rol exclusivo para gente externa que solo entra a jugar al
-  // Amigo Secreto — ve Inicio (contenido genérico de bienvenida, sin datos
-  // sensibles) y Amigo secreto, nada más.
-  INVITADO: ['dashboard', 'amigosecreto']
+  // Amigo Secreto — un único módulo visible, nada más. No es el bug de
+  // Pensum: acá la restricción total es justo lo buscado.
+  INVITADO: ['amigosecreto']
 };
 
 var ROLES_SISTEMA = ['ADMINISTRADOR', 'DIRECCION', 'SECRETARIA', 'PROFESOR', 'INVITADO'];
@@ -812,11 +808,6 @@ function activarBuscadorEstudiante(idBase, alumnosOProveedor, onSeleccionar) {
     }
     var coincidencias = alumnos
       .map(function (a, i) { return { a: a, i: i }; })
-      // Los retirados (incluye duplicados ya fusionados a otro id) no se
-      // ofrecen para asignarles nada nuevo. Se filtra acá, no en el origen
-      // de datos, para no correr las posiciones que ya usan alumnoIdx
-      // guardados (ej. inscripciones de Matrícula).
-      .filter(function (o) { return o.a.estado !== 'retirado'; })
       .filter(function (o) { return !texto || normalizar(o.a.nombres + ' ' + o.a.apellidos).indexOf(texto) !== -1; })
       .slice(0, 8);
 
@@ -1380,24 +1371,6 @@ async function refrescarCacheProfesores() {
     console.error('No se pudo cargar Profesores desde el backend:', err.message);
   }
 }
-// ---- Horario semanal de profesores (2026-09-08, pedido de Sergio) ----
-// Grilla de "quién dicta qué en cada franja", separada de "clases" (que
-// vincula profesor+alumnos+horario puntual). Reusa las mismas FRANJAS y
-// COLUMNAS_DIAS que Horarios de estudiantes.
-var CACHE_HORARIO_PROFESORES = [];
-async function refrescarCacheHorarioProfesores() {
-  try {
-    var lista = await apiFetch('/api/horario-profesores', { method: 'GET' });
-    CACHE_HORARIO_PROFESORES = (lista || []).map(function (h) {
-      return {
-        id: h.id, profesorId: h.profesor_id, profesorNombre: h.profesor_nombre,
-        programa: h.programa, dia: h.dia_semana, hora: (h.hora_inicio || '').slice(0, 5)
-      };
-    });
-  } catch (err) {
-    console.error('No se pudo cargar el Horario de profesores desde el backend:', err.message);
-  }
-}
 // ---- Roles: se usa solo para encontrar el id real del rol PROFESOR al dar
 // de alta un profesor (crearUsuario necesita rolId, no el nombre).
 var CACHE_ROLES = [];
@@ -1600,7 +1573,7 @@ async function refrescarCachePermisos() {
 // backend para este rol) — sacar este bloque en cuanto se confirme que
 // el guardado real funciona, probado con un Profesor en más de un
 // navegador.
-var MODULOS_PROFESOR_FORZADOS = ['dashboard', 'horarios', 'asistencia', 'evaluacion', 'eventos', 'comunicacion', 'pensum', 'amigosecreto'];
+var MODULOS_PROFESOR_FORZADOS = ['dashboard', 'horarios', 'asistencia', 'evaluacion', 'eventos', 'comunicacion', 'pensum', 'amigosecreto', 'clausura2026'];
 
 // Si el backend ya trajo permisos guardados para ese rol, esos mandan; si
 // el rol todavía no tiene ninguna fila en la tabla (o no se pidió todavía),
@@ -4718,72 +4691,6 @@ function activarLogicaAsistencia() {
   }
 }
 
-// ---- Horario semanal de profesores (2026-09-08) ----
-// Grilla de "quién dicta qué en cada franja", dentro del módulo Profesores.
-// Reusa las mismas FRANJAS/COLUMNAS_DIAS que Horarios de estudiantes (Lun-Vie
-// 3-6pm, Sábado 9-12m) y el mismo COLOR_PROGRAMA. A propósito NO limita
-// cuántos profesores distintos puede haber en la misma franja (pedido
-// explícito, "hazlo libre") — solo un mismo profesor no puede repetirse en
-// la misma franja (lo valida el backend).
-function renderGrillaHorarioProfesores(sesion) {
-  var permiteEditar = sesion.rol === 'ADMINISTRADOR' || sesion.rol === 'SECRETARIA';
-  var horario = CACHE_HORARIO_PROFESORES;
-
-  function ocupantesDeCelda(dia, hora) {
-    return horario.filter(function (h) { return h.dia === dia && h.hora === hora; });
-  }
-
-  var encabezado = '<tr><th style="min-width:60px;"></th>' + COLUMNAS_DIAS.map(function (d) {
-    return '<th style="text-align:left; font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em; padding:6px 12px;">' + DIAS_SEMANA[d] + '</th>';
-  }).join('') + '</tr>';
-
-  var filasHtml = FRANJAS.map(function (franja) {
-    var celdas = COLUMNAS_DIAS.map(function (dia) {
-      var esSabado = dia === 6;
-      var hora = esSabado ? franja.horaSabado : franja.horaLunVie;
-      var ocupantes = ocupantesDeCelda(dia, hora);
-
-      var chips = ocupantes.map(function (h) {
-        var color = colorPrograma(h.programa);
-        return '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px; background:' + color + '2a; border:1.5px solid ' + color + '; border-radius:8px; padding:5px 6px 5px 9px; margin-bottom:5px;">' +
-          '<div style="min-width:0;">' +
-          '<div style="font-weight:700; font-size:10px; color:' + color + '; text-transform:uppercase; letter-spacing:0.03em;">' + h.programa + '</div>' +
-          '<div style="font-weight:600; font-size:13px; color:var(--azul-oscuro); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + h.profesorNombre + '</div>' +
-          '</div>' +
-          (!permiteEditar ? '' : '<button class="btn-quitar-horario-profesor" data-id="' + h.id + '" title="Quitar" style="border:none; background:transparent; cursor:pointer; font-size:13px; padding:2px 4px; color:var(--rojo); flex-shrink:0;">✕</button>') +
-          '</div>';
-      }).join('');
-
-      var botonAgregar = !permiteEditar ? '' : '<button class="btn-celda-agregar-horario-profesor" data-dia="' + dia + '" data-hora="' + hora + '" style="font-size:12px; background:transparent; border:1.5px dashed var(--azul-claro); border-radius:7px; width:100%; padding:6px; color:var(--azul-oscuro); cursor:pointer; margin-top:2px; font-weight:600;">+ Agregar profesor</button>';
-
-      return '<td style="background:#fff; padding:10px; vertical-align:top; min-width:190px; border-left:1px solid #f0f0f0;">' + (chips || '') + botonAgregar + '</td>';
-    }).join('');
-    var etiquetaFranja = '<td style="font-size:11px; font-weight:700; color:var(--azul-oscuro); padding:10px 8px; white-space:nowrap; vertical-align:top;">' + franja.etiquetaLunVie + '<br><span style="font-weight:400; color:var(--muted); font-size:10px;">Sáb ' + franja.etiquetaSabado + '</span></td>';
-    return '<tr>' + etiquetaFranja + celdas + '</tr>';
-  }).join('');
-
-  var htmlModal =
-    '<div id="modal-horario-profesor" style="display:none; position:fixed; inset:0; background:rgba(21,42,68,0.5); z-index:55; align-items:center; justify-content:center; padding:20px;">' +
-    '<div style="background:#fff; border-radius:12px; padding:22px; width:100%; max-width:340px; max-height:85vh; overflow-y:auto;">' +
-    '<h2 style="margin-top:0;">Agregar profesor a esta franja</h2>' +
-    '<p id="modal-horario-profesor-info" style="font-size:12px; color:var(--muted); margin-top:-8px;"></p>' +
-    '<div class="campo"><label>Profesor</label>' + htmlBuscadorEstudiante('hp-profesor', '', 'Escribí el nombre del profesor…') + '</div>' +
-    '<div class="campo"><label>Curso / instrumento que dicta acá</label><select id="hp-programa">' +
-    PROGRAMAS.map(function (p) { return '<option value="' + p + '">' + p + '</option>'; }).join('') +
-    '</select></div>' +
-    '<button class="btn-primario" id="btn-confirmar-horario-profesor">Agregar</button>' +
-    '<button id="btn-cancelar-horario-profesor" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
-    '<p id="msj-error-horario-profesor" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
-    '</div></div>';
-
-  return '' +
-    '<div class="panel"><h2>Horario semanal de profesores</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Qué profesor dicta qué curso en cada franja — pueden coincidir varios profesores en la misma hora, sin límite.' + (permiteEditar ? ' Clic en "+ Agregar profesor" para sumar uno, o en ✕ para quitarlo.' : ' Vista de solo lectura.') + '</p>' +
-    '<div class="tabla-scroll"><table class="tabla-usuarios"><thead>' + encabezado + '</thead><tbody>' + filasHtml + '</tbody></table></div>' +
-    '</div>' +
-    htmlModal;
-}
-
 function renderProfesores(sesion) {
   var usuariosDemo = cargarUsuarios();
   var profesores = usuariosDemo.filter(function (u) { return u.rol === 'PROFESOR'; });
@@ -4857,8 +4764,6 @@ function renderProfesores(sesion) {
     '</div></div>';
 
   return '' +
-    renderGrillaHorarioProfesores(sesion) +
-
     '<div class="panel"><h2>Profesores, estudiantes y horarios (' + CACHE_PROFESORES.length + ')</h2>' +
     '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Vista consolidada — quién enseña, a quiénes y cuándo.</p>' +
     (CACHE_PROFESORES.length === 0 ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay profesores.</p>' :
@@ -4889,82 +4794,6 @@ function renderProfesores(sesion) {
 }
 
 function activarLogicaProfesores() {
-  // ---- Horario semanal de profesores (2026-09-08) ----
-  var modalHP = document.getElementById('modal-horario-profesor');
-  if (modalHP) {
-    // El buscador de "estudiante" se reutiliza tal cual, pasándole a los
-    // profesores disfrazados de alumno (nombres/apellidos) — así no hay
-    // que duplicar el widget de autocompletar para uno nuevo de profesores.
-    var profesoresParaBuscadorHP = CACHE_PROFESORES.map(function (p) {
-      return { id: p.id, nombres: p.nombre, apellidos: '' };
-    });
-    activarBuscadorEstudiante('hp-profesor', profesoresParaBuscadorHP);
-
-    document.querySelectorAll('.btn-celda-agregar-horario-profesor').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        modalHP.dataset.dia = btn.getAttribute('data-dia');
-        modalHP.dataset.hora = btn.getAttribute('data-hora');
-        document.getElementById('hp-profesor').value = '';
-        document.getElementById('hp-profesor-texto').value = '';
-        document.getElementById('hp-programa').selectedIndex = 0;
-        document.getElementById('msj-error-horario-profesor').style.display = 'none';
-        var dia = Number(btn.getAttribute('data-dia'));
-        var hora = btn.getAttribute('data-hora');
-        document.getElementById('modal-horario-profesor-info').textContent = DIAS_SEMANA[dia].charAt(0).toUpperCase() + DIAS_SEMANA[dia].slice(1) + ' — ' + hora;
-        modalHP.style.display = 'flex';
-      });
-    });
-
-    var btnCancelarHP = document.getElementById('btn-cancelar-horario-profesor');
-    if (btnCancelarHP) btnCancelarHP.addEventListener('click', function () { modalHP.style.display = 'none'; });
-
-    var btnConfirmarHP = document.getElementById('btn-confirmar-horario-profesor');
-    if (btnConfirmarHP) {
-      btnConfirmarHP.addEventListener('click', function () {
-        var idxProfesor = document.getElementById('hp-profesor').value;
-        var msjError = document.getElementById('msj-error-horario-profesor');
-        msjError.style.display = 'none';
-        if (idxProfesor === '' || !profesoresParaBuscadorHP[Number(idxProfesor)]) {
-          msjError.textContent = 'Elegí un profesor de la lista.';
-          msjError.style.display = 'block';
-          return;
-        }
-        var profesorId = profesoresParaBuscadorHP[Number(idxProfesor)].id;
-        var programa = document.getElementById('hp-programa').value;
-        btnConfirmarHP.disabled = true;
-        apiFetch('/api/horario-profesores', {
-          method: 'POST',
-          body: JSON.stringify({
-            profesorId: profesorId, programa: programa,
-            diaSemana: Number(modalHP.dataset.dia), horaInicio: modalHP.dataset.hora
-          })
-        })
-          .then(function () { return refrescarCacheHorarioProfesores(); })
-          .then(function () {
-            btnConfirmarHP.disabled = false;
-            modalHP.style.display = 'none';
-            renderContenido('profesores');
-          })
-          .catch(function (err) {
-            btnConfirmarHP.disabled = false;
-            msjError.textContent = err.message;
-            msjError.style.display = 'block';
-          });
-      });
-    }
-
-    document.querySelectorAll('.btn-quitar-horario-profesor').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var id = btn.getAttribute('data-id');
-        btn.disabled = true;
-        apiFetch('/api/horario-profesores/' + id, { method: 'DELETE' })
-          .then(function () { return refrescarCacheHorarioProfesores(); })
-          .then(function () { renderContenido('profesores'); })
-          .catch(function (err) { alert('No se pudo quitar: ' + err.message); btn.disabled = false; });
-      });
-    });
-  }
-
   var btnNuevo = document.getElementById('btn-agregar-profesor');
   if (btnNuevo) {
     btnNuevo.addEventListener('click', function () {
@@ -5719,6 +5548,33 @@ async function refrescarCachePensum() {
   }
 }
 
+// ---- Clausura 2026: repertorio de canciones por estudiante ----
+// Cada elemento: { id, nombres, apellidos, programa, canciones: [{numero, cancion}] }
+var CACHE_CLAUSURA = [];
+async function refrescarCacheClausura() {
+  try {
+    CACHE_CLAUSURA = await apiFetch('/api/clausura', { method: 'GET' }) || [];
+  } catch (err) {
+    console.error('No se pudo cargar Clausura 2026 desde el backend:', err.message);
+  }
+}
+function cargarClausura() { return CACHE_CLAUSURA; }
+function guardarCancionesAlumnoBackend(alumnoId, canciones) {
+  return apiFetch('/api/clausura/alumnos/' + alumnoId + '/canciones', { method: 'PUT', body: JSON.stringify({ canciones: canciones }) });
+}
+
+// ---- Clausura 2026: ensambles (grupos con estudiantes de varios cursos
+// tocando juntos una misma pieza — ej. 2 pianistas + 4 percusionistas). ----
+var CACHE_CLAUSURA_ENSAMBLES = [];
+async function refrescarCacheClausuraEnsambles() {
+  try {
+    CACHE_CLAUSURA_ENSAMBLES = await apiFetch('/api/clausura/ensambles', { method: 'GET' }) || [];
+  } catch (err) {
+    console.error('No se pudieron cargar los Ensambles de Clausura 2026 desde el backend:', err.message);
+  }
+}
+function cargarClausuraEnsambles() { return CACHE_CLAUSURA_ENSAMBLES; }
+
 var CACHE_EVENTOS = [];
 var CACHE_INVITADOS_EVENTO_POR_CLAVE = {}; // clave -> id real de evento_invitados
 
@@ -6313,6 +6169,318 @@ function activarLogicaPensum() {
           msjError.textContent = err.message || 'No se pudo guardar el enlace.';
           msjError.style.display = 'block';
         });
+    });
+  }
+}
+
+// ==================== CLAUSURA 2026 ====================
+// Repertorio de canciones para el evento final de año. Vista en dos
+// niveles: primero tarjetas por curso/programa (mismo criterio de color
+// que ya usa Horarios/Asistencia vía COLOR_PROGRAMA), y al entrar a una
+// se ve la lista de sus estudiantes; cada uno se puede abrir para
+// asignarle/corregirle sus 3 canciones. Todos los roles internos
+// (Administración, Dirección, Secretaría, Profesor) tienen acceso —
+// ver clausura:ver / clausura:editar en el SQL de siembra.
+var clausuraProgramaSeleccionado = null; // null = vista de tarjetas por curso
+var clausuraAlumnoAbierto = null; // id del alumno con el panel de canciones abierto
+var clausuraVistaEnsambles = false; // true = viendo la sección de Ensambles en vez de los cursos
+var clausuraEnsambleAbierto = null; // id del ensamble con el buscador de integrantes abierto
+var clausuraCreandoEnsamble = false; // true = mostrando el formulario "nuevo ensamble"
+
+// Progreso de canciones de un alumno → color: 0 sin nada (color normal),
+// 1 canción (rojo, falta bastante), 2 canciones (naranja, falta una),
+// 3 canciones (verde, repertorio completo).
+function colorProgresoClausura(cantidad) {
+  if (cantidad >= 3) return 'var(--verde)';
+  if (cantidad === 2) return 'var(--naranja)';
+  if (cantidad === 1) return 'var(--rojo)';
+  return 'var(--azul-oscuro)';
+}
+
+function renderClausura(sesion) {
+  var datos = cargarClausura();
+
+  if (clausuraVistaEnsambles) return renderClausuraEnsambles();
+
+  if (!clausuraProgramaSeleccionado) {
+    var porPrograma = {};
+    datos.forEach(function (a) {
+      var p = a.programa || 'Sin programa asignado';
+      if (!porPrograma[p]) porPrograma[p] = [];
+      porPrograma[p].push(a);
+    });
+    var nombresProgramas = Object.keys(porPrograma).sort();
+    var tarjetas = nombresProgramas.map(function (p) {
+      var color = colorPrograma(p);
+      return '<div class="tarjeta-curso-clausura" data-programa="' + p.replace(/"/g, '&quot;') + '" ' +
+        'style="cursor:pointer; border-radius:14px; padding:18px; background:#fff; border:1px solid #eee; box-shadow:0 2px 8px rgba(0,0,0,0.05);">' +
+        '<div style="width:42px; height:42px; border-radius:50%; background:' + color + '22; display:flex; align-items:center; justify-content:center; margin-bottom:12px; font-size:19px;">🎵</div>' +
+        '<h3 style="margin:0; color:' + color + '; font-size:16px;">' + p + '</h3>' +
+        '</div>';
+    }).join('');
+
+    // Tarjeta de Ensambles: se diferencia a propósito del resto (más
+    // grande, fondo sólido) porque no es un curso — agrupa estudiantes de
+    // varios cursos a la vez para tocar juntos una misma pieza.
+    var tarjetaEnsambles = '<div class="tarjeta-ensambles-clausura" ' +
+      'style="cursor:pointer; border-radius:14px; padding:22px; background:var(--azul-oscuro); color:#fff; ' +
+      'grid-column:span 2; display:flex; align-items:center; gap:16px; box-shadow:0 4px 14px rgba(34,63,97,0.25);">' +
+      '<div style="width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0;">🎻</div>' +
+      '<div><h3 style="margin:0 0 4px; font-size:17px;">Ensambles</h3>' +
+      '<p style="font-size:12.5px; opacity:0.85; margin:0;">Grupos con estudiantes de varios cursos tocando juntos una misma pieza — ' +
+      cargarClausuraEnsambles().length + ' ensamble' + (cargarClausuraEnsambles().length === 1 ? '' : 's') + ' creado' + (cargarClausuraEnsambles().length === 1 ? '' : 's') + '</p></div>' +
+      '</div>';
+
+    return '<div class="panel"><h2>Clausura 2026 — Repertorio por curso</h2>' +
+      '<p style="font-size:13px; color:var(--muted); margin-top:-6px;">Elegí un curso para ver a sus estudiantes y asignarles las 3 canciones del repertorio de fin de año, o entrá a Ensambles para armar los grupos combinados.</p>' +
+      '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:14px; margin-top:16px;">' +
+      (nombresProgramas.length === 0 ? '' : tarjetas) + tarjetaEnsambles +
+      '</div>' +
+      (nombresProgramas.length === 0 ? '<p style="font-size:13px; color:var(--muted); margin-top:14px;">Todavía no hay estudiantes activos.</p>' : '') +
+      '</div>';
+  }
+
+  // Vista de un curso puntual: lista de sus estudiantes.
+  var listaAlumnos = datos.filter(function (a) { return (a.programa || 'Sin programa asignado') === clausuraProgramaSeleccionado; });
+  var filas = listaAlumnos.map(function (a) {
+    var abierto = clausuraAlumnoAbierto === a.id;
+    var porNumero = {};
+    a.canciones.forEach(function (c) { porNumero[c.numero] = c.cancion; });
+    var resumen = [1, 2, 3].map(function (n) { return porNumero[n]; }).filter(Boolean);
+    var colorNombre = colorProgresoClausura(resumen.length);
+    return '<div style="border:1px solid #eee; border-radius:10px; margin-bottom:8px; overflow:hidden;">' +
+      '<div class="cabecera-alumno-clausura" data-alumno="' + a.id + '" ' +
+      'style="padding:12px 14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; background:#fafafa;">' +
+      '<strong style="color:' + colorNombre + ';">' + a.nombres + ' ' + a.apellidos + '</strong>' +
+      '<span style="font-size:12px; color:var(--muted); text-align:right;">' + (resumen.length ? resumen.join(' · ') : 'Sin canciones asignadas todavía') + '</span>' +
+      '</div>' +
+      (abierto ?
+        '<div style="padding:14px;">' +
+        [1, 2, 3].map(function (n) {
+          return '<div class="campo" style="margin-bottom:8px;"><label>Canción ' + n + '</label>' +
+            '<input type="text" class="in-cancion-clausura" data-numero="' + n + '" placeholder="Título de la canción" value="' +
+            (porNumero[n] || '').replace(/"/g, '&quot;') + '" /></div>';
+        }).join('') +
+        '<button class="btn-primario btn-guardar-clausura" data-alumno="' + a.id + '" style="max-width:220px;">Guardar canciones</button>' +
+        '<p class="msj-guardado-clausura" data-alumno="' + a.id + '" style="font-size:12px; color:var(--verde); display:none; margin-top:8px;">Canciones guardadas.</p>' +
+        '</div>' : '') +
+      '</div>';
+  }).join('');
+
+  return '<div class="panel">' +
+    '<a href="#" id="btn-volver-clausura" style="font-size:12.5px;">‹ Volver a los cursos</a>' +
+    '<h2 style="margin-top:6px;">' + clausuraProgramaSeleccionado + ' — Repertorio (' + listaAlumnos.length + ' estudiantes)</h2>' +
+    (listaAlumnos.length === 0 ? '<p style="font-size:13px; color:var(--muted);">No hay estudiantes activos en este curso.</p>' : filas) +
+    '</div>';
+}
+
+// Vista de Ensambles: grupos con estudiantes de varios cursos a la vez
+// (ej. 2 pianistas + 4 percusionistas + 2 violines) tocando una misma
+// pieza. Reutiliza el mismo buscador de estudiante que Horarios.
+function renderClausuraEnsambles() {
+  var ensambles = cargarClausuraEnsambles();
+
+  var formNuevo = clausuraCreandoEnsamble ?
+    '<div class="panel" style="margin-bottom:16px;"><h3 style="margin-top:0;">Nuevo ensamble</h3>' +
+    '<div class="grilla-2col">' +
+    '<div class="campo"><label>Nombre del ensamble</label><input id="nuevo-ens-nombre" type="text" placeholder="Ej: Ensamble de apertura" /></div>' +
+    '<div class="campo"><label>Canción / pieza (opcional)</label><input id="nuevo-ens-cancion" type="text" placeholder="Título de la pieza" /></div>' +
+    '</div>' +
+    '<button class="btn-primario" id="btn-crear-ensamble" style="max-width:200px;">Crear ensamble</button>' +
+    '<button id="btn-cancelar-ensamble" style="max-width:200px; margin-left:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
+    '<p id="msj-error-ensamble" style="font-size:12px; color:var(--rojo); display:none; margin-top:8px;"></p>' +
+    '</div>' :
+    '<button class="btn-primario" id="btn-mostrar-nuevo-ensamble" style="max-width:200px; margin-bottom:16px;">+ Crear ensamble</button>';
+
+  var listado = ensambles.map(function (e) {
+    var abierto = clausuraEnsambleAbierto === e.id;
+    var chips = e.integrantes.map(function (i) {
+      return '<span style="display:inline-flex; align-items:center; gap:6px; background:var(--beige); border-radius:20px; padding:4px 6px 4px 12px; margin:2px 6px 2px 0; font-size:12.5px;">' +
+        i.nombres + ' ' + i.apellidos + ' ' + chipPrograma(i.programa) +
+        '<button class="btn-quitar-integrante-ensamble" data-ensamble="' + e.id + '" data-alumno="' + i.alumnoId + '" ' +
+        'style="border:none; background:transparent; color:var(--rojo); cursor:pointer; font-weight:700; padding:0 4px; font-size:14px;">×</button>' +
+        '</span>';
+    }).join('');
+
+    return '<div class="panel" style="margin-bottom:14px;">' +
+      '<div class="grilla-2col">' +
+      '<div class="campo"><label>Nombre</label><input type="text" class="in-nombre-ensamble" data-ensamble="' + e.id + '" value="' + (e.nombre || '').replace(/"/g, '&quot;') + '" /></div>' +
+      '<div class="campo"><label>Canción / pieza</label><input type="text" class="in-cancion-ensamble" data-ensamble="' + e.id + '" value="' + (e.cancion || '').replace(/"/g, '&quot;') + '" /></div>' +
+      '</div>' +
+      '<div style="margin:10px 0;">' + (chips || '<span style="font-size:12.5px; color:var(--muted); font-style:italic;">Sin integrantes todavía</span>') + '</div>' +
+      '<button class="btn-primario btn-guardar-ensamble" data-ensamble="' + e.id + '" style="max-width:150px; margin-right:8px;">Guardar</button>' +
+      '<button class="btn-toggle-integrantes-ensamble" data-ensamble="' + e.id + '" style="max-width:220px; margin-right:8px; background:#fff; border:1px solid var(--azul-oscuro); color:var(--azul-oscuro); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px;">' +
+      (abierto ? 'Cerrar buscador' : '+ Agregar integrante') + '</button>' +
+      '<button class="btn-eliminar-ensamble" data-ensamble="' + e.id + '" style="max-width:150px; background:#fff; border:1px solid var(--rojo); color:var(--rojo); border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px;">Eliminar ensamble</button>' +
+      (abierto ? '<div style="margin-top:12px; max-width:420px;"><div class="campo"><label>Buscar estudiante para agregar</label>' +
+        htmlBuscadorEstudiante('ens-buscar-' + e.id, '', 'Escribí el nombre del estudiante…') + '</div></div>' : '') +
+      '</div>';
+  }).join('');
+
+  return '<div class="panel">' +
+    '<a href="#" id="btn-volver-clausura" style="font-size:12.5px;">‹ Volver a los cursos</a>' +
+    '<h2 style="margin-top:6px;">Ensambles</h2>' +
+    '<p style="font-size:13px; color:var(--muted); margin-top:-6px;">Grupos con estudiantes de varios cursos (ej. 2 pianistas, 4 percusionistas, 2 violines) que van a tocar juntos una misma pieza.</p>' +
+    '</div>' +
+    formNuevo +
+    (ensambles.length === 0 && !clausuraCreandoEnsamble ? '<p style="font-size:13px; color:var(--muted);">Todavía no hay ensambles creados.</p>' : listado);
+}
+
+function activarLogicaClausura() {
+  document.querySelectorAll('.tarjeta-curso-clausura').forEach(function (t) {
+    t.addEventListener('click', function () {
+      clausuraProgramaSeleccionado = t.getAttribute('data-programa');
+      clausuraAlumnoAbierto = null;
+      renderContenido('clausura2026');
+    });
+  });
+
+  var tarjetaEnsamblesEl = document.querySelector('.tarjeta-ensambles-clausura');
+  if (tarjetaEnsamblesEl) {
+    tarjetaEnsamblesEl.addEventListener('click', function () {
+      clausuraVistaEnsambles = true;
+      clausuraEnsambleAbierto = null;
+      clausuraCreandoEnsamble = false;
+      renderContenido('clausura2026');
+    });
+  }
+
+  var btnVolverClausura = document.getElementById('btn-volver-clausura');
+  if (btnVolverClausura) {
+    btnVolverClausura.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      clausuraProgramaSeleccionado = null;
+      clausuraVistaEnsambles = false;
+      renderContenido('clausura2026');
+    });
+  }
+
+  document.querySelectorAll('.cabecera-alumno-clausura').forEach(function (cab) {
+    cab.addEventListener('click', function () {
+      var id = Number(cab.getAttribute('data-alumno'));
+      clausuraAlumnoAbierto = (clausuraAlumnoAbierto === id) ? null : id;
+      renderContenido('clausura2026');
+    });
+  });
+
+  document.querySelectorAll('.btn-guardar-clausura').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var alumnoId = btn.getAttribute('data-alumno');
+      var inputs = btn.parentElement.querySelectorAll('.in-cancion-clausura');
+      var canciones = Array.prototype.map.call(inputs, function (inp) {
+        return { numero: Number(inp.getAttribute('data-numero')), cancion: inp.value };
+      });
+      btn.disabled = true;
+      guardarCancionesAlumnoBackend(alumnoId, canciones)
+        .then(function () { return refrescarCacheClausura(); })
+        .then(function () {
+          var msj = document.querySelector('.msj-guardado-clausura[data-alumno="' + alumnoId + '"]');
+          if (msj) msj.style.display = 'block';
+          setTimeout(function () { renderContenido('clausura2026'); }, 500);
+        })
+        .catch(function (err) { alert('No se pudo guardar el repertorio: ' + err.message); btn.disabled = false; });
+    });
+  });
+
+  // ---- Ensambles ----
+  var btnMostrarNuevoEnsamble = document.getElementById('btn-mostrar-nuevo-ensamble');
+  if (btnMostrarNuevoEnsamble) {
+    btnMostrarNuevoEnsamble.addEventListener('click', function () {
+      clausuraCreandoEnsamble = true;
+      renderContenido('clausura2026');
+    });
+  }
+
+  var btnCancelarEnsamble = document.getElementById('btn-cancelar-ensamble');
+  if (btnCancelarEnsamble) {
+    btnCancelarEnsamble.addEventListener('click', function () {
+      clausuraCreandoEnsamble = false;
+      renderContenido('clausura2026');
+    });
+  }
+
+  var btnCrearEnsamble = document.getElementById('btn-crear-ensamble');
+  if (btnCrearEnsamble) {
+    btnCrearEnsamble.addEventListener('click', function () {
+      var nombre = document.getElementById('nuevo-ens-nombre').value.trim();
+      var cancion = document.getElementById('nuevo-ens-cancion').value.trim();
+      var msjError = document.getElementById('msj-error-ensamble');
+      msjError.style.display = 'none';
+      if (!nombre) { msjError.textContent = 'El ensamble necesita un nombre.'; msjError.style.display = 'block'; return; }
+      btnCrearEnsamble.disabled = true;
+      apiFetch('/api/clausura/ensambles', { method: 'POST', body: JSON.stringify({ nombre: nombre, cancion: cancion }) })
+        .then(function () { return refrescarCacheClausuraEnsambles(); })
+        .then(function () { clausuraCreandoEnsamble = false; renderContenido('clausura2026'); })
+        .catch(function (err) {
+          btnCrearEnsamble.disabled = false;
+          msjError.textContent = err.message || 'No se pudo crear el ensamble.';
+          msjError.style.display = 'block';
+        });
+    });
+  }
+
+  document.querySelectorAll('.btn-guardar-ensamble').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-ensamble');
+      var nombre = document.querySelector('.in-nombre-ensamble[data-ensamble="' + id + '"]').value.trim();
+      var cancion = document.querySelector('.in-cancion-ensamble[data-ensamble="' + id + '"]').value.trim();
+      if (!nombre) { alert('El ensamble necesita un nombre.'); return; }
+      btn.disabled = true;
+      apiFetch('/api/clausura/ensambles/' + id, { method: 'PUT', body: JSON.stringify({ nombre: nombre, cancion: cancion }) })
+        .then(function () { return refrescarCacheClausuraEnsambles(); })
+        .then(function () { renderContenido('clausura2026'); })
+        .catch(function (err) { alert('No se pudo guardar el ensamble: ' + err.message); btn.disabled = false; });
+    });
+  });
+
+  document.querySelectorAll('.btn-eliminar-ensamble').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (!confirm('¿Eliminar este ensamble? Esta acción no se puede deshacer.')) return;
+      var id = btn.getAttribute('data-ensamble');
+      btn.disabled = true;
+      apiFetch('/api/clausura/ensambles/' + id, { method: 'DELETE' })
+        .then(function () { return refrescarCacheClausuraEnsambles(); })
+        .then(function () {
+          if (clausuraEnsambleAbierto === Number(id)) clausuraEnsambleAbierto = null;
+          renderContenido('clausura2026');
+        })
+        .catch(function (err) { alert('No se pudo eliminar el ensamble: ' + err.message); btn.disabled = false; });
+    });
+  });
+
+  document.querySelectorAll('.btn-toggle-integrantes-ensamble').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = Number(btn.getAttribute('data-ensamble'));
+      clausuraEnsambleAbierto = (clausuraEnsambleAbierto === id) ? null : id;
+      renderContenido('clausura2026');
+    });
+  });
+
+  document.querySelectorAll('.btn-quitar-integrante-ensamble').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var ensambleId = btn.getAttribute('data-ensamble');
+      var alumnoId = btn.getAttribute('data-alumno');
+      btn.disabled = true;
+      apiFetch('/api/clausura/ensambles/' + ensambleId + '/integrantes/' + alumnoId, { method: 'DELETE' })
+        .then(function () { return refrescarCacheClausuraEnsambles(); })
+        .then(function () { renderContenido('clausura2026'); })
+        .catch(function (err) { alert('No se pudo quitar al estudiante: ' + err.message); btn.disabled = false; });
+    });
+  });
+
+  // El buscador de estudiante solo existe en el DOM para el ensamble
+  // actualmente abierto (ver clausuraEnsambleAbierto) — se activa acá
+  // igual que en Horarios/Matrícula, agregando al ensamble apenas se
+  // elige un resultado.
+  if (clausuraEnsambleAbierto != null) {
+    var idAbierto = clausuraEnsambleAbierto;
+    activarBuscadorEstudiante('ens-buscar-' + idAbierto, cargarAlumnos(), function (idx) {
+      var alumno = cargarAlumnos()[idx];
+      if (!alumno) return;
+      apiFetch('/api/clausura/ensambles/' + idAbierto + '/integrantes', { method: 'POST', body: JSON.stringify({ alumnoId: alumno.id }) })
+        .then(function () { return refrescarCacheClausuraEnsambles(); })
+        .then(function () { renderContenido('clausura2026'); })
+        .catch(function (err) { alert('No se pudo agregar al estudiante: ' + err.message); });
     });
   }
 }
@@ -7568,12 +7736,6 @@ function activarLogicaAmigoSecreto() {
     });
     return;
   }
-  // Se resetea acá (no queda en true para siempre): así la próxima vez que
-  // se entre a este módulo se vuelve a pedir todo fresco — roles, participantes,
-  // resultado — en vez de mostrar lo que había la primera vez que se abrió
-  // en esta sesión. Bug real: tras cambiar el rol de un usuario en otro
-  // módulo, acá seguía apareciendo con el rol viejo hasta recargar la página.
-  amigosecretoCargado = false;
 
   var btnGuardarDeseos = document.getElementById('btn-guardar-mis-deseos');
   if (btnGuardarDeseos) {
@@ -8454,6 +8616,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'eventos') {
     document.getElementById('contenido').innerHTML = renderEventos(sesion);
     activarLogicaEventos();
+  } else if (mod.key === 'clausura2026') {
+    document.getElementById('contenido').innerHTML = renderClausura(sesion);
+    activarLogicaClausura();
   } else if (mod.key === 'pensum') {
     document.getElementById('contenido').innerHTML = renderPensum(sesion);
     activarLogicaPensum();
@@ -8544,14 +8709,11 @@ function navegar() {
       });
     })
     .then(function () { return refrescarCacheClases(); })
-    .then(function () {
-      return refrescarCacheHorarioProfesores().then(function () {
-        if ((location.hash.replace('#', '') || 'dashboard') === clave && !hayUnCampoConFocoAhora()) renderContenido(clave);
-      });
-    })
     .then(function () { return refrescarCacheAsistencias(); })
     .then(function () { return refrescarCacheEvaluacionesMensuales(); })
     .then(function () { return refrescarCacheEventos(); })
+    .then(function () { return refrescarCacheClausura(); })
+    .then(function () { return refrescarCacheClausuraEnsambles(); })
     .then(function () { return refrescarCachePensum(); })
     .then(function () { return refrescarCacheContabIngresos(); })
     .then(function () { return refrescarCacheContabGastos(); })
@@ -8579,7 +8741,7 @@ function mostrarApp() {
   document.getElementById('vista-cambiar-password').style.display = 'none';
   document.getElementById('vista-app').style.display = 'block';
   document.getElementById('quien-soy').textContent = sesion.email + ' · ' + sesion.rol;
-  if (!location.hash) location.hash = '#dashboard';
+  if (!location.hash) location.hash = sesion.rol === 'INVITADO' ? '#amigosecreto' : '#dashboard';
   navegar();
 }
 
