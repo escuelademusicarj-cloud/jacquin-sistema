@@ -629,6 +629,7 @@ var MODULOS = [
   { key: 'cursos', label: 'Cursos y programas', grupo: 'academia' },
   { key: 'pensum', label: 'Pensum académico', grupo: 'academia' },
   { key: 'asistencia', label: 'Asistencia', grupo: 'academia' },
+  { key: 'llegadas', label: 'Llegada del personal', grupo: 'academia' },
   { key: 'evaluacion', label: 'Avances académicos', grupo: 'seguimiento' },
   { key: 'eventos', label: 'Eventos', grupo: 'seguimiento' },
   { key: 'clausura2026', label: 'Clausura 2026', grupo: 'seguimiento' },
@@ -643,11 +644,11 @@ var MODULOS = [
 
 var VISIBILIDAD_ROL = {
   ADMINISTRADOR: MODULOS.map(function (m) { return m.key; }),
-  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','pagos','evaluacion','comunicacion','inventario','reportes','auditoria','amigosecreto','clausura2026'],
+  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','llegadas','pagos','evaluacion','comunicacion','inventario','reportes','auditoria','amigosecreto','clausura2026'],
   // Secretaría ve Contabilidad, pero con visibilidad restringida (renderContabilidad
   // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
   // el resumen financiero — eso queda reservado al Administrador).
-  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','pensum','horarios','asistencia','pagos','comunicacion','inventario','contabilidad','eventos','amigosecreto','clausura2026'],
+  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','pensum','horarios','asistencia','llegadas','pagos','comunicacion','inventario','contabilidad','eventos','amigosecreto','clausura2026'],
   PROFESOR: ['dashboard','horarios','asistencia','evaluacion','eventos','comunicacion','pensum','amigosecreto'],
   // INVITADO: rol exclusivo para gente externa que solo entra a jugar al
   // Amigo Secreto — un único módulo visible, nada más. No es el bug de
@@ -8573,6 +8574,337 @@ function activarLogicaAdmin() {
   pintarPrevia();
 }
 
+// ---- Llegada del personal (2026-10-03) ----
+// La Secretaría registra con UN clic la llegada de cada profesor (y la suya).
+// La fecha y la hora las pone el servidor en hora de Colombia — el
+// navegador nunca manda la hora. Secretaría solo corrige el mismo día;
+// Administración cualquier día; Dirección solo consulta y descarga.
+// Los datos se piden al entrar al módulo (no van en la cadena de navegar(),
+// porque Profesor no tiene permiso y daría 403 en cada navegación).
+var LLEGADAS_DATOS = null;        // { fecha, hoy, personal: [{usuarioId, nombre, rol, hora, noAsistio, observaciones}] }
+var llegadasFechaVista = null;    // 'AAAA-MM-DD' elegido; null = hoy
+var llegadasUltimaCarga = 0;
+var llegadasCargando = false;
+var llegadasError = '';
+var llegadasReporteUsuario = '';
+var llegadasReporteMes = '';
+
+function escLlegadas(t) {
+  return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function horaLlegada12(hhmm) {
+  if (!hhmm) return '';
+  var p = hhmm.split(':'); var h = Number(p[0]);
+  return (h % 12 === 0 ? 12 : h % 12) + ':' + p[1] + (h < 12 ? ' a. m.' : ' p. m.');
+}
+function fechaLlegadaLarga(f) {
+  var p = f.split('-');
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  var txt = d.toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+function ordenarPersonalLlegadas(lista) {
+  return lista.slice().sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }); });
+}
+function puedeEditarLlegadas(sesion, datos) {
+  if (!datos) return false;
+  if (sesion.rol === 'ADMINISTRADOR') return true;
+  return sesion.rol === 'SECRETARIA' && datos.fecha === datos.hoy;
+}
+
+async function refrescarLlegadas() {
+  llegadasCargando = true;
+  try {
+    var q = llegadasFechaVista ? '?fecha=' + encodeURIComponent(llegadasFechaVista) : '';
+    LLEGADAS_DATOS = await apiFetch('/api/llegadas' + q, { method: 'GET' });
+    llegadasError = '';
+    llegadasUltimaCarga = Date.now();
+  } catch (err) {
+    llegadasError = err.message;
+    console.error('No se pudo cargar Llegada del personal:', err.message);
+  } finally {
+    llegadasCargando = false;
+  }
+}
+
+function renderLlegadas(sesion) {
+  var titulo = '<h1 style="font-family:var(--font-wordmark); font-weight:500; font-size:22px; margin:4px 0 6px;">Llegada del personal</h1>';
+  if (!LLEGADAS_DATOS) {
+    return titulo + '<div class="panel"><p style="font-size:13px; color:' + (llegadasError ? 'var(--rojo)' : 'var(--muted)') + ';">' +
+      (llegadasError ? 'No se pudo cargar: ' + escLlegadas(llegadasError) : 'Cargando…') + '</p></div>';
+  }
+  var d = LLEGADAS_DATOS;
+  var editable = puedeEditarLlegadas(sesion, d);
+  var esHoy = d.fecha === d.hoy;
+  var personal = ordenarPersonalLlegadas(d.personal || []);
+  var registrados = personal.filter(function (p) { return p.hora; }).length;
+  var ausentes = personal.filter(function (p) { return p.noAsistio; }).length;
+
+  var filas = personal.map(function (p) {
+    var celdaHora;
+    if (p.hora) {
+      celdaHora = '<strong style="color:var(--verde); font-size:14px;">' + horaLlegada12(p.hora) + '</strong>' +
+        (editable ? ' <a href="#" class="lleg-corregir" data-id="' + p.usuarioId + '" style="font-size:11.5px; margin-left:6px;">Corregir</a>' : '');
+    } else if (p.noAsistio) {
+      celdaHora = '<strong style="color:var(--rojo); font-size:13px;">No asistió</strong>' +
+        (editable ? ' <a href="#" class="lleg-corregir" data-id="' + p.usuarioId + '" style="font-size:11.5px; margin-left:6px;">Corregir</a>' : '');
+    } else if (editable) {
+      var btnNoAsistio = '<button class="lleg-no-asistio" data-id="' + p.usuarioId + '" style="height:32px; padding:0 12px; font-size:12.5px; border:1px solid var(--rojo); color:var(--rojo); background:#fff; border-radius:6px; cursor:pointer; font-family:var(--font-ui);">No asistió</button>';
+      celdaHora = (esHoy ? '<button class="btn-primario lleg-registrar" data-id="' + p.usuarioId + '" style="width:auto; height:32px; font-size:12.5px; background:var(--naranja, #E78C3B); margin-right:6px;">Registrar llegada</button>' : '') + btnNoAsistio;
+    } else {
+      celdaHora = '<span style="color:var(--muted);">Sin registro</span>';
+    }
+    var celdaObs = editable
+      ? '<input type="text" class="lleg-obs" data-id="' + p.usuarioId + '" maxlength="500" placeholder="Observación del día…" value="' + escLlegadas(p.observaciones) + '" style="width:100%; min-width:180px; height:32px; font-size:12.5px; padding:0 8px; border:1px solid #d6dae0; border-radius:6px; box-sizing:border-box;" />' +
+        '<span class="lleg-obs-ok" data-id="' + p.usuarioId + '" style="display:none; font-size:11px; color:var(--verde);">Guardado</span>'
+      : '<span style="font-size:12.5px;">' + (escLlegadas(p.observaciones) || '<span style="color:var(--muted);">—</span>') + '</span>';
+    return '<tr>' +
+      '<td style="font-weight:600;">' + escLlegadas(p.nombre) + '</td>' +
+      '<td style="font-size:12px; color:var(--muted);">' + (p.rol === 'SECRETARIA' ? 'Secretaría' : 'Profesor') + '</td>' +
+      '<td style="white-space:nowrap;">' + celdaHora + '</td>' +
+      '<td>' + celdaObs + '</td>' +
+      '</tr>';
+  }).join('');
+
+  var mesActual = d.hoy.slice(0, 7);
+  if (!llegadasReporteMes) llegadasReporteMes = mesActual;
+  var opcionesPersonal = '<option value="">Elija una persona…</option>' + personal.map(function (p) {
+    return '<option value="' + p.usuarioId + '"' + (String(llegadasReporteUsuario) === String(p.usuarioId) ? ' selected' : '') + '>' + escLlegadas(p.nombre) + '</option>';
+  }).join('');
+
+  return titulo +
+    '<div class="panel">' +
+      '<div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; justify-content:space-between; margin-bottom:12px;">' +
+        '<div>' +
+          '<h2 style="margin:0;">' + fechaLlegadaLarga(d.fecha) + (esHoy ? ' <span style="font-size:12px; color:var(--muted); font-family:var(--font-ui);">(hoy)</span>' : '') + '</h2>' +
+          '<p style="font-size:12.5px; color:var(--muted); margin:4px 0 0;">' + registrados + ' de ' + personal.length + ' con llegada registrada' + (ausentes ? ' · ' + ausentes + ' no asistió' + (ausentes > 1 ? '/no asistieron' : '') : '') +
+            (!editable && !esHoy && sesion.rol === 'SECRETARIA' ? ' · Día anterior: solo consulta (las correcciones las hace Administración)' : '') + '</p>' +
+        '</div>' +
+        '<div style="display:flex; gap:8px; align-items:center;">' +
+          '<input type="date" id="lleg-fecha" value="' + d.fecha + '" max="' + d.hoy + '" style="height:34px; padding:0 8px; border:1px solid #d6dae0; border-radius:6px;" />' +
+          (esHoy ? '' : '<button class="btn-primario" id="lleg-ir-hoy" style="width:auto; height:34px;">Ir a hoy</button>') +
+        '</div>' +
+      '</div>' +
+      '<p id="lleg-msj" style="display:none; font-size:12.5px; color:var(--rojo); margin:0 0 10px;"></p>' +
+      (personal.length === 0
+        ? '<p style="font-size:13px; color:var(--muted);">No hay profesores ni secretaría activos en el sistema.</p>'
+        : '<div class="tabla-scroll"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Cargo</th><th>Hora de llegada</th><th>Observaciones</th></tr></thead><tbody>' + filas + '</tbody></table></div>') +
+    '</div>' +
+    '<div class="panel">' +
+      '<h2>Reporte mensual en PDF</h2>' +
+      '<p style="font-size:12.5px; color:var(--muted); margin-top:-6px;">Descargue las horas de llegada de una persona durante el mes, con sus observaciones.</p>' +
+      '<div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">' +
+        '<div class="campo" style="min-width:220px; flex:1;"><label>Persona</label><select id="lleg-rep-usuario">' + opcionesPersonal + '</select></div>' +
+        '<div class="campo" style="min-width:160px;"><label>Mes</label><input type="month" id="lleg-rep-mes" value="' + llegadasReporteMes + '" max="' + mesActual + '" /></div>' +
+        '<button class="btn-primario" id="lleg-rep-descargar" style="width:auto; min-width:160px;">Descargar PDF</button>' +
+      '</div>' +
+      '<p id="lleg-rep-msj" style="display:none; font-size:12.5px; margin:8px 0 0;"></p>' +
+    '</div>';
+}
+
+function mensajeLlegadas(texto) {
+  var el = document.getElementById('lleg-msj');
+  if (!el) { if (texto) alert(texto); return; }
+  el.textContent = texto || '';
+  el.style.display = texto ? 'block' : 'none';
+}
+
+function activarLogicaLlegadas() {
+  var sesion = sesionActual();
+  // navegar() repinta el módulo varias veces seguidas — solo se vuelve a
+  // pedir al backend si pasaron más de 20 segundos desde la última carga.
+  if (!llegadasCargando && (!LLEGADAS_DATOS || Date.now() - llegadasUltimaCarga > 20000)) {
+    refrescarLlegadas().then(function () {
+      if ((location.hash.replace('#', '') || 'dashboard') === 'llegadas' && !hayUnCampoConFocoAhora()) renderContenido('llegadas');
+    });
+  }
+  if (!LLEGADAS_DATOS) return;
+
+  function recargarYPintar() {
+    return refrescarLlegadas().then(function () {
+      if ((location.hash.replace('#', '') || 'dashboard') === 'llegadas') renderContenido('llegadas');
+    });
+  }
+
+  document.querySelectorAll('.lleg-registrar').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = 'Registrando…';
+      apiFetch('/api/llegadas/' + btn.getAttribute('data-id') + '/registrar', { method: 'POST' })
+        .then(recargarYPintar)
+        .catch(function (err) { btn.disabled = false; btn.textContent = 'Registrar llegada'; mensajeLlegadas(err.message); });
+    });
+  });
+
+  document.querySelectorAll('.lleg-no-asistio').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-id');
+      var persona = (LLEGADAS_DATOS.personal || []).find(function (p) { return String(p.usuarioId) === String(id); });
+      if (!confirm('¿Marcar que ' + (persona ? persona.nombre : 'esta persona') + ' no asistió el ' + fechaLlegadaLarga(LLEGADAS_DATOS.fecha).toLowerCase() + '?')) return;
+      btn.disabled = true;
+      apiFetch('/api/llegadas/' + id + '/no-asistio', { method: 'POST', body: JSON.stringify({ fecha: LLEGADAS_DATOS.fecha }) })
+        .then(recargarYPintar)
+        .catch(function (err) { btn.disabled = false; mensajeLlegadas(err.message); });
+    });
+  });
+
+  document.querySelectorAll('.lleg-corregir').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      var id = a.getAttribute('data-id');
+      var persona = (LLEGADAS_DATOS.personal || []).find(function (p) { return String(p.usuarioId) === String(id); });
+      var queSeQuita = persona && persona.noAsistio ? 'el "No asistió"' : 'la hora registrada';
+      if (!confirm('¿Quitar ' + queSeQuita + ' a ' + (persona ? persona.nombre : 'esta persona') + '? Después puede volver a registrarlo con el botón.')) return;
+      apiFetch('/api/llegadas/' + id + '/hora?fecha=' + LLEGADAS_DATOS.fecha, { method: 'DELETE' })
+        .then(recargarYPintar)
+        .catch(function (err) { mensajeLlegadas(err.message); });
+    });
+  });
+
+  document.querySelectorAll('.lleg-obs').forEach(function (input) {
+    var id = input.getAttribute('data-id');
+    var guardar = function () {
+      var persona = (LLEGADAS_DATOS.personal || []).find(function (p) { return String(p.usuarioId) === String(id); });
+      var texto = input.value.trim();
+      if (persona && (persona.observaciones || '') === texto) return;
+      apiFetch('/api/llegadas/' + id + '/observaciones', { method: 'PUT', body: JSON.stringify({ fecha: LLEGADAS_DATOS.fecha, observaciones: texto }) })
+        .then(function () {
+          if (persona) persona.observaciones = texto;
+          var ok = document.querySelector('.lleg-obs-ok[data-id="' + id + '"]');
+          if (ok) { ok.style.display = 'inline'; setTimeout(function () { ok.style.display = 'none'; }, 1800); }
+          mensajeLlegadas('');
+        })
+        .catch(function (err) { mensajeLlegadas(err.message); });
+    };
+    input.addEventListener('change', guardar);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
+  });
+
+  var inFecha = document.getElementById('lleg-fecha');
+  if (inFecha) inFecha.addEventListener('change', function () {
+    if (!inFecha.value) return;
+    llegadasFechaVista = inFecha.value === LLEGADAS_DATOS.hoy ? null : inFecha.value;
+    inFecha.blur();
+    recargarYPintar();
+  });
+  var btnHoy = document.getElementById('lleg-ir-hoy');
+  if (btnHoy) btnHoy.addEventListener('click', function () { llegadasFechaVista = null; recargarYPintar(); });
+
+  var selUsuario = document.getElementById('lleg-rep-usuario');
+  var inMes = document.getElementById('lleg-rep-mes');
+  if (selUsuario) selUsuario.addEventListener('change', function () { llegadasReporteUsuario = selUsuario.value; });
+  if (inMes) inMes.addEventListener('change', function () { llegadasReporteMes = inMes.value; });
+  var btnPdf = document.getElementById('lleg-rep-descargar');
+  if (btnPdf) btnPdf.addEventListener('click', function () {
+    var msj = document.getElementById('lleg-rep-msj');
+    var usuarioId = selUsuario.value, mes = inMes.value;
+    if (!usuarioId || !mes) { msj.style.color = 'var(--rojo)'; msj.textContent = 'Elija la persona y el mes.'; msj.style.display = 'block'; return; }
+    btnPdf.disabled = true; btnPdf.textContent = 'Generando…'; msj.style.display = 'none';
+    apiFetch('/api/llegadas/reporte?usuarioId=' + encodeURIComponent(usuarioId) + '&mes=' + encodeURIComponent(mes), { method: 'GET' })
+      .then(function (rep) { return generarPdfLlegadas(rep, sesion); })
+      .catch(function (err) { msj.style.color = 'var(--rojo)'; msj.textContent = 'No se pudo generar el PDF: ' + err.message; msj.style.display = 'block'; })
+      .then(function () { btnPdf.disabled = false; btnPdf.textContent = 'Descargar PDF'; });
+  });
+}
+
+function cargarLogoParaPdf(src) {
+  return new Promise(function (resolve) {
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext('2d').drawImage(img, 0, 0);
+        resolve({ data: c.toDataURL('image/png'), w: img.naturalWidth, h: img.naturalHeight });
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = function () { resolve(null); };
+    img.src = src;
+  });
+}
+
+// PDF armado con texto real de jsPDF (no captura de pantalla): pesa poco,
+// se puede buscar/copiar y pasa a una segunda página si hace falta.
+function generarPdfLlegadas(rep, sesion) {
+  return cargarLogoParaPdf('logo-jacquin-horizontal.png').then(function (logo) {
+    var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    var pdf = new JsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+    var W = pdf.internal.pageSize.getWidth(), H = pdf.internal.pageSize.getHeight();
+    var M = 40, AZUL = [34, 63, 97], NARANJA = [231, 140, 59];
+    var partesMes = rep.mes.split('-');
+    var nombreMes = new Date(Number(partesMes[0]), Number(partesMes[1]) - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+    nombreMes = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+    var cargo = rep.usuario.rol === 'SECRETARIA' ? 'Secretaría' : 'Profesor';
+
+    pdf.setFillColor(AZUL[0], AZUL[1], AZUL[2]);
+    pdf.rect(0, 0, W, 62, 'F');
+    if (logo) {
+      var alto = 26, ancho = logo.w / logo.h * alto;
+      pdf.addImage(logo.data, 'PNG', M, 18, ancho, alto);
+    } else {
+      pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(16);
+      pdf.text('ACADEMIA MUSICAL JACQUIN', M, 38);
+    }
+    pdf.setFillColor(NARANJA[0], NARANJA[1], NARANJA[2]);
+    pdf.rect(0, 62, W, 4, 'F');
+
+    var y = 100;
+    pdf.setTextColor(AZUL[0], AZUL[1], AZUL[2]); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(16);
+    pdf.text('Registro de horas de llegada', M, y);
+    y += 22;
+    pdf.setFontSize(11); pdf.setTextColor(40, 40, 40);
+    pdf.setFont('helvetica', 'bold'); pdf.text('Nombre:', M, y); pdf.setFont('helvetica', 'normal'); pdf.text(rep.usuario.nombre, M + 52, y);
+    y += 16;
+    pdf.setFont('helvetica', 'bold'); pdf.text('Cargo:', M, y); pdf.setFont('helvetica', 'normal'); pdf.text(cargo, M + 52, y);
+    pdf.setFont('helvetica', 'bold'); pdf.text('Mes:', M + 260, y); pdf.setFont('helvetica', 'normal'); pdf.text(nombreMes, M + 292, y);
+    y += 16;
+    var conHora = rep.registros.filter(function (r) { return r.hora; }).length;
+    var inasistencias = rep.registros.filter(function (r) { return r.noAsistio; }).length;
+    pdf.setFont('helvetica', 'bold'); pdf.text('Días con llegada registrada:', M, y); pdf.setFont('helvetica', 'normal'); pdf.text(String(conHora), M + 168, y);
+    pdf.setFont('helvetica', 'bold'); pdf.text('Inasistencias:', M + 260, y); pdf.setFont('helvetica', 'normal'); pdf.text(String(inasistencias), M + 345, y);
+    y += 24;
+
+    var colFecha = M, colHora = M + 190, colObs = M + 300, anchoObs = W - M - colObs;
+    function cabecera() {
+      pdf.setFillColor(243, 242, 238); pdf.rect(M, y - 13, W - 2 * M, 20, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9.5); pdf.setTextColor(AZUL[0], AZUL[1], AZUL[2]);
+      pdf.text('FECHA', colFecha + 6, y); pdf.text('HORA DE LLEGADA', colHora, y); pdf.text('OBSERVACIONES', colObs, y);
+      y += 18;
+    }
+    cabecera();
+    pdf.setFontSize(10);
+    if (rep.registros.length === 0) {
+      pdf.setFont('helvetica', 'italic'); pdf.setTextColor(110, 110, 110);
+      pdf.text('No hay registros para este mes.', colFecha + 6, y);
+      y += 18;
+    }
+    rep.registros.forEach(function (r) {
+      var lineasObs = r.observaciones ? pdf.splitTextToSize(r.observaciones, anchoObs) : ['-'];
+      var altoFila = Math.max(1, lineasObs.length) * 12 + 6;
+      if (y + altoFila > H - 50) { pdf.addPage(); y = 50; cabecera(); pdf.setFontSize(10); }
+      pdf.setTextColor(40, 40, 40); pdf.setFont('helvetica', 'normal');
+      pdf.text(fechaLlegadaLarga(r.fecha).replace(/ de \d{4}$/, ''), colFecha + 6, y);
+      if (r.hora) { pdf.setFont('helvetica', 'bold'); pdf.text(horaLlegada12(r.hora), colHora, y); }
+      else if (r.noAsistio) { pdf.setFont('helvetica', 'bold'); pdf.setTextColor(179, 38, 30); pdf.text('No asistió', colHora, y); }
+      else { pdf.setFont('helvetica', 'italic'); pdf.setTextColor(140, 140, 140); pdf.text('Sin registro', colHora, y); }
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(40, 40, 40);
+      pdf.text(lineasObs, colObs, y);
+      y += altoFila;
+      pdf.setDrawColor(226, 229, 234); pdf.line(M, y - 10, W - M, y - 10);
+    });
+
+    var paginas = pdf.internal.getNumberOfPages();
+    var generado = new Date().toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short' });
+    for (var i = 1; i <= paginas; i++) {
+      pdf.setPage(i);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(120, 120, 120);
+      pdf.text('Generado el ' + generado + (sesion && sesion.nombre ? ' por ' + sesion.nombre : '') + ' · Academia Musical Jacquin', M, H - 24);
+      pdf.text('Página ' + i + ' de ' + paginas, W - M, H - 24, { align: 'right' });
+    }
+    pdf.save('Llegadas ' + rep.usuario.nombre + ' - ' + nombreMes + '.pdf');
+  });
+}
+
 function renderContenido(clave) {
   var sesion = sesionActual();
   var visibles = modulosVisibles(sesion.rol);
@@ -8623,6 +8955,9 @@ function renderContenido(clave) {
   } else if (mod.key === 'eventos') {
     document.getElementById('contenido').innerHTML = renderEventos(sesion);
     activarLogicaEventos();
+  } else if (mod.key === 'llegadas') {
+    document.getElementById('contenido').innerHTML = renderLlegadas(sesion);
+    activarLogicaLlegadas();
   } else if (mod.key === 'clausura2026') {
     document.getElementById('contenido').innerHTML = renderClausura(sesion);
     activarLogicaClausura();

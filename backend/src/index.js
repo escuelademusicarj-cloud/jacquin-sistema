@@ -20,6 +20,7 @@ import { rutasAuditoria } from "./api/rutas/auditoria.js";
 import { rutasAmigoSecreto } from "./api/rutas/amigosecreto.js";
 import { rutasClausura } from "./api/rutas/clausura.js";
 import { rutasHorarioProfesores } from "./api/rutas/horarioProfesores.js";
+import { rutasLlegadas } from "./api/rutas/llegadas.js";
 import { manejoErrores, respuestaExitosa } from "./api/middlewares/manejoErrores.js";
 const app = express();
 app.use(cors());
@@ -44,6 +45,7 @@ app.use("/api/auditoria", rutasAuditoria);
 app.use("/api/amigosecreto", rutasAmigoSecreto);
 app.use("/api/clausura", rutasClausura);
 app.use("/api/horario-profesores", rutasHorarioProfesores);
+app.use("/api/llegadas", rutasLlegadas);
 app.use(manejoErrores);
 if (process.env.VERCEL !== "1") {
   const PUERTO = process.env.PUERTO || 3001;
