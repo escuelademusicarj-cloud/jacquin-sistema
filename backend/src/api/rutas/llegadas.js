@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
-  obtenerLlegadasDelDia, registrarLlegada, registrarNoAsistio, corregirLlegada, editarObservacion, obtenerReporteMensual,
+  obtenerLlegadasDelDia, registrarLlegada, registrarNoAsistio, corregirLlegada,
+  editarHoraLlegada, obtenerSemana, editarObservacion, obtenerReporteMensual,
 } from "../../servicios/llegadas/servicio.js";
 import { respuestaExitosa } from "../middlewares/manejoErrores.js";
 import { requiereAutenticacion } from "../middlewares/autenticacion.js";
@@ -21,6 +22,11 @@ rutasLlegadas.get("/reporte", requierePermiso("llegadas:ver"), async (req, res, 
   try { respuestaExitosa(res, await obtenerReporteMensual(req.query.usuarioId, req.query.mes)); } catch (err) { next(err); }
 });
 
+// Registro semanal: ?fecha=AAAA-MM-DD (cualquier día; se toma su lunes).
+rutasLlegadas.get("/semana", requierePermiso("llegadas:ver"), async (req, res, next) => {
+  try { respuestaExitosa(res, await obtenerSemana(req.query.fecha)); } catch (err) { next(err); }
+});
+
 // Un clic = llegada de HOY con la hora del servidor. No recibe hora del navegador.
 rutasLlegadas.post("/:usuarioId/registrar", requierePermiso("llegadas:registrar"), async (req, res, next) => {
   try { respuestaExitosa(res, await registrarLlegada(req.params.usuarioId, contexto(req))); } catch (err) { next(err); }
@@ -35,6 +41,11 @@ rutasLlegadas.post("/:usuarioId/no-asistio", requierePermiso("llegadas:registrar
 // Corregir = quitar la hora (o el "No asistió") registrada ese día (?fecha=AAAA-MM-DD).
 rutasLlegadas.delete("/:usuarioId/hora", requierePermiso("llegadas:registrar"), async (req, res, next) => {
   try { respuestaExitosa(res, await corregirLlegada(req.params.usuarioId, req.query.fecha, contexto(req))); } catch (err) { next(err); }
+});
+
+// Poner/cambiar la hora a mano. Body: { fecha: 'AAAA-MM-DD', hora: 'HH:MM' }
+rutasLlegadas.put("/:usuarioId/hora", requierePermiso("llegadas:registrar"), async (req, res, next) => {
+  try { respuestaExitosa(res, await editarHoraLlegada(req.params.usuarioId, req.body?.fecha, req.body?.hora, contexto(req))); } catch (err) { next(err); }
 });
 
 // Body: { fecha: 'AAAA-MM-DD', observaciones: '...' }

@@ -1,0 +1,1 @@
+ALTER TABLE llegadas_personal ADD COLUMN IF NOT EXISTS hora_editada BOOLEAN NOT NULL DEFAULT false;

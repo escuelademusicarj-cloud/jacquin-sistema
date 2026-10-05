@@ -1,10 +1,12 @@
 import {
   fechaHoyColombia, listarPersonalConLlegadas, buscarPersonal,
-  registrarLlegadaHoy, quitarHoraLlegada, buscarRegistroDelDia, marcarNoAsistio, guardarObservacion, listarLlegadasDelMes,
+  registrarLlegadaHoy, quitarHoraLlegada, buscarRegistroDelDia, marcarNoAsistio,
+  ahoraColombia, ponerHoraManual, listarSemana, guardarObservacion, listarLlegadasDelMes,
 } from "../../persistencia/llegadas/repositorio.js";
 import { registrarAuditoria } from "../../auditoria/servicio.js";
 
 const FORMATO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const FORMATO_HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 const FORMATO_MES = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 function error(mensaje, codigoHttp) {
@@ -67,6 +69,42 @@ export async function registrarNoAsistio(usuarioId, fecha, contexto) {
     entidad: "llegada_personal", entidadId: usuarioId, resultado: "exito",
   });
   return { fecha: dia, noAsistio: true };
+}
+
+// La secretaria (mismo día) o Administración (cualquier día) ponen o
+// cambian la hora a mano. No se permite una hora que todavía no ha pasado.
+export async function editarHoraLlegada(usuarioId, fecha, hora, contexto) {
+  if (!FORMATO_FECHA.test(fecha || "")) throw error("Fecha inválida.", 400);
+  if (!FORMATO_HORA.test(hora || "")) throw error("Hora inválida (formato esperado HH:MM).", 400);
+  await personalValido(usuarioId);
+  await validarDiaEditable(fecha, contexto.rol);
+  const ahora = await ahoraColombia();
+  if (fecha > ahora.hoy || (fecha === ahora.hoy && hora > ahora.hora)) {
+    throw error("No se puede poner una hora que todavía no ha pasado.", 400);
+  }
+  const registro = await ponerHoraManual(usuarioId, fecha, hora, contexto.usuarioId);
+
+  await registrarAuditoria({
+    usuarioId: contexto.usuarioId, accion: "editar", modulo: "llegadas",
+    entidad: "llegada_personal", entidadId: usuarioId, resultado: "exito",
+  });
+  return registro;
+}
+
+// Lunes de la semana de una fecha 'AAAA-MM-DD' (cálculo en UTC puro para
+// que la zona horaria del servidor no corra el día).
+function lunesDe(fecha) {
+  const [a, m, d] = fecha.split("-").map(Number);
+  const dt = new Date(Date.UTC(a, m - 1, d));
+  const dia = dt.getUTCDay();
+  dt.setUTCDate(dt.getUTCDate() + (dia === 0 ? -6 : 1 - dia));
+  return dt.toISOString().slice(0, 10);
+}
+
+export async function obtenerSemana(fecha) {
+  const hoy = await fechaHoyColombia();
+  const lunes = lunesDe(fecha && FORMATO_FECHA.test(fecha) ? fecha : hoy);
+  return { lunes, hoy, lunesActual: lunesDe(hoy), ...(await listarSemana(lunes)) };
 }
 
 export async function corregirLlegada(usuarioId, fecha, contexto) {

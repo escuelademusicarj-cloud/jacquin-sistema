@@ -6,6 +6,14 @@ import { pool } from "../../config/db.js";
 const ZONA = "America/Bogota";
 const ROLES_PERSONAL = ["PROFESOR", "SECRETARIA"];
 
+export async function ahoraColombia() {
+  const { rows } = await pool.query(
+    `SELECT to_char(now() AT TIME ZONE '${ZONA}', 'YYYY-MM-DD') AS hoy,
+            to_char(now() AT TIME ZONE '${ZONA}', 'HH24:MI') AS hora`
+  );
+  return rows[0];
+}
+
 export async function fechaHoyColombia() {
   const { rows } = await pool.query(
     `SELECT to_char((now() AT TIME ZONE '${ZONA}')::date, 'YYYY-MM-DD') AS hoy`
@@ -20,7 +28,8 @@ export async function listarPersonalConLlegadas(fecha) {
   const { rows } = await pool.query(
     `SELECT u.id AS usuario_id, u.nombre, r.nombre AS rol,
             to_char(l.hora_llegada AT TIME ZONE '${ZONA}', 'HH24:MI') AS hora,
-            COALESCE(l.no_asistio, false) AS no_asistio, l.observaciones
+            COALESCE(l.no_asistio, false) AS no_asistio,
+            COALESCE(l.hora_editada, false) AS hora_editada, l.observaciones
      FROM usuarios u
      JOIN roles r ON r.id = u.rol_id
      LEFT JOIN llegadas_personal l ON l.usuario_id = u.id AND l.fecha = $1::date
@@ -30,8 +39,40 @@ export async function listarPersonalConLlegadas(fecha) {
   );
   return rows.map((f) => ({
     usuarioId: f.usuario_id, nombre: f.nombre, rol: f.rol,
-    hora: f.hora, noAsistio: f.no_asistio, observaciones: f.observaciones || "",
+    hora: f.hora, noAsistio: f.no_asistio, horaEditada: f.hora_editada, observaciones: f.observaciones || "",
   }));
+}
+
+// Semana completa (desde el lunes, 7 días): personal + registros de esos días.
+export async function listarSemana(lunes) {
+  const { rows: personal } = await pool.query(
+    `SELECT u.id AS usuario_id, u.nombre, r.nombre AS rol
+     FROM usuarios u
+     JOIN roles r ON r.id = u.rol_id
+     WHERE r.nombre = ANY($2)
+       AND (u.activo = true OR EXISTS (
+         SELECT 1 FROM llegadas_personal l
+         WHERE l.usuario_id = u.id AND l.fecha >= $1::date AND l.fecha < $1::date + 7))
+     ORDER BY u.nombre`,
+    [lunes, ROLES_PERSONAL]
+  );
+  const { rows: registros } = await pool.query(
+    `SELECT l.usuario_id, to_char(l.fecha, 'YYYY-MM-DD') AS fecha,
+            to_char(l.hora_llegada AT TIME ZONE '${ZONA}', 'HH24:MI') AS hora,
+            l.no_asistio, l.hora_editada, l.observaciones
+     FROM llegadas_personal l
+     JOIN usuarios u ON u.id = l.usuario_id
+     JOIN roles r ON r.id = u.rol_id
+     WHERE r.nombre = ANY($2) AND l.fecha >= $1::date AND l.fecha < $1::date + 7`,
+    [lunes, ROLES_PERSONAL]
+  );
+  return {
+    personal: personal.map((f) => ({ usuarioId: f.usuario_id, nombre: f.nombre, rol: f.rol })),
+    registros: registros.map((f) => ({
+      usuarioId: f.usuario_id, fecha: f.fecha, hora: f.hora, noAsistio: f.no_asistio,
+      horaEditada: f.hora_editada, observaciones: f.observaciones || "",
+    })),
+  };
 }
 
 export async function buscarPersonal(usuarioId) {
@@ -52,13 +93,31 @@ export async function registrarLlegadaHoy(usuarioId, registradoPor) {
     `INSERT INTO llegadas_personal (usuario_id, fecha, hora_llegada, registrado_por)
      VALUES ($1, (now() AT TIME ZONE '${ZONA}')::date, now(), $2)
      ON CONFLICT (usuario_id, fecha) DO UPDATE
-       SET hora_llegada = now(), registrado_por = EXCLUDED.registrado_por, actualizado_en = now()
+       SET hora_llegada = now(), hora_editada = false, registrado_por = EXCLUDED.registrado_por, actualizado_en = now()
        WHERE llegadas_personal.hora_llegada IS NULL AND llegadas_personal.no_asistio = false
      RETURNING to_char(fecha, 'YYYY-MM-DD') AS fecha,
                to_char(hora_llegada AT TIME ZONE '${ZONA}', 'HH24:MI') AS hora`,
     [usuarioId, registradoPor]
   );
   return rows[0] ?? null;
+}
+
+// Pone o cambia la hora de llegada a mano (la secretaria no alcanzó a darle
+// clic en el momento). La hora llega como 'HH:MM' en hora de Colombia y se
+// guarda como instante real. Quita el "No asistió" si lo tenía y deja la
+// marca hora_editada = true para que se note que no fue con el clic.
+export async function ponerHoraManual(usuarioId, fecha, hora, registradoPor) {
+  const { rows } = await pool.query(
+    `INSERT INTO llegadas_personal (usuario_id, fecha, hora_llegada, hora_editada, registrado_por)
+     VALUES ($1, $2::date, ($2::date + $3::time) AT TIME ZONE '${ZONA}', true, $4)
+     ON CONFLICT (usuario_id, fecha) DO UPDATE
+       SET hora_llegada = EXCLUDED.hora_llegada, no_asistio = false, hora_editada = true,
+           registrado_por = EXCLUDED.registrado_por, actualizado_en = now()
+     RETURNING to_char(fecha, 'YYYY-MM-DD') AS fecha,
+               to_char(hora_llegada AT TIME ZONE '${ZONA}', 'HH24:MI') AS hora`,
+    [usuarioId, fecha, hora, registradoPor]
+  );
+  return rows[0];
 }
 
 // Estado del día de una persona (para saber por qué no se pudo registrar).
@@ -89,7 +148,7 @@ export async function marcarNoAsistio(usuarioId, fecha, registradoPor) {
 // observación, se borra la fila completa para no dejar registros vacíos.
 export async function quitarHoraLlegada(usuarioId, fecha) {
   await pool.query(
-    `UPDATE llegadas_personal SET hora_llegada = NULL, no_asistio = false, actualizado_en = now()
+    `UPDATE llegadas_personal SET hora_llegada = NULL, no_asistio = false, hora_editada = false, actualizado_en = now()
      WHERE usuario_id = $1 AND fecha = $2::date`,
     [usuarioId, fecha]
   );
@@ -122,7 +181,7 @@ export async function listarLlegadasDelMes(usuarioId, mes) {
   const { rows } = await pool.query(
     `SELECT to_char(fecha, 'YYYY-MM-DD') AS fecha,
             to_char(hora_llegada AT TIME ZONE '${ZONA}', 'HH24:MI') AS hora,
-            no_asistio, observaciones
+            no_asistio, hora_editada, observaciones
      FROM llegadas_personal
      WHERE usuario_id = $1
        AND fecha >= ($2 || '-01')::date
@@ -130,5 +189,5 @@ export async function listarLlegadasDelMes(usuarioId, mes) {
      ORDER BY fecha`,
     [usuarioId, mes]
   );
-  return rows.map((f) => ({ fecha: f.fecha, hora: f.hora, noAsistio: f.no_asistio, observaciones: f.observaciones || "" }));
+  return rows.map((f) => ({ fecha: f.fecha, hora: f.hora, noAsistio: f.no_asistio, horaEditada: f.hora_editada, observaciones: f.observaciones || "" }));
 }

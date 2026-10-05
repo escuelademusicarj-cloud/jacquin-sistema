@@ -8588,6 +8588,20 @@ var llegadasCargando = false;
 var llegadasError = '';
 var llegadasReporteUsuario = '';
 var llegadasReporteMes = '';
+var LLEGADAS_SEMANA = null;       // { lunes, hoy, lunesActual, personal: [...], registros: [...] }
+var llegadasSemanaFecha = null;   // cualquier día de la semana elegida; null = semana actual
+
+// Fechas 'AAAA-MM-DD' calculadas en UTC puro (no se corren por zona horaria).
+function fechaMasDiasLlegadas(f, n) {
+  var p = f.split('-');
+  var d = new Date(Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]) + n));
+  return d.toISOString().slice(0, 10);
+}
+function fechaCortaLlegadas(f) {
+  var p = f.split('-');
+  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' });
+}
+var DIAS_LLEGADAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 function escLlegadas(t) {
   return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -8616,7 +8630,13 @@ async function refrescarLlegadas() {
   llegadasCargando = true;
   try {
     var q = llegadasFechaVista ? '?fecha=' + encodeURIComponent(llegadasFechaVista) : '';
-    LLEGADAS_DATOS = await apiFetch('/api/llegadas' + q, { method: 'GET' });
+    var qs = llegadasSemanaFecha ? '?fecha=' + encodeURIComponent(llegadasSemanaFecha) : '';
+    var resultados = await Promise.all([
+      apiFetch('/api/llegadas' + q, { method: 'GET' }),
+      apiFetch('/api/llegadas/semana' + qs, { method: 'GET' }),
+    ]);
+    LLEGADAS_DATOS = resultados[0];
+    LLEGADAS_SEMANA = resultados[1];
     llegadasError = '';
     llegadasUltimaCarga = Date.now();
   } catch (err) {
@@ -8642,15 +8662,19 @@ function renderLlegadas(sesion) {
 
   var filas = personal.map(function (p) {
     var celdaHora;
+    var linkCambiar = '<a href="#" class="lleg-cambiar-hora" data-id="' + p.usuarioId + '" data-hora="' + (p.hora || '') + '" style="font-size:11.5px; margin-left:8px;">' + (p.hora ? 'Cambiar hora' : 'Poner hora') + '</a>';
+    var linkQuitar = '<a href="#" class="lleg-corregir" data-id="' + p.usuarioId + '" style="font-size:11.5px; margin-left:8px; color:var(--rojo);">Quitar</a>';
     if (p.hora) {
       celdaHora = '<strong style="color:var(--verde); font-size:14px;">' + horaLlegada12(p.hora) + '</strong>' +
-        (editable ? ' <a href="#" class="lleg-corregir" data-id="' + p.usuarioId + '" style="font-size:11.5px; margin-left:6px;">Corregir</a>' : '');
+        (p.horaEditada ? ' <span title="Hora puesta a mano (no con el clic del momento)" style="font-size:10.5px; color:var(--muted);">✎ editada</span>' : '') +
+        (editable ? linkCambiar + linkQuitar : '');
     } else if (p.noAsistio) {
       celdaHora = '<strong style="color:var(--rojo); font-size:13px;">No asistió</strong>' +
-        (editable ? ' <a href="#" class="lleg-corregir" data-id="' + p.usuarioId + '" style="font-size:11.5px; margin-left:6px;">Corregir</a>' : '');
+        (editable ? linkCambiar + linkQuitar : '');
     } else if (editable) {
+      var btnPonerHora = '<button class="lleg-cambiar-hora" data-id="' + p.usuarioId + '" data-hora="" style="height:32px; padding:0 12px; font-size:12.5px; border:1px solid var(--azul-oscuro); color:var(--azul-oscuro); background:#fff; border-radius:6px; cursor:pointer; font-family:var(--font-ui); margin-right:6px;">Poner hora</button>';
       var btnNoAsistio = '<button class="lleg-no-asistio" data-id="' + p.usuarioId + '" style="height:32px; padding:0 12px; font-size:12.5px; border:1px solid var(--rojo); color:var(--rojo); background:#fff; border-radius:6px; cursor:pointer; font-family:var(--font-ui);">No asistió</button>';
-      celdaHora = (esHoy ? '<button class="btn-primario lleg-registrar" data-id="' + p.usuarioId + '" style="width:auto; height:32px; font-size:12.5px; background:var(--naranja, #E78C3B); margin-right:6px;">Registrar llegada</button>' : '') + btnNoAsistio;
+      celdaHora = (esHoy ? '<button class="btn-primario lleg-registrar" data-id="' + p.usuarioId + '" style="width:auto; height:32px; font-size:12.5px; background:var(--naranja, #E78C3B); margin-right:6px;">Registrar llegada</button>' : '') + btnPonerHora + btnNoAsistio;
     } else {
       celdaHora = '<span style="color:var(--muted);">Sin registro</span>';
     }
@@ -8661,7 +8685,7 @@ function renderLlegadas(sesion) {
     return '<tr>' +
       '<td style="font-weight:600;">' + escLlegadas(p.nombre) + '</td>' +
       '<td style="font-size:12px; color:var(--muted);">' + (p.rol === 'SECRETARIA' ? 'Secretaría' : 'Profesor') + '</td>' +
-      '<td style="white-space:nowrap;">' + celdaHora + '</td>' +
+      '<td style="white-space:nowrap;"><div class="lleg-celda-hora" data-id="' + p.usuarioId + '">' + celdaHora + '</div></td>' +
       '<td>' + celdaObs + '</td>' +
       '</tr>';
   }).join('');
@@ -8699,6 +8723,91 @@ function renderLlegadas(sesion) {
         '<button class="btn-primario" id="lleg-rep-descargar" style="width:auto; min-width:160px;">Descargar PDF</button>' +
       '</div>' +
       '<p id="lleg-rep-msj" style="display:none; font-size:12.5px; margin:8px 0 0;"></p>' +
+    '</div>' +
+    renderSemanaLlegadas();
+}
+
+// Cuadro semanal tipo horario: una fila por persona, una columna por día
+// (lunes a sábado, como el horario de estudiantes; el domingo aparece solo
+// si alguien tiene registro ese día). Clic en una celda = abrir ese día arriba.
+function renderSemanaLlegadas() {
+  var cab = '<h2 style="margin-bottom:4px;">Registro semanal de llegadas</h2>';
+  var s = LLEGADAS_SEMANA;
+  if (!s) return '<div class="panel">' + cab + '<p style="font-size:13px; color:var(--muted);">Cargando…</p></div>';
+
+  var dias = [0, 1, 2, 3, 4, 5].map(function (i) { return fechaMasDiasLlegadas(s.lunes, i); });
+  var domingo = fechaMasDiasLlegadas(s.lunes, 6);
+  if ((s.registros || []).some(function (r) { return r.fecha === domingo; })) dias.push(domingo);
+  var mapa = {};
+  (s.registros || []).forEach(function (r) { mapa[r.usuarioId + '|' + r.fecha] = r; });
+  var personal = ordenarPersonalLlegadas(s.personal || []);
+  var esSemanaActual = s.lunes === s.lunesActual;
+  var btnNav = 'font-size:12px; padding:6px 12px; border-radius:8px; border:1px solid var(--azul-oscuro); background:#fff; color:var(--azul-oscuro); cursor:pointer;';
+
+  var selector = '<div style="display:flex; align-items:center; gap:10px; margin:10px 0 14px; flex-wrap:wrap;">' +
+    '<button id="lleg-sem-anterior" style="' + btnNav + '">‹ Semana anterior</button>' +
+    '<div style="font-size:13px; font-weight:700; color:var(--azul-oscuro);">Semana del ' + fechaCortaLlegadas(s.lunes) + ' al ' + fechaCortaLlegadas(fechaMasDiasLlegadas(s.lunes, 5)) + '</div>' +
+    '<button id="lleg-sem-siguiente" style="' + btnNav + (esSemanaActual ? ' opacity:0.35; cursor:default;' : '') + '"' + (esSemanaActual ? ' disabled' : '') + '>Semana siguiente ›</button>' +
+    (esSemanaActual ? '' : '<button id="lleg-sem-hoy" style="font-size:12px; padding:6px 10px; border:none; background:transparent; color:var(--muted); cursor:pointer; text-decoration:underline;">Ir a esta semana</button>') +
+    '<label style="font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; margin-left:auto;">Ver la semana del día ' +
+      '<input type="date" id="lleg-sem-fecha" value="' + s.lunes + '" max="' + s.hoy + '" style="height:30px; padding:0 6px; border:1px solid #d6dae0; border-radius:6px;" /></label>' +
+    '</div>';
+
+  var leyenda = '<div style="display:flex; gap:16px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin-bottom:8px;">' +
+    '<span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--verde); margin-right:5px;"></span>Llegó (hora registrada)</span>' +
+    '<span>✎ Hora puesta a mano</span>' +
+    '<span><span style="display:inline-block; width:10px; height:10px; border-radius:2px; background:var(--rojo); margin-right:5px;"></span>No asistió</span>' +
+    '<span>Clic en una casilla para abrir ese día arriba</span>' +
+    '</div>';
+
+  var encabezado = '<tr><td style="font-size:12px; font-weight:700; color:var(--muted); padding:8px; text-transform:uppercase; letter-spacing:0.03em;">Personal</td>' +
+    dias.map(function (f, i) {
+      var esHoyCol = f === s.hoy;
+      return '<td style="font-size:14px; font-weight:700; text-align:center; padding:8px; border-radius:8px; color:var(--azul-oscuro);' + (esHoyCol ? ' background:#fdf0e3;' : '') + '">' +
+        DIAS_LLEGADAS[f === domingo ? 6 : i] +
+        '<div style="font-size:11.5px; font-weight:500; color:' + (esHoyCol ? 'var(--naranja)' : 'var(--muted)') + ';">' + fechaCortaLlegadas(f) + (esHoyCol ? ' · hoy' : '') + '</div></td>';
+    }).join('') + '</tr>';
+
+  var filas = personal.map(function (p) {
+    var celdas = dias.map(function (f) {
+      var r = mapa[p.usuarioId + '|' + f];
+      var futuro = f > s.hoy;
+      var borde = '#e6e6e6', contenido;
+      if (futuro) {
+        contenido = '';
+      } else if (r && r.hora) {
+        borde = 'var(--verde)';
+        contenido = '<div style="font-size:15px; font-weight:700; color:var(--verde);">' + horaLlegada12(r.hora) +
+          (r.horaEditada ? ' <span title="Hora puesta a mano" style="font-size:11px; color:var(--muted); font-weight:500;">✎</span>' : '') + '</div>';
+      } else if (r && r.noAsistio) {
+        borde = 'var(--rojo)';
+        contenido = '<div style="font-size:12.5px; font-weight:700; color:var(--rojo); text-transform:uppercase; letter-spacing:0.02em;">No asistió</div>';
+      } else {
+        contenido = '<div style="font-size:12px; color:var(--muted);">' + (f === s.hoy ? 'Pendiente' : 'Sin registro') + '</div>';
+      }
+      if (r && r.observaciones) {
+        contenido += '<div title="' + escLlegadas(r.observaciones) + '" style="font-size:11px; color:#555; margin-top:4px; line-height:1.3; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;">' + escLlegadas(r.observaciones) + '</div>';
+      }
+      return '<td class="' + (futuro ? '' : 'lleg-sem-celda') + '" data-fecha="' + f + '" style="border-left:4px solid ' + borde + '; background:' + (futuro ? '#fafafa' : '#fff') + '; padding:9px 10px; vertical-align:top; border-radius:6px; min-width:105px; height:52px;' + (futuro ? '' : ' cursor:pointer;') + '">' + contenido + '</td>';
+    }).join('');
+    return '<tr><td style="padding:8px; vertical-align:middle;"><div style="font-weight:700; font-size:13px; color:var(--azul-oscuro);">' + escLlegadas(p.nombre) + '</div>' +
+      '<div style="font-size:11px; color:var(--muted);">' + (p.rol === 'SECRETARIA' ? 'Secretaría' : 'Profesor') + '</div></td>' + celdas + '</tr>';
+  }).join('');
+
+  var totales = '<tr><td style="padding:8px; font-size:11.5px; color:var(--muted); font-weight:700;">Llegaron</td>' + dias.map(function (f) {
+    if (f > s.hoy) return '<td></td>';
+    var llegaron = personal.filter(function (p) { var r = mapa[p.usuarioId + '|' + f]; return r && r.hora; }).length;
+    var faltaron = personal.filter(function (p) { var r = mapa[p.usuarioId + '|' + f]; return r && r.noAsistio; }).length;
+    return '<td style="text-align:center; font-size:12px; color:var(--azul-oscuro); font-weight:700;">' + llegaron + ' de ' + personal.length +
+      (faltaron ? '<div style="font-size:11px; color:var(--rojo); font-weight:600;">' + faltaron + ' no asistió</div>' : '') + '</td>';
+  }).join('') + '</tr>';
+
+  return '<div class="panel" style="background:#f6f5f1;">' + cab +
+    '<p style="font-size:12.5px; color:var(--muted); margin:0;">Hora de llegada de cada persona, día por día. Elija la semana que quiere ver.</p>' +
+    selector + leyenda +
+    (personal.length === 0 ? '<p style="font-size:13px; color:var(--muted);">No hay personal para esta semana.</p>' :
+      '<div class="tabla-scroll"><table style="border-collapse:separate; border-spacing:6px; width:100%; table-layout:fixed; min-width:' + (190 + dias.length * 115) + 'px;">' +
+      '<colgroup><col style="width:190px;" /></colgroup>' + encabezado + filas + totales + '</table></div>') +
     '</div>';
 }
 
@@ -8733,6 +8842,75 @@ function activarLogicaLlegadas() {
       apiFetch('/api/llegadas/' + btn.getAttribute('data-id') + '/registrar', { method: 'POST' })
         .then(recargarYPintar)
         .catch(function (err) { btn.disabled = false; btn.textContent = 'Registrar llegada'; mensajeLlegadas(err.message); });
+    });
+  });
+
+  // Poner / cambiar la hora a mano: la celda se convierte en un selector de
+  // hora con Guardar / Cancelar (sin repintar el resto de la pantalla).
+  document.querySelectorAll('.lleg-cambiar-hora').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      e.preventDefault();
+      var id = el.getAttribute('data-id');
+      var celda = document.querySelector('.lleg-celda-hora[data-id="' + id + '"]');
+      if (!celda) return;
+      var valor = el.getAttribute('data-hora');
+      if (!valor && LLEGADAS_DATOS.fecha === LLEGADAS_DATOS.hoy) {
+        var ahora = new Date();
+        valor = String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+      }
+      celda.innerHTML = '<div style="display:flex; gap:6px; align-items:center;">' +
+        '<input type="time" class="lleg-hora-input" value="' + (valor || '') + '" style="height:32px; padding:0 6px; border:1px solid var(--azul-oscuro); border-radius:6px; font-size:13px;" />' +
+        '<button class="btn-primario lleg-hora-guardar" style="width:auto; height:32px; font-size:12.5px; padding:0 12px;">Guardar</button>' +
+        '<button class="lleg-hora-cancelar" style="height:32px; padding:0 10px; font-size:12.5px; border:1px solid #d6dae0; background:#fff; border-radius:6px; cursor:pointer;">Cancelar</button>' +
+        '</div>';
+      var input = celda.querySelector('.lleg-hora-input');
+      input.focus();
+      celda.querySelector('.lleg-hora-cancelar').addEventListener('click', function () { renderContenido('llegadas'); });
+      var guardarHora = function () {
+        if (!input.value) { mensajeLlegadas('Escriba la hora de llegada.'); return; }
+        var btnG = celda.querySelector('.lleg-hora-guardar');
+        btnG.disabled = true; btnG.textContent = 'Guardando…';
+        apiFetch('/api/llegadas/' + id + '/hora', { method: 'PUT', body: JSON.stringify({ fecha: LLEGADAS_DATOS.fecha, hora: input.value.slice(0, 5) }) })
+          .then(function () { mensajeLlegadas(''); return recargarYPintar(); })
+          .catch(function (err) { btnG.disabled = false; btnG.textContent = 'Guardar'; mensajeLlegadas(err.message); });
+      };
+      celda.querySelector('.lleg-hora-guardar').addEventListener('click', guardarHora);
+      input.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); guardarHora(); } });
+    });
+  });
+
+  // ---- Registro semanal ----
+  function cargarSemana(fecha) {
+    llegadasSemanaFecha = fecha;
+    var qs = fecha ? '?fecha=' + encodeURIComponent(fecha) : '';
+    return apiFetch('/api/llegadas/semana' + qs, { method: 'GET' })
+      .then(function (sem) {
+        LLEGADAS_SEMANA = sem;
+        if ((location.hash.replace('#', '') || 'dashboard') === 'llegadas') renderContenido('llegadas');
+      })
+      .catch(function (err) { mensajeLlegadas('No se pudo cargar la semana: ' + err.message); });
+  }
+  var semAnt = document.getElementById('lleg-sem-anterior');
+  if (semAnt && LLEGADAS_SEMANA) semAnt.addEventListener('click', function () { cargarSemana(fechaMasDiasLlegadas(LLEGADAS_SEMANA.lunes, -7)); });
+  var semSig = document.getElementById('lleg-sem-siguiente');
+  if (semSig && LLEGADAS_SEMANA) semSig.addEventListener('click', function () {
+    if (LLEGADAS_SEMANA.lunes >= LLEGADAS_SEMANA.lunesActual) return;
+    var sig = fechaMasDiasLlegadas(LLEGADAS_SEMANA.lunes, 7);
+    cargarSemana(sig >= LLEGADAS_SEMANA.lunesActual ? null : sig);
+  });
+  var semHoy = document.getElementById('lleg-sem-hoy');
+  if (semHoy) semHoy.addEventListener('click', function () { cargarSemana(null); });
+  var semFecha = document.getElementById('lleg-sem-fecha');
+  if (semFecha) semFecha.addEventListener('change', function () {
+    if (!semFecha.value) return;
+    semFecha.blur();
+    cargarSemana(semFecha.value);
+  });
+  document.querySelectorAll('.lleg-sem-celda').forEach(function (td) {
+    td.addEventListener('click', function () {
+      var f = td.getAttribute('data-fecha');
+      llegadasFechaVista = f === LLEGADAS_DATOS.hoy ? null : f;
+      recargarYPintar().then(function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
     });
   });
 
@@ -8884,7 +9062,7 @@ function generarPdfLlegadas(rep, sesion) {
       if (y + altoFila > H - 50) { pdf.addPage(); y = 50; cabecera(); pdf.setFontSize(10); }
       pdf.setTextColor(40, 40, 40); pdf.setFont('helvetica', 'normal');
       pdf.text(fechaLlegadaLarga(r.fecha).replace(/ de \d{4}$/, ''), colFecha + 6, y);
-      if (r.hora) { pdf.setFont('helvetica', 'bold'); pdf.text(horaLlegada12(r.hora), colHora, y); }
+      if (r.hora) { pdf.setFont('helvetica', 'bold'); pdf.text(horaLlegada12(r.hora) + (r.horaEditada ? ' *' : ''), colHora, y); }
       else if (r.noAsistio) { pdf.setFont('helvetica', 'bold'); pdf.setTextColor(179, 38, 30); pdf.text('No asistió', colHora, y); }
       else { pdf.setFont('helvetica', 'italic'); pdf.setTextColor(140, 140, 140); pdf.text('Sin registro', colHora, y); }
       pdf.setFont('helvetica', 'normal'); pdf.setTextColor(40, 40, 40);
@@ -8892,6 +9070,12 @@ function generarPdfLlegadas(rep, sesion) {
       y += altoFila;
       pdf.setDrawColor(226, 229, 234); pdf.line(M, y - 10, W - M, y - 10);
     });
+
+    if (rep.registros.some(function (r) { return r.hora && r.horaEditada; })) {
+      if (y + 16 > H - 50) { pdf.addPage(); y = 50; }
+      pdf.setFont('helvetica', 'italic'); pdf.setFontSize(8.5); pdf.setTextColor(110, 110, 110);
+      pdf.text('* Hora ingresada a mano (no registrada con el clic en el momento de la llegada).', M, y + 4);
+    }
 
     var paginas = pdf.internal.getNumberOfPages();
     var generado = new Date().toLocaleString('es-CO', { dateStyle: 'long', timeStyle: 'short' });
