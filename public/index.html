@@ -534,8 +534,6 @@
   /* ---- Buscador de estudiante con autocompletar ---- */
   .item-buscador-estudiante:last-child { border-bottom: none !important; }
 
-  /* ---- Amigo Secreto ---- */
-  @keyframes as-wiggle { 0%, 100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
 </style>
 </head>
 <body>
@@ -620,7 +618,6 @@ var PASS_PRUEBA = 'CambiarEnPrimerIngreso123';
 
 var MODULOS = [
   { key: 'dashboard', label: 'Inicio', grupo: 'principal' },
-  { key: 'amigosecreto', label: 'Amigo secreto', grupo: 'principal' },
   { key: 'estudiantes', label: 'Estudiantes', grupo: 'matricula' },
   { key: 'matricula', label: 'Matrícula', grupo: 'matricula' },
   { key: 'pagos', label: 'Pagos y cartera', grupo: 'matricula' },
@@ -644,16 +641,15 @@ var MODULOS = [
 
 var VISIBILIDAD_ROL = {
   ADMINISTRADOR: MODULOS.map(function (m) { return m.key; }),
-  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','llegadas','pagos','evaluacion','comunicacion','inventario','reportes','auditoria','amigosecreto','clausura2026'],
+  DIRECCION: ['dashboard','estudiantes','matricula','profesores','cursos','pensum','horarios','asistencia','llegadas','pagos','evaluacion','comunicacion','inventario','reportes','auditoria','clausura2026'],
   // Secretaría ve Contabilidad, pero con visibilidad restringida (renderContabilidad
   // bifurca según rol: solo puede registrar ingresos/gastos/compras/nómina, sin ver
   // el resumen financiero — eso queda reservado al Administrador).
-  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','pensum','horarios','asistencia','llegadas','pagos','comunicacion','inventario','contabilidad','eventos','amigosecreto','clausura2026'],
-  PROFESOR: ['dashboard','horarios','asistencia','evaluacion','eventos','comunicacion','pensum','amigosecreto'],
-  // INVITADO: rol exclusivo para gente externa que solo entra a jugar al
-  // Amigo Secreto — un único módulo visible, nada más. No es el bug de
-  // Pensum: acá la restricción total es justo lo buscado.
-  INVITADO: ['amigosecreto']
+  SECRETARIA: ['dashboard','estudiantes','matricula','cursos','pensum','horarios','asistencia','llegadas','pagos','comunicacion','inventario','contabilidad','eventos','clausura2026'],
+  PROFESOR: ['dashboard','horarios','asistencia','evaluacion','eventos','comunicacion','pensum'],
+  // INVITADO: rol para gente externa. Antes se usaba solo para el Amigo
+  // Secreto (módulo retirado el 2026-10-11); hoy solo ve Inicio.
+  INVITADO: ['dashboard']
 };
 
 var ROLES_SISTEMA = ['ADMINISTRADOR', 'DIRECCION', 'SECRETARIA', 'PROFESOR', 'INVITADO'];
@@ -1574,7 +1570,7 @@ async function refrescarCachePermisos() {
 // backend para este rol) — sacar este bloque en cuanto se confirme que
 // el guardado real funciona, probado con un Profesor en más de un
 // navegador.
-var MODULOS_PROFESOR_FORZADOS = ['dashboard', 'horarios', 'asistencia', 'evaluacion', 'eventos', 'comunicacion', 'pensum', 'amigosecreto', 'clausura2026'];
+var MODULOS_PROFESOR_FORZADOS = ['dashboard', 'horarios', 'asistencia', 'evaluacion', 'eventos', 'comunicacion', 'pensum', 'clausura2026'];
 
 // Si el backend ya trajo permisos guardados para ese rol, esos mandan; si
 // el rol todavía no tiene ninguna fila en la tabla (o no se pidió todavía),
@@ -7566,306 +7562,6 @@ function activarLogicaAuditoria() {
   }
 }
 
-// ==================== AMIGO SECRETO ====================
-var CACHE_AMIGOSECRETO = { evento: null, resultado: null, deseos: '', misDeseos: '', participantes: [], cruces: [], revelado: false, todosLosUsuarios: [] };
-var amigosecretoCargado = false;
-
-async function refrescarCacheAmigoSecreto() {
-  var sesion = sesionActual();
-  try {
-    var miResultado = await apiFetch('/api/amigosecreto/mi-resultado', { method: 'GET' });
-    CACHE_AMIGOSECRETO.evento = miResultado.evento;
-    CACHE_AMIGOSECRETO.resultado = miResultado.resultado;
-    CACHE_AMIGOSECRETO.deseos = miResultado.deseos || '';
-    CACHE_AMIGOSECRETO.revelado = !!miResultado.revelado;
-    CACHE_AMIGOSECRETO.misDeseos = await apiFetch('/api/amigosecreto/mis-deseos', { method: 'GET' }) || '';
-
-    if (sesion.rol === 'ADMINISTRADOR') {
-      CACHE_AMIGOSECRETO.participantes = await apiFetch('/api/amigosecreto/participantes', { method: 'GET' }) || [];
-      CACHE_AMIGOSECRETO.cruces = await apiFetch('/api/amigosecreto/cruces', { method: 'GET' }) || [];
-      // Amigo Secreto es el primer módulo del menú y puede pintarse antes
-      // de que la cadena general de carga (navegar()) llegue a traer los
-      // usuarios — por eso acá se pide su propia copia fresca, sin
-      // depender de en qué punto vaya esa cadena.
-      // Antes se apoyaba en refrescarCacheUsuarios() (la caché
-      // compartida con el resto del sistema) — pero como Amigo Secreto
-      // ahora es el primer módulo, esa caché se pisaba con otras partes
-      // del sistema que también la escriben al mismo tiempo en paralelo.
-      // Trae su propia copia, aparte, para que nadie más se la pueda pisar.
-      CACHE_AMIGOSECRETO.todosLosUsuarios = await apiFetch('/api/identidad/usuarios', { method: 'GET' }) || [];
-    }
-  } catch (err) {
-    console.error('No se pudo cargar Amigo secreto desde el backend:', err.message);
-  }
-}
-
-function renderAmigoSecreto(sesion) {
-  var esAdmin = sesion.rol === 'ADMINISTRADOR';
-  var evento = CACHE_AMIGOSECRETO.evento;
-  var hoyStr3 = new Date().toISOString().slice(0, 10);
-  var fechaLimitePasada = evento && evento.fecha_limite_deseos && evento.fecha_limite_deseos.slice(0, 10) < hoyStr3;
-
-  var cabecera = '' +
-    '<div style="background:linear-gradient(120deg, #E63946, #F4A300 60%, #F77F00); border-radius:22px; padding:26px 28px; margin-bottom:20px; color:#fff; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; box-shadow:0 10px 26px rgba(230,57,70,0.25);">' +
-    '<div>' +
-    '<p style="margin:0 0 4px; font-size:12.5px; text-transform:uppercase; letter-spacing:0.09em; opacity:0.95;">🎉 ¡Ya casi llega la fiesta! 🎉</p>' +
-    '<h1 style="margin:0; font-family:var(--font-wordmark); font-weight:600; font-size:30px;">Amigo Secreto</h1>' +
-    '</div>' +
-    '<span style="display:flex; align-items:center;">' +
-    '<img src="amigo-secreto-meme.png" alt="" style="height:104px; width:auto; border-radius:14px; box-shadow:0 8px 18px rgba(0,0,0,0.25); transform:rotate(-4deg);" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'inline-block\';" />' +
-    '<span style="display:none; font-size:46px; animation: as-wiggle 2.4s ease-in-out infinite;">🎅</span>' +
-    '</span>' +
-    '</div>';
-
-  var avisoFechaLimite = (evento && evento.fecha_limite_deseos)
-    ? '<div style="background:' + (fechaLimitePasada ? '#FDECEC' : '#FFF3D6') + '; border:2px dashed ' + (fechaLimitePasada ? '#E63946' : '#F4A300') + '; border-radius:12px; padding:10px 14px; margin-bottom:12px; font-size:12.5px; font-weight:600; color:' + (fechaLimitePasada ? '#C0392B' : '#B8860B') + ';">' +
-      (fechaLimitePasada ? '⏰ El plazo para cargar ideas de regalo ya venció (' + evento.fecha_limite_deseos.slice(0, 10) + ').' : '⏰ Tenés hasta el ' + evento.fecha_limite_deseos.slice(0, 10) + ' para cargar tus ideas de regalo.') +
-      '</div>'
-    : '';
-
-  var contenidoResultado;
-  if (!evento) {
-    contenidoResultado = '<p style="font-size:13.5px; color:var(--muted);">Todavía no hay un Amigo Secreto activo. 🎄</p>';
-  } else if (!CACHE_AMIGOSECRETO.revelado) {
-    contenidoResultado = '<p style="font-size:13.5px; color:var(--muted);">🤫 Todavía no se reveló quién le toca a quién — por ahora, aprovechá para dejar tus ideas de regalo más abajo.</p>';
-  } else if (!CACHE_AMIGOSECRETO.resultado) {
-    contenidoResultado = '<p style="font-size:13.5px; color:var(--muted);">No estás anotado en el sorteo actual.</p>';
-  } else {
-    contenidoResultado = '' +
-      (evento.fecha_evento || evento.presupuesto_sugerido
-        ? '<p style="font-size:12px; color:var(--muted); margin:0 0 10px;">' +
-          (evento.fecha_evento ? '📅 Fecha del intercambio: <strong>' + evento.fecha_evento.slice(0, 10) + '</strong>. ' : '') +
-          (evento.presupuesto_sugerido ? '💰 Presupuesto sugerido: <strong>' + formatearCOPContable(evento.presupuesto_sugerido) + '</strong>.' : '') +
-          '</p>'
-        : '') +
-      '<div style="background:linear-gradient(120deg, #9D4EDD, #E63946); color:#fff; border-radius:16px; padding:22px; text-align:center; box-shadow:0 8px 20px rgba(157,78,221,0.3);">' +
-      '<p style="margin:0 0 6px; font-size:13px; text-transform:uppercase; letter-spacing:0.08em; opacity:0.95;">🎊 Te tocó regalarle a 🎊</p>' +
-      '<p style="margin:0; font-family:var(--font-wordmark); font-weight:600; font-size:28px;">' + CACHE_AMIGOSECRETO.resultado.nombre + '</p>' +
-      '</div>' +
-      (CACHE_AMIGOSECRETO.deseos
-        ? '<div style="background:#FFF9EC; border:2px dashed #F4A300; border-radius:12px; padding:12px 16px; margin-top:14px;"><p style="font-size:12px; color:#B8860B; font-weight:700; margin:0 0 4px;">💡 Ideas de regalo que dejó:</p><p style="font-size:14px; white-space:pre-wrap; margin:0;">' + CACHE_AMIGOSECRETO.deseos + '</p></div>'
-        : '<p style="font-size:12px; color:var(--muted); margin-top:14px;">Todavía no dejó ninguna idea de regalo.</p>');
-  }
-
-  var panelResultado = '' +
-    '<div class="panel" style="background:linear-gradient(135deg,#FFF3E0,#FFE8F0); border:none; box-shadow:0 6px 18px rgba(0,0,0,0.06);">' +
-    '<h2 style="color:#C0392B;">🎁 Tu Amigo Secreto</h2>' +
-    contenidoResultado +
-    '</div>';
-
-  var panelMisDeseos = '' +
-    '<div class="panel" style="border:2px solid #52B788; background:#F0FFF4;"><h2 style="color:#2D6A4F;">💌 Tus ideas de regalo</h2>' +
-    avisoFechaLimite +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Escribí algo que te gustaría recibir — lo va a ver quien te haya tocado a vos.</p>' +
-    '<textarea id="as-mis-deseos" rows="3" style="width:100%; border:1.5px solid #52B788; border-radius:10px; padding:10px; font-family:var(--font-ui); font-size:13.5px;" placeholder="Ej: me gusta la música, el café, algo para tocar guitarra...">' + (CACHE_AMIGOSECRETO.misDeseos || '') + '</textarea>' +
-    '<button class="btn-primario" id="btn-guardar-mis-deseos" style="max-width:200px; margin-top:8px; background:#2D6A4F;">✨ Guardar</button>' +
-    '<p id="msj-guardado-deseos" style="font-size:12px; color:var(--verde); display:none; margin-top:6px; font-weight:700;">¡Guardado! 🎉</p>' +
-    '</div>';
-
-  if (!esAdmin) return cabecera + panelResultado + panelMisDeseos;
-
-  // Panel de administración — solo Administrador.
-  var participantes = CACHE_AMIGOSECRETO.participantes || [];
-  var usuarios = CACHE_AMIGOSECRETO.todosLosUsuarios || [];
-  var idsYaParticipan = participantes.map(function (p) { return p.usuario_id; });
-  var usuariosDisponibles = usuarios.filter(function (u) { return idsYaParticipan.indexOf(u.id) === -1; });
-  var checkboxesUsuarios = usuariosDisponibles.map(function (u) {
-    return '<label style="display:flex; align-items:center; gap:8px; padding:6px 4px; font-size:13.5px; border-bottom:1px solid #e3f3f3; cursor:pointer;">' +
-      '<input type="checkbox" class="chk-agregar-participante-as" value="' + u.id + '" style="width:auto;" />' +
-      u.nombre + ' <span style="color:var(--muted); font-size:11.5px;">(' + (ETIQUETA_ROL_MENSAJE[u.rol] || u.rol) + ')</span>' +
-      '</label>';
-  }).join('');
-
-  var coloresBadge = ['#E63946', '#F4A300', '#9D4EDD', '#2D6A4F', '#1D8A99'];
-  var filasParticipantes = participantes.map(function (p, i) {
-    var color = coloresBadge[i % coloresBadge.length];
-    var celdaDeseos = p.deseos_texto
-      ? '<span style="color:#2D6A4F; font-weight:700;">✅</span> <span style="white-space:pre-wrap;">' + p.deseos_texto + '</span>'
-      : '<span style="color:var(--muted); font-style:italic;">— Sin guardar todavía</span>';
-    return '<tr><td>🙋 ' + p.nombre + '</td><td><span style="background:' + color + '1a; color:' + color + '; font-weight:700; font-size:11px; padding:3px 10px; border-radius:10px;">' + (ETIQUETA_ROL_MENSAJE[p.rol] || p.rol || '—') + '</span></td><td>' + p.email + '</td>' +
-      '<td style="font-size:12.5px; max-width:260px;">' + celdaDeseos + '</td>' +
-      '<td><button class="btn-quitar-participante-as" data-id="' + p.usuario_id + '" style="font-size:11px; padding:4px 8px; border-radius:6px; border:1px solid var(--rojo); background:#fff; color:var(--rojo); cursor:pointer;">Quitar</button></td></tr>';
-  }).join('');
-
-  var cruces = CACHE_AMIGOSECRETO.cruces || [];
-  var filasCruces = cruces.map(function (c) {
-    return '<tr><td>' + c.usuario_nombre + '</td><td>🎁→</td><td>' + c.le_toca_nombre + '</td></tr>';
-  }).join('');
-
-  var panelAdmin = '' +
-    '<div class="panel" style="border:2px dashed #F4A300; background:#FFF9EC;"><h2 style="color:#B8860B;">⚙️ Configurar el evento</h2>' +
-    '<div class="grilla-2col">' +
-    '<div class="campo"><label>🎈 Nombre del evento</label><input id="as-nombre-evento" type="text" value="' + (evento ? (evento.nombre || '') : 'Amigo secreto') + '" /></div>' +
-    '<div class="campo"><label>⏰ Fecha límite para cargar ideas de regalo</label><input id="as-fecha-limite-evento" type="date" value="' + (evento && evento.fecha_limite_deseos ? evento.fecha_limite_deseos.slice(0, 10) : '') + '" /></div>' +
-    '<div class="campo"><label>📅 Fecha del intercambio</label><input id="as-fecha-evento" type="date" value="' + (evento && evento.fecha_evento ? evento.fecha_evento.slice(0, 10) : '') + '" /></div>' +
-    '<div class="campo"><label>💰 Presupuesto sugerido</label><input id="as-presupuesto-evento" type="number" min="0" value="' + (evento ? (evento.presupuesto_sugerido || '') : '') + '" /></div>' +
-    '</div>' +
-    '<button class="btn-primario" id="btn-guardar-evento-as" style="max-width:200px; margin-top:6px; background:#F4A300;">Guardar</button>' +
-    '</div>' +
-
-    '<div class="panel" style="border:2px solid #A8DADC; background:#F1FAFA;"><h2 style="color:#1D8A99;">👥 Participantes (' + participantes.length + ')</h2>' +
-    (participantes.length > 0
-      ? '<p style="font-size:12.5px; color:#1D8A99; font-weight:700; margin-top:-8px; margin-bottom:10px;">🎁 ' + participantes.filter(function (p) { return p.deseos_texto; }).length + ' de ' + participantes.length + ' ya guardaron sus ideas de regalo</p>'
-      : '') +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Para agregar a alguien que todavía no tiene usuario en el sistema, primero creale uno desde "Usuarios y permisos" con el rol <strong>Invitado</strong> (así solo va a poder entrar a esta pantalla) y después aparece acá para sumarlo.</p>' +
-    (usuariosDisponibles.length > 0
-      ? '<div style="max-width:420px; max-height:220px; overflow-y:auto; border:1px solid #dde1e7; border-radius:8px; padding:4px 10px; background:#fff;">' + checkboxesUsuarios + '</div>' +
-        '<button class="btn-primario" id="btn-agregar-varios-participantes-as" style="max-width:220px; margin-top:10px;">➕ Agregar seleccionados</button>' +
-        '<p id="msj-error-agregar-participantes-as" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>'
-      : '<p style="font-size:13px; color:var(--muted);">No hay más usuarios disponibles para agregar.</p>') +
-    (participantes.length > 0
-      ? '<div class="tabla-scroll" style="margin-top:10px;"><table class="tabla-usuarios"><thead><tr><th>Nombre</th><th>Rol</th><th>Email</th><th>Ideas de regalo</th><th></th></tr></thead><tbody>' + filasParticipantes + '</tbody></table></div>'
-      : '<p style="font-size:13px; color:var(--muted); margin-top:10px;">Todavía no hay nadie anotado. 🦗</p>') +
-    '</div>' +
-
-    '<div class="panel" style="border:2px solid #9D4EDD; background:#F7F0FF;"><h2 style="color:#7B2CBF;">🎲 Sorteo</h2>' +
-    '<p style="font-size:12px; color:var(--muted); margin-top:-6px;">Al azar, sin exclusiones — nadie se saca a sí mismo. Podés hacer el sorteo con anticipación: armar los cruces NO se los muestra a nadie todavía, eso lo controlás aparte con "Revelar resultados".</p>' +
-    '<button class="btn-primario" id="btn-sortear-as" style="max-width:220px; background:linear-gradient(90deg,#9D4EDD,#E63946); font-size:14.5px; padding:12px 20px;">🎲 ' + (cruces.length > 0 ? 'Volver a sortear' : '¡Hacer el sorteo!') + '</button>' +
-    '<p id="msj-error-sorteo-as" style="font-size:12px; color:#c0392b; display:none; margin-top:8px;"></p>' +
-    (cruces.length > 0
-      ? '<div class="tabla-scroll" style="margin-top:14px;"><table class="tabla-usuarios"><thead><tr><th>Le regala a</th><th></th><th>Recibe de</th></tr></thead><tbody>' + filasCruces + '</tbody></table></div>'
-      : '') +
-    (cruces.length > 0
-      ? '<div style="margin-top:16px; padding-top:14px; border-top:2px dashed #d9c2f0;">' +
-        '<p style="font-size:13px; margin:0 0 8px;">Estado actual: ' + (CACHE_AMIGOSECRETO.revelado ? '<strong style="color:var(--verde);">🔓 Revelado — todos ya pueden ver su resultado</strong>' : '<strong style="color:var(--naranja);">🔒 Oculto — nadie ve resultados todavía</strong>') + '</p>' +
-        '<button class="btn-primario" id="btn-revelar-as" style="max-width:260px; background:' + (CACHE_AMIGOSECRETO.revelado ? 'var(--rojo)' : 'var(--verde)') + ';">' + (CACHE_AMIGOSECRETO.revelado ? '🙈 Ocultar resultados de nuevo' : '🎉 ¡Revelar resultados a todos!') + '</button>' +
-        '</div>'
-      : '') +
-    '</div>';
-
-  return cabecera + panelAdmin + panelResultado + panelMisDeseos;
-}
-
-function activarLogicaAmigoSecreto() {
-  if (!amigosecretoCargado) {
-    refrescarCacheAmigoSecreto().then(function () {
-      amigosecretoCargado = true;
-      if ((location.hash.replace('#', '') || 'dashboard') === 'amigosecreto') renderContenido('amigosecreto');
-    });
-    return;
-  }
-
-  var btnGuardarDeseos = document.getElementById('btn-guardar-mis-deseos');
-  if (btnGuardarDeseos) {
-    btnGuardarDeseos.addEventListener('click', function () {
-      var texto = document.getElementById('as-mis-deseos').value;
-      btnGuardarDeseos.disabled = true;
-      apiFetch('/api/amigosecreto/mis-deseos', { method: 'POST', body: JSON.stringify({ texto: texto }) })
-        .then(function () {
-          CACHE_AMIGOSECRETO.misDeseos = texto;
-          btnGuardarDeseos.disabled = false;
-          var msj = document.getElementById('msj-guardado-deseos');
-          msj.style.display = 'block';
-          setTimeout(function () { msj.style.display = 'none'; }, 2000);
-        })
-        .catch(function (err) {
-          btnGuardarDeseos.disabled = false;
-          alert('No se pudo guardar: ' + (err.message || 'error de conexión.'));
-        });
-    });
-  }
-
-  var btnGuardarEvento = document.getElementById('btn-guardar-evento-as');
-  if (btnGuardarEvento) {
-    btnGuardarEvento.addEventListener('click', function () {
-      var nombre = document.getElementById('as-nombre-evento').value.trim();
-      var fecha = document.getElementById('as-fecha-evento').value;
-      var fechaLimite = document.getElementById('as-fecha-limite-evento').value;
-      var presupuesto = document.getElementById('as-presupuesto-evento').value;
-      btnGuardarEvento.disabled = true;
-      apiFetch('/api/amigosecreto/evento', {
-        method: 'POST',
-        body: JSON.stringify({
-          nombre: nombre, fechaEvento: fecha || null, fechaLimiteDeseos: fechaLimite || null,
-          presupuestoSugerido: presupuesto ? Number(presupuesto) : null
-        })
-      })
-        .then(function () { return refrescarCacheAmigoSecreto(); })
-        .then(function () { renderContenido('amigosecreto'); })
-        .catch(function (err) {
-          btnGuardarEvento.disabled = false;
-          alert('No se pudo guardar: ' + (err.message || 'error de conexión.'));
-        });
-    });
-  }
-
-  var btnRevelar = document.getElementById('btn-revelar-as');
-  if (btnRevelar) {
-    btnRevelar.addEventListener('click', function () {
-      var vaARevelar = !CACHE_AMIGOSECRETO.revelado;
-      var confirmacion = vaARevelar
-        ? '¿Revelar los resultados a todos los participantes? Cada uno va a poder ver quién le tocó.'
-        : '¿Ocultar los resultados de nuevo? Nadie va a poder ver su resultado hasta que lo reveles otra vez.';
-      if (!confirm(confirmacion)) return;
-      btnRevelar.disabled = true;
-      apiFetch('/api/amigosecreto/revelar', { method: 'POST', body: JSON.stringify({ revelado: vaARevelar }) })
-        .then(function () { return refrescarCacheAmigoSecreto(); })
-        .then(function () { renderContenido('amigosecreto'); })
-        .catch(function (err) {
-          btnRevelar.disabled = false;
-          alert('No se pudo cambiar el estado: ' + (err.message || 'error de conexión.'));
-        });
-    });
-  }
-
-  var btnAgregarVarios = document.getElementById('btn-agregar-varios-participantes-as');
-  if (btnAgregarVarios) {
-    btnAgregarVarios.addEventListener('click', function () {
-      var msjError = document.getElementById('msj-error-agregar-participantes-as');
-      msjError.style.display = 'none';
-      var idsElegidos = Array.prototype.slice.call(document.querySelectorAll('.chk-agregar-participante-as:checked')).map(function (chk) { return Number(chk.value); });
-      if (idsElegidos.length === 0) {
-        msjError.textContent = 'Marcá al menos una persona.';
-        msjError.style.display = 'block';
-        return;
-      }
-      btnAgregarVarios.disabled = true;
-      mapearEnParalelo(idsElegidos, 5, function (usuarioId) {
-        return apiFetch('/api/amigosecreto/participantes', { method: 'POST', body: JSON.stringify({ usuarioId: usuarioId }) });
-      })
-        .then(function () { return refrescarCacheAmigoSecreto(); })
-        .then(function () { renderContenido('amigosecreto'); })
-        .catch(function (err) {
-          btnAgregarVarios.disabled = false;
-          msjError.textContent = 'No se pudo agregar a todos: ' + (err.message || 'error de conexión.');
-          msjError.style.display = 'block';
-        });
-    });
-  }
-
-  document.querySelectorAll('.btn-quitar-participante-as').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      if (!confirm('¿Quitar a esta persona del Amigo Secreto?')) return;
-      var usuarioId = btn.getAttribute('data-id');
-      apiFetch('/api/amigosecreto/participantes/' + usuarioId, { method: 'DELETE' })
-        .then(function () { return refrescarCacheAmigoSecreto(); })
-        .then(function () { renderContenido('amigosecreto'); })
-        .catch(function (err) { alert('No se pudo quitar: ' + (err.message || 'error de conexión.')); });
-    });
-  });
-
-  var btnSortear = document.getElementById('btn-sortear-as');
-  if (btnSortear) {
-    btnSortear.addEventListener('click', function () {
-      var msjError = document.getElementById('msj-error-sorteo-as');
-      msjError.style.display = 'none';
-      var confirmacion = CACHE_AMIGOSECRETO.cruces.length > 0
-        ? '¿Volver a sortear? Se van a reemplazar todos los cruces actuales — cada quien va a ver un resultado nuevo.'
-        : '¿Hacer el sorteo ahora? No se puede deshacer, aunque sí se puede volver a sortear después.';
-      if (!confirm(confirmacion)) return;
-      btnSortear.disabled = true;
-      apiFetch('/api/amigosecreto/sortear', { method: 'POST' })
-        .then(function () { return refrescarCacheAmigoSecreto(); })
-        .then(function () { renderContenido('amigosecreto'); })
-        .catch(function (err) {
-          btnSortear.disabled = false;
-          msjError.textContent = err.message || 'No se pudo sortear.';
-          msjError.style.display = 'block';
-        });
-    });
-  }
-}
-
 function renderReportes() {
   var porModulo = {};
   REPORTES_DISPONIBLES.forEach(function (r) { (porModulo[r.modulo] = porModulo[r.modulo] || []).push(r); });
@@ -8383,7 +8079,7 @@ function renderAdmin() {
     '<option value="SECRETARIA">Secretaría</option>' +
     '<option value="PROFESOR">Profesor</option>' +
     '<option value="DIRECCION">Dirección</option>' +
-    '<option value="INVITADO">Invitado (solo Amigo secreto)</option>' +
+    '<option value="INVITADO">Invitado</option>' +
     '</select></div>' +
     '<button class="btn-primario" id="btn-guardar-editar-usuario">Guardar cambios</button>' +
     '<button id="btn-cancelar-editar-usuario" style="width:100%; margin-top:8px; background:transparent; border:none; color:var(--muted); font-size:12px; cursor:pointer;">Cancelar</button>' +
@@ -8408,7 +8104,7 @@ function renderAdmin() {
     '<option value="SECRETARIA">Secretaría</option>' +
     '<option value="PROFESOR">Profesor</option>' +
     '<option value="DIRECCION">Dirección</option>' +
-    '<option value="INVITADO">Invitado (solo Amigo secreto)</option>' +
+    '<option value="INVITADO">Invitado</option>' +
     '</select></div>' +
     '<div class="campo"><label>Contraseña temporal</label><input id="admin-pass" type="password" /></div>' +
     '<div class="campo"><label>Fecha de nacimiento (opcional)</label><input id="admin-nacimiento" type="date" /></div>' +
@@ -9160,9 +8856,6 @@ function renderContenido(clave) {
   } else if (mod.key === 'auditoria') {
     document.getElementById('contenido').innerHTML = renderAuditoria();
     activarLogicaAuditoria();
-  } else if (mod.key === 'amigosecreto') {
-    document.getElementById('contenido').innerHTML = renderAmigoSecreto(sesion);
-    activarLogicaAmigoSecreto();
   } else if (mod.key === 'comunicacion') {
     document.getElementById('contenido').innerHTML = renderComunicacion(sesion);
     activarLogicaComunicacion();
@@ -9267,7 +8960,7 @@ function mostrarApp() {
   document.getElementById('vista-cambiar-password').style.display = 'none';
   document.getElementById('vista-app').style.display = 'block';
   document.getElementById('quien-soy').textContent = sesion.email + ' · ' + sesion.rol;
-  if (!location.hash) location.hash = sesion.rol === 'INVITADO' ? '#amigosecreto' : '#dashboard';
+  if (!location.hash) location.hash = '#dashboard';
   navegar();
 }
 
